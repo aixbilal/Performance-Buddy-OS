@@ -54,7 +54,7 @@ export const NAVIGATION: NavGroup[] = [
     items: [
       { id: "academics", label: "Academics", path: "/academics", status: "structured" },
       { id: "development", label: "Development", path: "/development", status: "structured" },
-      { id: "fitness", label: "Fitness", path: "/fitness", status: "placeholder" },
+      { id: "fitness", label: "Fitness", path: "/fitness", status: "structured" },
       { id: "routine", label: "Routine", path: "/routine", status: "placeholder" },
       { id: "language", label: "Language", path: "/language", status: "placeholder" },
       { id: "money", label: "Money", path: "/money", status: "placeholder" },

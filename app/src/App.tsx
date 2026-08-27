@@ -4,6 +4,7 @@ import { PerformanceProvider } from "./domains/performance/store";
 import { AcademicProvider } from "./domains/academic/store";
 import { KnowledgeProvider } from "./domains/knowledge/store";
 import { DevelopmentProvider } from "./domains/development/store";
+import { FitnessProvider } from "./domains/fitness-recovery/store";
 
 export default function App() {
   return (
@@ -11,7 +12,9 @@ export default function App() {
       <AcademicProvider>
         <KnowledgeProvider>
           <DevelopmentProvider>
-            <RouterProvider router={router} />
+            <FitnessProvider>
+              <RouterProvider router={router} />
+            </FitnessProvider>
           </DevelopmentProvider>
         </KnowledgeProvider>
       </AcademicProvider>
