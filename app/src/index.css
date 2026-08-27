@@ -1,0 +1,29 @@
+@import "tailwindcss";
+@import "./tokens/tokens.css";
+
+@theme inline {
+  --color-canvas: var(--color-canvas);
+  --color-surface-raised: var(--color-surface-raised);
+  --color-surface-inset: var(--color-surface-inset);
+  --color-surface-overlay: var(--color-surface-overlay);
+  --color-surface-selected: var(--color-surface-selected);
+  --color-text-primary: var(--color-text-primary);
+  --color-text-secondary: var(--color-text-secondary);
+  --color-text-muted: var(--color-text-muted);
+  --color-text-disabled: var(--color-text-disabled);
+  --color-text-inverse: var(--color-text-inverse);
+  --color-border-subtle: var(--color-border-subtle);
+  --color-border-strong: var(--color-border-strong);
+  --color-border-focus: var(--color-border-focus);
+  --color-action-primary: var(--color-action-primary);
+  --color-action-secondary: var(--color-action-secondary);
+  --color-status-success: var(--color-status-success);
+  --color-status-warning: var(--color-status-warning);
+  --color-status-danger: var(--color-status-danger);
+  --color-ai-surface: var(--color-ai-surface);
+}
+
+body {
+  margin: 0;
+  background: var(--color-canvas);
+}

@@ -1,0 +1,107 @@
+/*
+  Performance Buddy OS — Design Tokens v1 (DERIVED, not formally locked)
+
+  SOURCE: sampled from the approved reference screenshots
+    - Design Assets/01 - App Shell/Approved/App-Shell-v1-PRIMARY.png
+    - Design Assets/02 - Today/Approved/Today-v1-PRIMARY.png
+  and the written direction in Design Assets/00 - Foundation/Visual Identity/VISUAL-IDENTITY-v1.md
+
+  STATUS NOTE (flag, not a blocker):
+  docs/07 - Visual & Design System/07.03 - Color System.md explicitly states exact color
+  values are PROVISIONAL pending accessibility/contrast review. These tokens are therefore
+  DERIVED from the approved visuals, not copied from a formally locked source — because no
+  such locked raw-value file currently exists in the repo. Treat these as Working, not Approved,
+  until 07.03 is updated to APPROVED with real values and this file is reconciled against it.
+
+  Naming follows the tiers already defined in 07.16 - Design Tokens.md:
+  foundation -> semantic -> component. Only foundation + semantic are defined here;
+  component-level aliases are added as real components need them, not invented upfront.
+*/
+
+@theme {
+  /* ---------- Foundation: neutrals ---------- */
+  --color-neutral-0: #000000;
+  --color-neutral-50: #050608;
+  --color-neutral-100: #0a0b0d;
+  --color-neutral-150: #0d0f12;
+  --color-neutral-200: #121417;
+  --color-neutral-300: #1a1c20;
+  --color-neutral-400: #24262b;
+  --color-neutral-500: #34363c;
+  --color-neutral-600: #55585f;
+  --color-neutral-700: #7a7d84;
+  --color-neutral-800: #9a9ea5;
+  --color-neutral-900: #c7c9cd;
+  --color-neutral-950: #f2f3f5;
+
+  /* ---------- Foundation: accent (muted blue-grey, per Visual Identity) ---------- */
+  --color-accent-400: #4d78a8;
+  --color-accent-500: #5b8dc4;
+  --color-accent-600: #7ba7d6;
+
+  /* ---------- Foundation: status (minimal, restrained per Visual Identity "avoid" list) ---------- */
+  --color-status-success: #4a9b6e;
+  --color-status-warning: #c9a24d;
+  --color-status-danger: #c1584f;
+  --color-status-info: var(--color-accent-500);
+
+  /* ---------- Semantic: canvas / surface ---------- */
+  --color-canvas: var(--color-neutral-100);
+  --color-surface-raised: var(--color-neutral-200);
+  --color-surface-inset: var(--color-neutral-150);
+  --color-surface-overlay: var(--color-neutral-300);
+  --color-surface-selected: var(--color-neutral-400);
+
+  /* ---------- Semantic: text ---------- */
+  --color-text-primary: var(--color-neutral-950);
+  --color-text-secondary: var(--color-neutral-800);
+  --color-text-muted: var(--color-neutral-700);
+  --color-text-disabled: var(--color-neutral-600);
+  --color-text-inverse: var(--color-neutral-50);
+
+  /* ---------- Semantic: border ---------- */
+  --color-border-subtle: var(--color-neutral-300);
+  --color-border-strong: var(--color-neutral-500);
+  --color-border-focus: var(--color-accent-500);
+  --color-border-selected: var(--color-accent-400);
+
+  /* ---------- Semantic: action ---------- */
+  --color-action-primary: var(--color-accent-500);
+  --color-action-primary-hover: var(--color-accent-600);
+  --color-action-secondary: var(--color-neutral-300);
+  --color-action-destructive: var(--color-status-danger);
+
+  /* ---------- Semantic: AI / proposal identity (distinct from confirmed state, per 07.03) ---------- */
+  --color-ai-accent: var(--color-accent-500);
+  --color-ai-surface: color-mix(in srgb, var(--color-accent-500) 12%, var(--color-neutral-200));
+
+  /* ---------- Foundation: type ---------- */
+  --font-sans: "Inter", "Helvetica Neue", Arial, sans-serif;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.9375rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 2rem;
+
+  /* ---------- Foundation: space (4px base scale) ---------- */
+  --spacing-0: 0px;
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-5: 20px;
+  --spacing-6: 24px;
+  --spacing-8: 32px;
+  --spacing-10: 40px;
+
+  /* ---------- Foundation: radius ---------- */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* ---------- Foundation: motion ---------- */
+  --motion-duration-feedback: 120ms;
+  --motion-duration-transition: 200ms;
+  --motion-easing-standard: cubic-bezier(0.2, 0.0, 0.2, 1);
+}
