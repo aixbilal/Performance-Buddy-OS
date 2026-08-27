@@ -12,6 +12,16 @@
  * necessity — routing needs exactly one structure to exist. It is NOT a UI
  * decision and should be confirmed or corrected explicitly on the design side,
  * not silently accepted because code now assumes it.
+ *
+ * DAY 3 NOTE: PBOS-System-Detail-Actions-v1-REFERENCE.png shows a THIRD,
+ * different sidebar (Today/Goals/Systems/Actions/Focus/Learn/Test/Routines/
+ * Analytics/AI Tutor/Notes) — this is now the third distinct sidebar seen
+ * across reference screenshots. Not reconciled here either. "Systems" is
+ * reachable via a Goal's detail page and via /systems directly, but has
+ * deliberately NOT been added as its own top-level sidebar item, to avoid
+ * compounding the drift by guessing at yet another structure. Flag this for
+ * the same UI ↔ ARCHITECTURE review as the Day 1 nav conflict — ideally
+ * resolved together, once, rather than patched per-screenshot.
  */
 
 export type NavItem = {
@@ -34,7 +44,7 @@ export const NAVIGATION: NavGroup[] = [
     items: [
       { id: "today", label: "Today", path: "/", status: "structured" },
       { id: "focus", label: "Focus", path: "/focus", status: "placeholder" },
-      { id: "goals", label: "Goals", path: "/goals", status: "placeholder" },
+      { id: "goals", label: "Goals", path: "/goals", status: "structured" },
       { id: "calendar", label: "Calendar", path: "/calendar", status: "placeholder" },
     ],
   },
