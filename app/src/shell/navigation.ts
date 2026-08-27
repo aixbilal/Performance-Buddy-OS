@@ -64,7 +64,7 @@ export const NAVIGATION: NavGroup[] = [
     id: "intelligence",
     label: "Intelligence",
     items: [
-      { id: "knowledge", label: "Knowledge", path: "/knowledge", status: "placeholder" },
+      { id: "knowledge", label: "Knowledge", path: "/knowledge", status: "structured" },
       { id: "analytics", label: "Analytics", path: "/analytics", status: "placeholder" },
       { id: "ai-coach", label: "AI Coach", path: "/ai-coach", status: "placeholder" },
     ],
