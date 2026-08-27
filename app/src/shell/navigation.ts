@@ -53,7 +53,7 @@ export const NAVIGATION: NavGroup[] = [
     label: "Life",
     items: [
       { id: "academics", label: "Academics", path: "/academics", status: "structured" },
-      { id: "development", label: "Development", path: "/development", status: "placeholder" },
+      { id: "development", label: "Development", path: "/development", status: "structured" },
       { id: "fitness", label: "Fitness", path: "/fitness", status: "placeholder" },
       { id: "routine", label: "Routine", path: "/routine", status: "placeholder" },
       { id: "language", label: "Language", path: "/language", status: "placeholder" },
