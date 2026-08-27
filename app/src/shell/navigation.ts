@@ -52,7 +52,7 @@ export const NAVIGATION: NavGroup[] = [
     id: "life",
     label: "Life",
     items: [
-      { id: "academics", label: "Academics", path: "/academics", status: "placeholder" },
+      { id: "academics", label: "Academics", path: "/academics", status: "structured" },
       { id: "development", label: "Development", path: "/development", status: "placeholder" },
       { id: "fitness", label: "Fitness", path: "/fitness", status: "placeholder" },
       { id: "routine", label: "Routine", path: "/routine", status: "placeholder" },
