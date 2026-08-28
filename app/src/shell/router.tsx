@@ -20,13 +20,14 @@ import { ReadingLanguageOverviewPage } from "../domains/language/ReadingLanguage
 import { MoneyOverviewPage } from "../domains/money/MoneyOverviewPage";
 import { AnalyticsOverviewPage } from "../domains/analytics/AnalyticsOverviewPage";
 import { AICoachPage } from "../domains/intelligence/AICoachPage";
+import { PlannerPage } from "../domains/planning/PlannerPage";
 import { NAVIGATION } from "./navigation";
 
 // Flatten nav config into routes so every sidebar item resolves somewhere real,
 // rather than maintaining a second, hand-written route list that can drift
 // from the sidebar (this is the "single source of truth" fix for the
 // App Shell / Today nav mismatch flagged in navigation.ts).
-const STRUCTURED_IDS = ["goals", "academics", "knowledge", "development", "fitness", "routine", "language", "money", "analytics", "ai-coach"];
+const STRUCTURED_IDS = ["goals", "academics", "knowledge", "development", "fitness", "routine", "language", "money", "analytics", "ai-coach", "calendar"];
 const placeholderRoutes = NAVIGATION.flatMap((group) => group.items)
   .filter((item) => item.path !== "/" && !STRUCTURED_IDS.includes(item.id))
   .map((item) => ({
@@ -59,6 +60,7 @@ export const router = createHashRouter([
       { path: "/money", element: <MoneyOverviewPage />, handle: { title: "Money" } },
       { path: "/analytics", element: <AnalyticsOverviewPage />, handle: { title: "Analytics" } },
       { path: "/ai-coach", element: <AICoachPage />, handle: { title: "AI Coach" } },
+      { path: "/calendar", element: <PlannerPage />, handle: { title: "Conflict & Capacity" } },
       ...placeholderRoutes,
     ],
   },
