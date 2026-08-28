@@ -9,6 +9,7 @@ import { RoutineProvider } from "./domains/routine/store";
 import { LanguageProvider } from "./domains/language/store";
 import { MoneyProvider } from "./domains/money/store";
 import { AnalyticsProvider } from "./domains/analytics/store";
+import { AICoachProvider } from "./domains/intelligence/store";
 
 export default function App() {
   return (
@@ -21,7 +22,9 @@ export default function App() {
                 <LanguageProvider>
                   <MoneyProvider>
                     <AnalyticsProvider>
-                      <RouterProvider router={router} />
+                      <AICoachProvider>
+                        <RouterProvider router={router} />
+                      </AICoachProvider>
                     </AnalyticsProvider>
                   </MoneyProvider>
                 </LanguageProvider>
