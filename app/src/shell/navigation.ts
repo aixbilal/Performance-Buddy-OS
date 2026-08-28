@@ -72,6 +72,6 @@ export const NAVIGATION: NavGroup[] = [
   {
     id: "system",
     label: "System",
-    items: [{ id: "settings", label: "Settings", path: "/settings", status: "placeholder" }],
+    items: [{ id: "settings", label: "Settings", path: "/settings", status: "structured" }],
   },
 ];

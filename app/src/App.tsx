@@ -11,6 +11,7 @@ import { MoneyProvider } from "./domains/money/store";
 import { AnalyticsProvider } from "./domains/analytics/store";
 import { AICoachProvider } from "./domains/intelligence/store";
 import { PlanningProvider } from "./domains/planning/store";
+import { SettingsProvider } from "./domains/settings/store";
 
 export default function App() {
   return (
@@ -25,7 +26,9 @@ export default function App() {
                     <AnalyticsProvider>
                       <AICoachProvider>
                         <PlanningProvider>
-                          <RouterProvider router={router} />
+                          <SettingsProvider>
+                            <RouterProvider router={router} />
+                          </SettingsProvider>
                         </PlanningProvider>
                       </AICoachProvider>
                     </AnalyticsProvider>
