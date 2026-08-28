@@ -5,6 +5,7 @@ import { AcademicProvider } from "./domains/academic/store";
 import { KnowledgeProvider } from "./domains/knowledge/store";
 import { DevelopmentProvider } from "./domains/development/store";
 import { FitnessProvider } from "./domains/fitness-recovery/store";
+import { RoutineProvider } from "./domains/routine/store";
 
 export default function App() {
   return (
@@ -13,7 +14,9 @@ export default function App() {
         <KnowledgeProvider>
           <DevelopmentProvider>
             <FitnessProvider>
-              <RouterProvider router={router} />
+              <RoutineProvider>
+                <RouterProvider router={router} />
+              </RoutineProvider>
             </FitnessProvider>
           </DevelopmentProvider>
         </KnowledgeProvider>

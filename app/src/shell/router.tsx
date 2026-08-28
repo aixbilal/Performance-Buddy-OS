@@ -15,13 +15,14 @@ import { DevelopmentOverviewPage } from "../domains/development/DevelopmentOverv
 import { SkillDetailPage } from "../domains/development/SkillDetailPage";
 import { FitnessOverviewPage } from "../domains/fitness-recovery/FitnessOverviewPage";
 import { RecoveryReadinessPage } from "../domains/fitness-recovery/RecoveryReadinessPage";
+import { RoutinesOverviewPage } from "../domains/routine/RoutinesOverviewPage";
 import { NAVIGATION } from "./navigation";
 
 // Flatten nav config into routes so every sidebar item resolves somewhere real,
 // rather than maintaining a second, hand-written route list that can drift
 // from the sidebar (this is the "single source of truth" fix for the
 // App Shell / Today nav mismatch flagged in navigation.ts).
-const STRUCTURED_IDS = ["goals", "academics", "knowledge", "development", "fitness"];
+const STRUCTURED_IDS = ["goals", "academics", "knowledge", "development", "fitness", "routine"];
 const placeholderRoutes = NAVIGATION.flatMap((group) => group.items)
   .filter((item) => item.path !== "/" && !STRUCTURED_IDS.includes(item.id))
   .map((item) => ({
@@ -49,6 +50,7 @@ export const router = createHashRouter([
       { path: "/development/skills/:skillId", element: <SkillDetailPage />, handle: { title: "Skill" } },
       { path: "/fitness", element: <FitnessOverviewPage />, handle: { title: "Fitness" } },
       { path: "/fitness/recovery", element: <RecoveryReadinessPage />, handle: { title: "Recovery" } },
+      { path: "/routine", element: <RoutinesOverviewPage />, handle: { title: "Routine" } },
       ...placeholderRoutes,
     ],
   },
