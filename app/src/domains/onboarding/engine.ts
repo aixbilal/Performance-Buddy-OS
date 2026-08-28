@@ -3,7 +3,7 @@
  * are pure logic — no AI involvement anywhere in this file.
  */
 
-import type { LaunchCheck, LaunchValidationResult, OnboardingState, OnboardingStep, StartupRoute } from "./types";
+import type { FullStartupRoute, LaunchCheck, LaunchValidationResult, OnboardingState, OnboardingStep, StartupRoute } from "./types";
 
 const STEP_ORDER: OnboardingStep[] = ["welcome", "personal-setup", "connect-systems", "review-launch"];
 
@@ -48,3 +48,29 @@ export function validateMinimumViableLaunch(coreChecks: LaunchCheck[]): LaunchVa
   const blockers = coreChecks.filter((c) => !c.passed).map((c) => c.name);
   return { canLaunch: blockers.length === 0, blockers };
 }
+
+/**
+ * Day 15B §23 — the full startup routing tree, deterministic. AI has no
+ * authority here (explicitly stated in the handoff), so this function takes
+ * no AI input at all — same structural-boundary approach as
+ * validateMinimumViableLaunch.
+ *
+ * A critical initialization failure routes to recovery BEFORE any first-boot/
+ * onboarding branching happens — a broken database is not a "first boot"
+ * problem, it's a startup problem (§26).
+ */
+export function determineFullStartupRoute(
+  firstBootSeen: boolean,
+  onboardingStatus: OnboardingState["status"],
+  criticalInitFailed: boolean
+): FullStartupRoute {
+  if (criticalInitFailed) return "startup-recovery";
+
+  if (!firstBootSeen) return "full-cinematic-splash-then-welcome";
+
+  if (onboardingStatus === "in_progress") return "short-splash-then-continue-setup";
+  if (onboardingStatus === "not_started") return "short-splash-then-welcome";
+  // completed or skipped
+  return "short-splash-then-today";
+}
+

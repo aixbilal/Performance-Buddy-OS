@@ -22,6 +22,8 @@ type OnboardingContextValue = {
   startupRoute: ReturnType<typeof determineStartupRoute>;
   launchCheck: ReturnType<typeof validateMinimumViableLaunch>;
   completeOnboarding: () => void;
+  relaunchToken: number;
+  simulateRelaunch: () => void;
 };
 
 const OnboardingContext = createContext<OnboardingContextValue | null>(null);
@@ -75,6 +77,13 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, status: "completed", completedAt: new Date().toISOString() }));
   };
 
+  const [relaunchToken, setRelaunchToken] = useState(0);
+  // Test-only affordance (see AppGate.tsx honest-limitation note): since
+  // real disk persistence doesn't exist yet, this lets the Day 15B routing
+  // branches (interrupted/completed relaunch) be verified live instead of
+  // only via unit tests.
+  const simulateRelaunch = () => setRelaunchToken((t) => t + 1);
+
   // §28: reads REAL state from each domain's own store — no onboarding-only
   // duplicate model. §32: Money is optional and does not need to be enabled.
   const systemStatuses: SystemConnectionStatus[] = [
@@ -111,9 +120,11 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       startupRoute,
       launchCheck,
       completeOnboarding,
+      relaunchToken,
+      simulateRelaunch,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state, personalSetup, courses, fitnessPlan, transactions]
+    [state, personalSetup, courses, fitnessPlan, transactions, relaunchToken]
   );
 
   return <OnboardingContext.Provider value={value}>{children}</OnboardingContext.Provider>;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getNextStep, resumeAtStep, determineStartupRoute, validateMinimumViableLaunch } from "./engine";
+import { getNextStep, resumeAtStep, determineStartupRoute, validateMinimumViableLaunch, determineFullStartupRoute } from "./engine";
 import type { OnboardingState } from "./types";
 
 describe("getNextStep", () => {
@@ -84,5 +84,32 @@ describe("validateMinimumViableLaunch — only core failures block (§38)", () =
     ];
     expect(coreOnly.some((c) => /ai|obsidian|money/i.test(c.name))).toBe(false);
     expect(validateMinimumViableLaunch(coreOnly).canLaunch).toBe(true);
+  });
+});
+
+describe("determineFullStartupRoute — Day 15B §23 full routing tree", () => {
+  it("first-ever launch goes to the full cinematic splash", () => {
+    expect(determineFullStartupRoute(false, "not_started", false)).toBe("full-cinematic-splash-then-welcome");
+  });
+
+  it("does NOT replay the cinematic splash just because onboarding is still not_started, once first boot has been seen", () => {
+    expect(determineFullStartupRoute(true, "not_started", false)).toBe("short-splash-then-welcome");
+  });
+
+  it("interrupted onboarding after first boot goes to short splash + Continue Setup, never the cinematic splash again", () => {
+    expect(determineFullStartupRoute(true, "in_progress", false)).toBe("short-splash-then-continue-setup");
+  });
+
+  it("completed onboarding goes to short splash + Today", () => {
+    expect(determineFullStartupRoute(true, "completed", false)).toBe("short-splash-then-today");
+  });
+
+  it("skipped onboarding also goes to short splash + Today", () => {
+    expect(determineFullStartupRoute(true, "skipped", false)).toBe("short-splash-then-today");
+  });
+
+  it("a critical init failure routes to recovery even on a genuine first boot — a broken database is not a first-boot problem", () => {
+    expect(determineFullStartupRoute(false, "not_started", true)).toBe("startup-recovery");
+    expect(determineFullStartupRoute(true, "completed", true)).toBe("startup-recovery");
   });
 });

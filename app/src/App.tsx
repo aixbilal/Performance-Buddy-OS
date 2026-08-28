@@ -1,5 +1,4 @@
-import { RouterProvider } from "react-router-dom";
-import { router } from "./shell/router";
+import { AppGate } from "./shell/AppGate";
 import { PerformanceProvider } from "./domains/performance/store";
 import { AcademicProvider } from "./domains/academic/store";
 import { KnowledgeProvider } from "./domains/knowledge/store";
@@ -29,7 +28,7 @@ export default function App() {
                         <PlanningProvider>
                           <SettingsProvider>
                             <OnboardingProvider>
-                              <RouterProvider router={router} />
+                              <AppGate />
                             </OnboardingProvider>
                           </SettingsProvider>
                         </PlanningProvider>

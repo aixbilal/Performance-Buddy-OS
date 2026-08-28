@@ -19,7 +19,7 @@ const STATE_LABEL = {
 const PRIORITY_OPTIONS = ["Academics", "Development", "Fitness", "Language", "Knowledge"];
 
 export function OnboardingPage() {
-  const { state, personalSetup, setPersonalSetup, goToNextStep, saveAndExit, systemStatuses, resumeStep, startupRoute, launchCheck, completeOnboarding } =
+  const { state, personalSetup, setPersonalSetup, goToNextStep, saveAndExit, systemStatuses, resumeStep, startupRoute, launchCheck, completeOnboarding, simulateRelaunch } =
     useOnboarding();
 
   const togglePriority = (p: string) => {
@@ -37,6 +37,18 @@ export function OnboardingPage() {
       <div className="bg-surface-inset border border-border-subtle rounded-md px-4 py-3 text-xs text-text-muted">
         Resume step if interrupted right now: <b className="text-text-secondary">{resumeStep ?? "none — would go straight to Today"}</b>{" "}
         · Startup route this state would produce: <b className="text-text-secondary">{startupRoute}</b>
+      </div>
+
+      <div className="flex items-center justify-between bg-surface-inset border border-border-subtle rounded-md px-4 py-3">
+        <p className="text-text-disabled text-[11px]">
+          No real disk persistence exists yet, so a genuine app restart can't be demonstrated. This button
+          replays the Day 15B splash/routing gate in place, using your current onboarding status — the
+          cinematic splash will NOT replay (first-boot already seen), only the short splash + correct
+          destination will.
+        </p>
+        <button onClick={simulateRelaunch} className="shrink-0 ml-3 px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium">
+          Simulate Relaunch
+        </button>
       </div>
 
       {state.currentStep === "welcome" && (

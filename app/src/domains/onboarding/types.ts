@@ -45,3 +45,23 @@ export type LaunchCheck = { name: string; passed: boolean };
 export type LaunchValidationResult = { canLaunch: boolean; blockers: string[] };
 
 export type StartupRoute = "first-install-welcome" | "continue-setup" | "existing-data-choice" | "today";
+
+/**
+ * Day 15B §20/§23: separate from `OnboardingState.status` — the cinematic
+ * first-boot experience plays exactly once, ever, regardless of how many
+ * times onboarding itself is interrupted/resumed.
+ */
+export type FirstBootState = {
+  firstBootExperienceSeen: boolean;
+};
+
+/** The five real outcomes from Day 15B §23's routing tree — nothing invented beyond what's specified. */
+export type FullStartupRoute =
+  | "full-cinematic-splash-then-welcome"
+  | "short-splash-then-continue-setup"
+  | "short-splash-then-welcome"
+  | "short-splash-then-today"
+  | "startup-recovery";
+
+export type ReducedMotionPreference = boolean;
+
