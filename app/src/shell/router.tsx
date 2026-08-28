@@ -22,6 +22,7 @@ import { AnalyticsOverviewPage } from "../domains/analytics/AnalyticsOverviewPag
 import { AICoachPage } from "../domains/intelligence/AICoachPage";
 import { PlannerPage } from "../domains/planning/PlannerPage";
 import { SettingsPage } from "../domains/settings/SettingsPage";
+import { OnboardingPage } from "../domains/onboarding/OnboardingPage";
 import { NAVIGATION } from "./navigation";
 
 // Flatten nav config into routes so every sidebar item resolves somewhere real,
@@ -38,6 +39,11 @@ const placeholderRoutes = NAVIGATION.flatMap((group) => group.items)
   }));
 
 export const router = createHashRouter([
+  // Onboarding renders standalone, outside AppShell — no sidebar/topbar
+  // during setup, matching real onboarding UX. Reachable at #/onboarding
+  // for now; real startup-time routing into this is Day 15B's concern
+  // (splash/launch sequence), not implemented here — see DAY-15A notes.
+  { path: "/onboarding", element: <OnboardingPage /> },
   {
     path: "/",
     element: <AppShell />,

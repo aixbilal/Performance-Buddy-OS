@@ -12,6 +12,7 @@ import { AnalyticsProvider } from "./domains/analytics/store";
 import { AICoachProvider } from "./domains/intelligence/store";
 import { PlanningProvider } from "./domains/planning/store";
 import { SettingsProvider } from "./domains/settings/store";
+import { OnboardingProvider } from "./domains/onboarding/store";
 
 export default function App() {
   return (
@@ -27,7 +28,9 @@ export default function App() {
                       <AICoachProvider>
                         <PlanningProvider>
                           <SettingsProvider>
-                            <RouterProvider router={router} />
+                            <OnboardingProvider>
+                              <RouterProvider router={router} />
+                            </OnboardingProvider>
                           </SettingsProvider>
                         </PlanningProvider>
                       </AICoachProvider>
