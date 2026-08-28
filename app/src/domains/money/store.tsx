@@ -1,0 +1,83 @@
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import type { Budget, PlannedExpense, SavingsGoal, Transaction, TransactionType } from "./types";
+import {
+  computeBalance,
+  computeBudgetStatus,
+  computeCategoryTotals,
+  computeExpenseTotal,
+  computeIncomeTotal,
+  computeSavingsProgress,
+  computeUnallocated,
+} from "./engine";
+import { SEED_BUDGETS, SEED_PLANNED_EXPENSES, SEED_SAVINGS_GOALS, SEED_TRANSACTIONS } from "./mockData";
+
+type MoneyContextValue = {
+  transactions: Transaction[];
+  plannedExpenses: PlannedExpense[];
+  budgets: Budget[];
+  savingsGoals: SavingsGoal[];
+  balance: number;
+  unallocated: number;
+  incomeTotal: number;
+  expenseTotal: number;
+  categoryTotals: ReturnType<typeof computeCategoryTotals>;
+  getBudgetResult: (budget: Budget) => ReturnType<typeof computeBudgetStatus>;
+  getSavingsProgress: (goal: SavingsGoal) => ReturnType<typeof computeSavingsProgress>;
+  addTransaction: (t: Omit<Transaction, "id">) => void;
+  plannedTotal: number;
+};
+
+const MoneyContext = createContext<MoneyContextValue | null>(null);
+
+export function MoneyProvider({ children }: { children: ReactNode }) {
+  const [transactions, setTransactions] = useState<Transaction[]>(SEED_TRANSACTIONS);
+  const [plannedExpenses] = useState<PlannedExpense[]>(SEED_PLANNED_EXPENSES);
+  const [budgets] = useState<Budget[]>(SEED_BUDGETS);
+  const [savingsGoals] = useState<SavingsGoal[]>(SEED_SAVINGS_GOALS);
+
+  const balance = computeBalance(transactions);
+  const unallocated = computeUnallocated(transactions); // this month's transactions only, in this seed
+  const incomeTotal = computeIncomeTotal(transactions);
+  const expenseTotal = computeExpenseTotal(transactions);
+  const categoryTotals = computeCategoryTotals(transactions, "expense");
+  const plannedTotal = plannedExpenses
+    .filter((p) => p.recordedTransactionId === null) // §6.4 — not yet recorded, still just an intention
+    .reduce((s, p) => s + p.amount, 0);
+
+  const getBudgetResult = (budget: Budget) => computeBudgetStatus(budget, transactions);
+  const getSavingsProgress = (goal: SavingsGoal) => computeSavingsProgress(goal);
+
+  const addTransaction = (t: Omit<Transaction, "id">) => {
+    setTransactions((prev) => [...prev, { ...t, id: `tx-${Date.now()}` }]);
+  };
+
+  const value = useMemo(
+    () => ({
+      transactions,
+      plannedExpenses,
+      budgets,
+      savingsGoals,
+      balance,
+      unallocated,
+      incomeTotal,
+      expenseTotal,
+      categoryTotals,
+      getBudgetResult,
+      getSavingsProgress,
+      addTransaction,
+      plannedTotal,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [transactions, plannedExpenses, budgets, savingsGoals]
+  );
+
+  return <MoneyContext.Provider value={value}>{children}</MoneyContext.Provider>;
+}
+
+export function useMoney() {
+  const ctx = useContext(MoneyContext);
+  if (!ctx) throw new Error("useMoney must be used within MoneyProvider");
+  return ctx;
+}
+
+export type { TransactionType };
