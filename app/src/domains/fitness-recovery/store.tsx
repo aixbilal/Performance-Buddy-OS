@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import type { PlannedSession, Prescription, RecoveryCheckIn, TrainingPlan } from "./types";
 import { deriveReadiness } from "./engine";
 import { SEED_PLAN, SEED_PRESCRIPTIONS, SEED_RECOVERY_CHECKINS, SEED_SESSIONS } from "./mockData";
@@ -22,9 +22,9 @@ type FitnessContextValue = {
 const FitnessContext = createContext<FitnessContextValue | null>(null);
 
 export function FitnessProvider({ children }: { children: ReactNode }) {
-  const [plan] = useState<TrainingPlan>(SEED_PLAN);
-  const [sessions] = useState<PlannedSession[]>(SEED_SESSIONS);
-  const [prescriptions] = useState<Prescription[]>(SEED_PRESCRIPTIONS);
+  const [plan] = usePersistedState<TrainingPlan>("fitness-plan", SEED_PLAN);
+  const [sessions] = usePersistedState<PlannedSession[]>("fitness-sessions", SEED_SESSIONS);
+  const [prescriptions] = usePersistedState<Prescription[]>("fitness-prescriptions", SEED_PRESCRIPTIONS);
   // Real persistence: your logged recovery check-ins now genuinely survive
   // an app restart — readiness is derived from this, so it's the
   // highest-value piece of Fitness domain state to persist.

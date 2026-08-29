@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { SaveIndicator } from "../../components/SaveIndicator";
+import { StatCard } from "../../components/StatCard";
 import { useAcademic } from "./store";
 
 const STATUS_TONE = {
@@ -24,24 +25,9 @@ export function AcademicsOverviewPage() {
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <Card>
-          <div className="text-text-muted text-xs mb-1">Current CGPA</div>
-          <div className="text-text-primary text-lg font-semibold">
-            {cgpa.cgpa !== null ? cgpa.cgpa.toFixed(2) : "—"}
-          </div>
-          <div className="text-text-secondary text-xs">{cgpa.totalCreditsCounted} credit hours</div>
-        </Card>
-        <Card>
-          <div className="text-text-muted text-xs mb-1">Projected SGPA</div>
-          <div className="text-text-primary text-lg font-semibold">
-            {projectedSGPA !== null ? projectedSGPA.toFixed(2) : "—"}
-          </div>
-          <div className="text-text-secondary text-xs">{semester.label}</div>
-        </Card>
-        <Card>
-          <div className="text-text-muted text-xs mb-1">Courses This Semester</div>
-          <div className="text-text-primary text-lg font-semibold">{courses.length}</div>
-        </Card>
+        <StatCard label="Current CGPA" value={cgpa.cgpa !== null ? cgpa.cgpa.toFixed(2) : "—"} sub={`${cgpa.totalCreditsCounted} credit hours`} />
+        <StatCard label="Projected SGPA" value={projectedSGPA !== null ? projectedSGPA.toFixed(2) : "—"} sub={semester.label} />
+        <StatCard label="Courses This Semester" value={courses.length} />
       </div>
 
       {cgpa.blockedByUnresolvedRepeatPolicy && (

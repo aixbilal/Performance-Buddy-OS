@@ -1,7 +1,8 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import type { CapacityConfig, ScheduleBlock } from "./types";
 import { computePlanFragility, detectCapacityViolations, detectConflicts, tryFitBlock } from "./engine";
 import { SEED_BLOCKS, SEED_CAPACITY } from "./mockData";
+import { usePersistedState } from "../persistence/usePersistedState";
 
 type PlanningContextValue = {
   blocks: ScheduleBlock[];
@@ -16,8 +17,8 @@ type PlanningContextValue = {
 const PlanningContext = createContext<PlanningContextValue | null>(null);
 
 export function PlanningProvider({ children }: { children: ReactNode }) {
-  const [blocks] = useState<ScheduleBlock[]>(SEED_BLOCKS);
-  const [capacity] = useState<CapacityConfig>(SEED_CAPACITY);
+  const [blocks] = usePersistedState<ScheduleBlock[]>("planning-blocks", SEED_BLOCKS);
+  const [capacity] = usePersistedState<CapacityConfig>("planning-capacity", SEED_CAPACITY);
 
   const conflicts = detectConflicts(blocks);
   const violations = detectCapacityViolations(blocks, capacity.dailyCapacityMinutes, capacity.weeklyCapacityMinutes);

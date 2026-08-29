@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import type { CompletionState, Routine, RoutineLog, TimeWindow } from "./types";
 import { computeConsistency } from "./engine";
 import { SEED_LOGS, SEED_ROUTINES } from "./mockData";
@@ -20,9 +20,8 @@ const RoutineContext = createContext<RoutineContextValue | null>(null);
 const today = new Date().toISOString().slice(0, 10);
 
 export function RoutineProvider({ children }: { children: ReactNode }) {
-  // Routine definitions stay in-memory seed data (a deliberate scope choice —
-  // only the frequently-changing logs are persisted for now).
-  const [routines] = useState<Routine[]>(SEED_ROUTINES);
+  // Routine definitions now also persisted, for full domain coverage.
+  const [routines] = usePersistedState<Routine[]>("routine-definitions", SEED_ROUTINES);
 
   // Real persistence: routine logs now genuinely survive an app restart —
   // see domains/persistence for the honest scope note on why this is

@@ -1,5 +1,6 @@
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
+import { StatCard } from "../../components/StatCard";
 import { ProposalCard } from "../intelligence/ProposalCard";
 import { usePerformance } from "./store";
 import { usePlanning } from "../planning/store";
@@ -48,24 +49,12 @@ export function TodayPage() {
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <Card>
-          <div className="text-text-muted text-xs mb-1">Actions Completed</div>
-          <div className="text-text-primary text-lg font-semibold">
-            {completedActions} / {actions.length}
-          </div>
-        </Card>
-        <Card>
-          <div className="text-text-muted text-xs mb-1">Scheduled Today</div>
-          <div className="text-text-primary text-lg font-semibold">{todaysBlocks.length} block(s)</div>
-        </Card>
-        <Card>
-          <div className="text-text-muted text-xs mb-1">
-            {primarySystem ? `${primarySystem.title} Health` : "System Health"}
-          </div>
-          <div className="text-text-primary text-lg font-semibold">
-            {primarySystemHealth !== null ? `${primarySystemHealth}%` : "—"}
-          </div>
-        </Card>
+        <StatCard label="Actions Completed" value={`${completedActions} / ${actions.length}`} />
+        <StatCard label="Scheduled Today" value={`${todaysBlocks.length} block(s)`} />
+        <StatCard
+          label={primarySystem ? `${primarySystem.title} Health` : "System Health"}
+          value={primarySystemHealth !== null ? `${primarySystemHealth}%` : "—"}
+        />
       </div>
 
       <div className="grid grid-cols-3 gap-4">

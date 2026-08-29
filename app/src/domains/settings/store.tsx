@@ -8,6 +8,7 @@ import type {
 } from "./types";
 import { computeEffectiveWeekdayCapacity, resolveResetScope } from "./engine";
 import { MODE_OVERRIDES, SEED_APPEARANCE, SEED_BASE_CONFIG, SEED_NOTIFICATIONS, SEED_TEMPORARY_OVERRIDES } from "./mockData";
+import { usePersistedState } from "../persistence/usePersistedState";
 
 type SettingsContextValue = {
   baseConfig: typeof SEED_BASE_CONFIG;
@@ -28,23 +29,33 @@ const SettingsContext = createContext<SettingsContextValue | null>(null);
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [baseConfig] = useState(SEED_BASE_CONFIG);
-  const [mode, setMode] = useState<OperatingMode>("normal");
-  const [temporaryOverrides, setTemporaryOverrides] = useState<TemporaryOverride[]>(SEED_TEMPORARY_OVERRIDES);
-  const [notifications, setNotifications] = useState<NotificationSettings>(SEED_NOTIFICATIONS);
-  const [appearance, setAppearance] = useState<AppearanceSettings>(SEED_APPEARANCE);
+  // Real persistence: operating mode, overrides, notifications, and
+  // appearance (including Reduced Motion) now genuinely survive an app
+  // restart — these are exactly the kind of user preference that should.
+  const [mode, setMode] = usePersistedState<OperatingMode>("settings-mode", "normal");
+  const [temporaryOverrides, setTemporaryOverrides] = usePersistedState<TemporaryOverride[]>(
+    "settings-temporary-overrides",
+    SEED_TEMPORARY_OVERRIDES
+  );
+  const [notifications, setNotifications] = usePersistedState<NotificationSettings>(
+    "settings-notifications",
+    SEED_NOTIFICATIONS
+  );
+  const [appearance, setAppearance] = usePersistedState<AppearanceSettings>("settings-appearance", SEED_APPEARANCE);
+  // Transient UI feedback only — deliberately NOT persisted (it's meaningless after a restart).
   const [lastResetResult, setLastResetResult] = useState<ReturnType<typeof resolveResetScope> | null>(null);
 
   const effectiveWeekdayCapacity = computeEffectiveWeekdayCapacity(baseConfig, MODE_OVERRIDES[mode], temporaryOverrides);
 
   const addTemporaryOverride = (o: Omit<TemporaryOverride, "id">) => {
-    setTemporaryOverrides((prev) => [...prev, { ...o, id: `temp-${Date.now()}` }]);
+    setTemporaryOverrides([...temporaryOverrides, { ...o, id: `temp-${Date.now()}` }]);
   };
 
   const toggleCategory = (c: NotificationCategory) => {
-    setNotifications((prev) => ({ ...prev, categories: { ...prev.categories, [c]: !prev.categories[c] } }));
+    setNotifications({ ...notifications, categories: { ...notifications.categories, [c]: !notifications.categories[c] } });
   };
 
-  const setReducedMotion = (v: boolean) => setAppearance((prev) => ({ ...prev, reducedMotion: v }));
+  const setReducedMotion = (v: boolean) => setAppearance({ ...appearance, reducedMotion: v });
 
   const restoreInterfaceDefaults = () => {
     const result = resolveResetScope("interface");

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { SaveIndicator } from "../../components/SaveIndicator";
+import { StatCard } from "../../components/StatCard";
 import { useMoney } from "./store";
 import type { TransactionType } from "./types";
 
@@ -49,23 +50,14 @@ export function MoneyOverviewPage() {
       </div>
 
       <div className="grid grid-cols-4 gap-4">
-        <Card>
-          <div className="text-text-muted text-xs mb-1">Tracked Balance</div>
-          <div className="text-text-primary text-lg font-semibold">Rs {balance.toLocaleString()}</div>
-        </Card>
-        <Card>
-          <div className="text-text-muted text-xs mb-1">Income (recorded)</div>
-          <div className="text-text-primary text-lg font-semibold">Rs {incomeTotal.toLocaleString()}</div>
-        </Card>
-        <Card>
-          <div className="text-text-muted text-xs mb-1">Spent (recorded)</div>
-          <div className="text-text-primary text-lg font-semibold">Rs {expenseTotal.toLocaleString()}</div>
-        </Card>
-        <Card>
-          <div className="text-text-muted text-xs mb-1">Currently Unallocated</div>
-          <div className="text-text-primary text-lg font-semibold">Rs {unallocated.toLocaleString()}</div>
-          <p className="text-text-disabled text-[10px] mt-1">Not "safe to spend" — only what's recorded.</p>
-        </Card>
+        <StatCard label="Tracked Balance" value={`Rs ${balance.toLocaleString()}`} />
+        <StatCard label="Income (recorded)" value={`Rs ${incomeTotal.toLocaleString()}`} />
+        <StatCard label="Spent (recorded)" value={`Rs ${expenseTotal.toLocaleString()}`} />
+        <StatCard
+          label="Currently Unallocated"
+          value={`Rs ${unallocated.toLocaleString()}`}
+          sub={<span className="text-text-disabled text-[10px]">Not "safe to spend" — only what's recorded.</span>}
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-4">

@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import type { Milestone, Project, Skill, SkillEvidence } from "./types";
 import { computeEvidenceScore } from "./engine";
 import { SEED_EVIDENCE, SEED_MILESTONES, SEED_PROJECTS, SEED_SKILLS } from "./mockData";
@@ -18,9 +18,9 @@ type DevelopmentContextValue = {
 const DevelopmentContext = createContext<DevelopmentContextValue | null>(null);
 
 export function DevelopmentProvider({ children }: { children: ReactNode }) {
-  const [projects] = useState<Project[]>(SEED_PROJECTS);
-  const [milestones] = useState<Milestone[]>(SEED_MILESTONES);
-  const [skills] = useState<Skill[]>(SEED_SKILLS);
+  const [projects] = usePersistedState<Project[]>("development-projects", SEED_PROJECTS);
+  const [milestones] = usePersistedState<Milestone[]>("development-milestones", SEED_MILESTONES);
+  const [skills] = usePersistedState<Skill[]>("development-skills", SEED_SKILLS);
   // Real persistence, ready for when a real "add evidence" UI exists —
   // there's no creation path yet, but the data now survives a restart
   // the moment one is added, with zero changes needed here.

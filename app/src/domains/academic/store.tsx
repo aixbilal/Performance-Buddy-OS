@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import type { Assessment, Course, CourseAttempt, Semester, Topic } from "./types";
 import { calculateCGPA, calculateSGPA, calculateWeightedScore } from "./engine";
 import {
@@ -30,15 +30,15 @@ type AcademicContextValue = {
 const AcademicContext = createContext<AcademicContextValue | null>(null);
 
 export function AcademicProvider({ children }: { children: ReactNode }) {
-  const [courses] = useState<Course[]>(SEED_COURSES);
-  const [topics] = useState<Topic[]>(SEED_TOPICS);
+  const [courses] = usePersistedState<Course[]>("academic-courses", SEED_COURSES);
+  const [topics] = usePersistedState<Topic[]>("academic-topics", SEED_TOPICS);
   // Real persistence: entered marks now genuinely survive an app restart —
   // see domains/persistence for the honest scope note.
   const [assessments, setAssessments, assessmentsSaveState] = usePersistedState<Assessment[]>(
     "academic-assessments",
     SEED_ASSESSMENTS
   );
-  const [attemptsByCourseId] = useState<Record<string, CourseAttempt[]>>(SEED_ATTEMPTS);
+  const [attemptsByCourseId] = usePersistedState<Record<string, CourseAttempt[]>>("academic-attempts", SEED_ATTEMPTS);
 
   const getTopicsForCourse = (courseId: string) =>
     topics.filter((t) => t.courseId === courseId).sort((a, b) => a.order - b.order);

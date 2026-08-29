@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import type { Budget, PlannedExpense, SavingsGoal, Transaction, TransactionType } from "./types";
 import {
   computeBalance,
@@ -39,9 +39,9 @@ export function MoneyProvider({ children }: { children: ReactNode }) {
     "money-transactions",
     SEED_TRANSACTIONS
   );
-  const [plannedExpenses] = useState<PlannedExpense[]>(SEED_PLANNED_EXPENSES);
-  const [budgets] = useState<Budget[]>(SEED_BUDGETS);
-  const [savingsGoals] = useState<SavingsGoal[]>(SEED_SAVINGS_GOALS);
+  const [plannedExpenses] = usePersistedState<PlannedExpense[]>("money-planned-expenses", SEED_PLANNED_EXPENSES);
+  const [budgets] = usePersistedState<Budget[]>("money-budgets", SEED_BUDGETS);
+  const [savingsGoals] = usePersistedState<SavingsGoal[]>("money-savings-goals", SEED_SAVINGS_GOALS);
 
   const balance = computeBalance(transactions);
   const unallocated = computeUnallocated(transactions); // this month's transactions only, in this seed

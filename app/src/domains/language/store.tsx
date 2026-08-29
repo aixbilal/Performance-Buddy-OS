@@ -1,7 +1,8 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import type { Book, LanguageLesson, LanguageUnit } from "./types";
 import { computePathProgress, computeReadingProgress } from "./engine";
 import { SEED_BOOKS, SEED_LESSONS, SEED_UNITS } from "./mockData";
+import { usePersistedState } from "../persistence/usePersistedState";
 
 type LanguageContextValue = {
   units: LanguageUnit[];
@@ -16,9 +17,9 @@ type LanguageContextValue = {
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [units] = useState<LanguageUnit[]>(SEED_UNITS);
-  const [lessons, setLessons] = useState<LanguageLesson[]>(SEED_LESSONS);
-  const [books] = useState<Book[]>(SEED_BOOKS);
+  const [units] = usePersistedState<LanguageUnit[]>("language-units", SEED_UNITS);
+  const [lessons, setLessons] = usePersistedState<LanguageLesson[]>("language-lessons", SEED_LESSONS);
+  const [books] = usePersistedState<Book[]>("language-books", SEED_BOOKS);
 
   const getLessonsForUnit = (unitId: string) => lessons.filter((l) => l.unitId === unitId).sort((a, b) => a.order - b.order);
   const pathProgress = computePathProgress(lessons);
@@ -27,7 +28,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     return book ? computeReadingProgress(book) : 0;
   };
   const markLessonCompleted = (lessonId: string) => {
-    setLessons((prev) => prev.map((l) => (l.id === lessonId ? { ...l, completed: true } : l)));
+    setLessons(lessons.map((l) => (l.id === lessonId ? { ...l, completed: true } : l)));
   };
 
   const value = useMemo(

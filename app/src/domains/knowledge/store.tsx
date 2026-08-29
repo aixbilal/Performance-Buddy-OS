@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import type { Evidence, Source, Topic } from "./types";
 import { deriveKnowledgeState, isReviewDue } from "./engine";
 import { SEED_EVIDENCE, SEED_SOURCES, SEED_TOPICS } from "./mockData";
@@ -18,8 +18,8 @@ type KnowledgeContextValue = {
 const KnowledgeContext = createContext<KnowledgeContextValue | null>(null);
 
 export function KnowledgeProvider({ children }: { children: ReactNode }) {
-  const [topics] = useState<Topic[]>(SEED_TOPICS);
-  const [sources] = useState<Source[]>(SEED_SOURCES);
+  const [topics] = usePersistedState<Topic[]>("knowledge-topics", SEED_TOPICS);
+  const [sources] = usePersistedState<Source[]>("knowledge-sources", SEED_SOURCES);
   // Real persistence: recorded evidence (recall/test scores) now genuinely
   // survives an app restart — mastery derives from this, so persisting it
   // is the highest-value piece of Knowledge domain state.
