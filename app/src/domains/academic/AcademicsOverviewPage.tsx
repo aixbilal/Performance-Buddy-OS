@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
+import { SaveIndicator } from "../../components/SaveIndicator";
 import { useAcademic } from "./store";
 
 const STATUS_TONE = {
@@ -10,13 +11,16 @@ const STATUS_TONE = {
 } as const;
 
 export function AcademicsOverviewPage() {
-  const { semester, courses, cgpa, projectedSGPA } = useAcademic();
+  const { semester, courses, cgpa, projectedSGPA, assessmentsSaveState } = useAcademic();
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-text-primary text-xl font-semibold">Academics</h2>
-        <p className="text-text-muted text-sm">{semester.label}</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-text-primary text-xl font-semibold">Academics</h2>
+          <p className="text-text-muted text-sm">{semester.label}</p>
+        </div>
+        <SaveIndicator state={assessmentsSaveState} />
       </div>
 
       <div className="grid grid-cols-3 gap-4">

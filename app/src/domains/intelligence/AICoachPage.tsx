@@ -14,7 +14,7 @@ function minutesLabel(mins: number) {
 }
 
 export function AICoachPage() {
-  const { permissions, setPermission, visibleRecommendations, filteredOutCount, decideRecommendation, combinedImpact, decisionHistory } =
+  const { permissions, setPermission, visibleRecommendations, filteredOutCount, decideRecommendation, combinedImpact, decisionHistory, aiAvailability, userEnabled, setUserEnabled } =
     useAICoach();
 
   return (
@@ -23,6 +23,29 @@ export function AICoachPage() {
         <h2 className="text-text-primary text-xl font-semibold">AI Coach</h2>
         <p className="text-text-muted text-sm">AI proposes. You decide. PBOS validates. Systems change.</p>
       </div>
+
+      <Card>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-text-muted text-xs mb-1">AI Availability</div>
+            <Badge tone={aiAvailability === "ready" ? "success" : aiAvailability === "disabled" ? "neutral" : "warning"}>
+              {aiAvailability === "not-configured" ? "Not Configured" : aiAvailability}
+            </Badge>
+            {aiAvailability === "not-configured" && (
+              <p className="text-text-disabled text-[11px] mt-1">
+                No AI provider is wired in this build yet — this is the honest state, not an error. PBOS works
+                fully without it.
+              </p>
+            )}
+          </div>
+          <button
+            onClick={() => setUserEnabled(!userEnabled)}
+            className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
+          >
+            {userEnabled ? "Disable AI" : "Enable AI"}
+          </button>
+        </div>
+      </Card>
 
       <Card title="Domain Access">
         <p className="text-text-disabled text-[11px] mb-3">

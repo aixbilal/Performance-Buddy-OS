@@ -2,6 +2,8 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from "re
 import type { Evidence, Source, Topic } from "./types";
 import { deriveKnowledgeState, isReviewDue } from "./engine";
 import { SEED_EVIDENCE, SEED_SOURCES, SEED_TOPICS } from "./mockData";
+import { usePersistedState } from "../persistence/usePersistedState";
+import type { SaveState } from "../resilience/types";
 
 type KnowledgeContextValue = {
   topics: Topic[];
@@ -10,6 +12,7 @@ type KnowledgeContextValue = {
   getTopicState: (topic: Topic) => ReturnType<typeof deriveKnowledgeState>;
   getReviewQueue: () => Topic[];
   addEvidence: (topicId: string, evidence: Omit<Evidence, "id" | "topicId">) => void;
+  evidenceSaveState: SaveState;
 };
 
 const KnowledgeContext = createContext<KnowledgeContextValue | null>(null);
@@ -17,7 +20,10 @@ const KnowledgeContext = createContext<KnowledgeContextValue | null>(null);
 export function KnowledgeProvider({ children }: { children: ReactNode }) {
   const [topics] = useState<Topic[]>(SEED_TOPICS);
   const [sources] = useState<Source[]>(SEED_SOURCES);
-  const [evidence, setEvidence] = useState<Evidence[]>(SEED_EVIDENCE);
+  // Real persistence: recorded evidence (recall/test scores) now genuinely
+  // survives an app restart — mastery derives from this, so persisting it
+  // is the highest-value piece of Knowledge domain state.
+  const [evidence, setEvidence, evidenceSaveState] = usePersistedState<Evidence[]>("knowledge-evidence", SEED_EVIDENCE);
 
   const getSourcesForTopic = (topicId: string) => sources.filter((s) => s.topicId === topicId);
   const getEvidenceForTopic = (topicId: string) =>
@@ -29,10 +35,7 @@ export function KnowledgeProvider({ children }: { children: ReactNode }) {
   const getReviewQueue = () => topics.filter((t) => isReviewDue(t.nextReviewDate));
 
   const addEvidence = (topicId: string, newEvidence: Omit<Evidence, "id" | "topicId">) => {
-    setEvidence((prev) => [
-      ...prev,
-      { ...newEvidence, id: `ev-${Date.now()}`, topicId },
-    ]);
+    setEvidence([...evidence, { ...newEvidence, id: `ev-${Date.now()}`, topicId }]);
   };
 
   const value = useMemo(
@@ -43,9 +46,10 @@ export function KnowledgeProvider({ children }: { children: ReactNode }) {
       getTopicState,
       getReviewQueue,
       addEvidence,
+      evidenceSaveState,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [topics, sources, evidence]
+    [topics, sources, evidence, evidenceSaveState]
   );
 
   return <KnowledgeContext.Provider value={value}>{children}</KnowledgeContext.Provider>;

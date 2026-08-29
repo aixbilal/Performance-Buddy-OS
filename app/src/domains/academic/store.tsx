@@ -9,6 +9,8 @@ import {
   SEED_SEMESTER,
   SEED_TOPICS,
 } from "./mockData";
+import { usePersistedState } from "../persistence/usePersistedState";
+import type { SaveState } from "../resilience/types";
 
 type AcademicContextValue = {
   semester: Semester;
@@ -22,6 +24,7 @@ type AcademicContextValue = {
   setAssessmentMarks: (assessmentId: string, obtainedMarks: number) => void;
   cgpa: ReturnType<typeof calculateCGPA>;
   projectedSGPA: number | null;
+  assessmentsSaveState: SaveState;
 };
 
 const AcademicContext = createContext<AcademicContextValue | null>(null);
@@ -29,7 +32,12 @@ const AcademicContext = createContext<AcademicContextValue | null>(null);
 export function AcademicProvider({ children }: { children: ReactNode }) {
   const [courses] = useState<Course[]>(SEED_COURSES);
   const [topics] = useState<Topic[]>(SEED_TOPICS);
-  const [assessments, setAssessments] = useState<Assessment[]>(SEED_ASSESSMENTS);
+  // Real persistence: entered marks now genuinely survive an app restart —
+  // see domains/persistence for the honest scope note.
+  const [assessments, setAssessments, assessmentsSaveState] = usePersistedState<Assessment[]>(
+    "academic-assessments",
+    SEED_ASSESSMENTS
+  );
   const [attemptsByCourseId] = useState<Record<string, CourseAttempt[]>>(SEED_ATTEMPTS);
 
   const getTopicsForCourse = (courseId: string) =>
@@ -49,7 +57,7 @@ export function AcademicProvider({ children }: { children: ReactNode }) {
   };
 
   const setAssessmentMarks = (assessmentId: string, obtainedMarks: number) => {
-    setAssessments((prev) => prev.map((a) => (a.id === assessmentId ? { ...a, obtainedMarks } : a)));
+    setAssessments(assessments.map((a) => (a.id === assessmentId ? { ...a, obtainedMarks } : a)));
   };
 
   // No attempts are graded yet in seed data (current semester in progress),
@@ -76,9 +84,10 @@ export function AcademicProvider({ children }: { children: ReactNode }) {
       setAssessmentMarks,
       cgpa,
       projectedSGPA,
+      assessmentsSaveState,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [courses, topics, assessments, attemptsByCourseId]
+    [courses, topics, assessments, attemptsByCourseId, assessmentsSaveState]
   );
 
   return <AcademicContext.Provider value={value}>{children}</AcademicContext.Provider>;

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
+import { SaveIndicator } from "../../components/SaveIndicator";
 import { useMoney } from "./store";
 import type { TransactionType } from "./types";
 
@@ -24,6 +25,7 @@ export function MoneyOverviewPage() {
     plannedExpenses,
     plannedTotal,
     addTransaction,
+    transactionsSaveState,
   } = useMoney();
 
   const [amount, setAmount] = useState(0);
@@ -38,9 +40,12 @@ export function MoneyOverviewPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-text-primary text-xl font-semibold">Money</h2>
-        <p className="text-text-muted text-sm">Manual tracking — this is your recorded balance, not a verified bank figure.</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-text-primary text-xl font-semibold">Money</h2>
+          <p className="text-text-muted text-sm">Manual tracking — this is your recorded balance, not a verified bank figure.</p>
+        </div>
+        <SaveIndicator state={transactionsSaveState} />
       </div>
 
       <div className="grid grid-cols-4 gap-4">

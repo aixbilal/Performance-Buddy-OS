@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
+import { SaveIndicator } from "../../components/SaveIndicator";
 import { useFitness } from "./store";
 import { useState } from "react";
 import type { Level3, SorenessLevel } from "./types";
@@ -14,7 +15,7 @@ const STATE_TONE = {
 } as const;
 
 export function RecoveryReadinessPage() {
-  const { readiness, checkIns, addCheckIn } = useFitness();
+  const { readiness, checkIns, addCheckIn, checkInsSaveState } = useFitness();
   const [sleepHours, setSleepHours] = useState(7.5);
   const [soreness, setSoreness] = useState<SorenessLevel>("none");
   const [energy, setEnergy] = useState<Level3>("normal");
@@ -32,12 +33,15 @@ export function RecoveryReadinessPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link to="/fitness" className="text-text-muted text-xs hover:text-text-secondary">
-          ← Fitness
-        </Link>
-        <h2 className="text-text-primary text-xl font-semibold mt-1">Recovery & Readiness</h2>
-        <p className="text-text-muted text-sm">Understand your recovery and get the best recommendation for today.</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <Link to="/fitness" className="text-text-muted text-xs hover:text-text-secondary">
+            ← Fitness
+          </Link>
+          <h2 className="text-text-primary text-xl font-semibold mt-1">Recovery & Readiness</h2>
+          <p className="text-text-muted text-sm">Understand your recovery and get the best recommendation for today.</p>
+        </div>
+        <SaveIndicator state={checkInsSaveState} />
       </div>
 
       <Card>

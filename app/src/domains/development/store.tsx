@@ -2,6 +2,8 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from "re
 import type { Milestone, Project, Skill, SkillEvidence } from "./types";
 import { computeEvidenceScore } from "./engine";
 import { SEED_EVIDENCE, SEED_MILESTONES, SEED_PROJECTS, SEED_SKILLS } from "./mockData";
+import { usePersistedState } from "../persistence/usePersistedState";
+import type { SaveState } from "../resilience/types";
 
 type DevelopmentContextValue = {
   projects: Project[];
@@ -10,6 +12,7 @@ type DevelopmentContextValue = {
   getEvidenceForSkill: (skillId: string) => SkillEvidence[];
   getProjectsForSkill: (skillId: string) => Project[];
   getSkillEvidenceScore: (skillId: string) => ReturnType<typeof computeEvidenceScore>;
+  evidenceSaveState: SaveState;
 };
 
 const DevelopmentContext = createContext<DevelopmentContextValue | null>(null);
@@ -18,7 +21,10 @@ export function DevelopmentProvider({ children }: { children: ReactNode }) {
   const [projects] = useState<Project[]>(SEED_PROJECTS);
   const [milestones] = useState<Milestone[]>(SEED_MILESTONES);
   const [skills] = useState<Skill[]>(SEED_SKILLS);
-  const [evidence] = useState<SkillEvidence[]>(SEED_EVIDENCE);
+  // Real persistence, ready for when a real "add evidence" UI exists —
+  // there's no creation path yet, but the data now survives a restart
+  // the moment one is added, with zero changes needed here.
+  const [evidence, , evidenceSaveState] = usePersistedState<SkillEvidence[]>("development-evidence", SEED_EVIDENCE);
 
   const getMilestonesForProject = (projectId: string) =>
     milestones.filter((m) => m.projectId === projectId).sort((a, b) => a.order - b.order);
@@ -38,9 +44,10 @@ export function DevelopmentProvider({ children }: { children: ReactNode }) {
       getEvidenceForSkill,
       getProjectsForSkill,
       getSkillEvidenceScore,
+      evidenceSaveState,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [projects, milestones, skills, evidence]
+    [projects, milestones, skills, evidence, evidenceSaveState]
   );
 
   return <DevelopmentContext.Provider value={value}>{children}</DevelopmentContext.Provider>;
