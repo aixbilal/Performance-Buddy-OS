@@ -3,6 +3,7 @@ import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { CommandPalette } from "./CommandPalette";
 import { ConnectivityBanner } from "./ConnectivityBanner";
+import { RouteErrorBoundary } from "./RouteErrorBoundary";
 
 export function AppShell() {
   const matches = useMatches();
@@ -16,7 +17,11 @@ export function AppShell() {
         <ConnectivityBanner />
         <TopBar title={title} />
         <main className="flex-1 overflow-y-auto p-6">
-          <Outlet />
+          {/* §34: the smallest reasonable failing surface — a crash inside
+              one routed page never takes down the sidebar/topbar/shell. */}
+          <RouteErrorBoundary label={title} key={title}>
+            <Outlet />
+          </RouteErrorBoundary>
         </main>
       </div>
       <CommandPalette />
