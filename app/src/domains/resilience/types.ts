@@ -36,3 +36,5 @@ export type AIAvailabilityInputs = {
 };
 
 export type SaveState = "idle" | "saving" | "saved" | "failed";
+
+export type ConnectivityBannerState = "hidden" | "offline" | "back-online";

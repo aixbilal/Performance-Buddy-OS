@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveResilienceState, deriveAIAvailability, saveStateLabel } from "./engine";
+import { resolveResilienceState, deriveAIAvailability, saveStateLabel, deriveConnectivityBannerState } from "./engine";
 import type { ResilienceInputs } from "./types";
 
 const base: ResilienceInputs = {
@@ -62,5 +62,20 @@ describe("saveStateLabel — never claims Saved before persistence succeeds (§5
     expect(saveStateLabel("saved")).toBe("Saved");
     expect(saveStateLabel("failed")).toBe("Save Failed");
     expect(saveStateLabel("idle")).toBe("");
+  });
+});
+
+describe("deriveConnectivityBannerState — restrained offline banner (§28)", () => {
+  it("shows offline regardless of any recent-reconnect flag", () => {
+    expect(deriveConnectivityBannerState(false, true)).toBe("offline");
+    expect(deriveConnectivityBannerState(false, false)).toBe("offline");
+  });
+
+  it("shows a transient back-online message right after reconnecting", () => {
+    expect(deriveConnectivityBannerState(true, true)).toBe("back-online");
+  });
+
+  it("shows nothing once fully settled back online", () => {
+    expect(deriveConnectivityBannerState(true, false)).toBe("hidden");
   });
 });

@@ -50,3 +50,17 @@ export function saveStateLabel(state: "idle" | "saving" | "saved" | "failed"): s
       return "";
   }
 }
+
+/**
+ * Day 17 §28: "Device offline must NOT trigger a giant full-screen
+ * failure... Use a restrained status such as: Offline · Local features
+ * available. When network returns: brief factual Back Online feedback
+ * then disappear." Deterministic — the transient "back online" window is
+ * timed by the caller (a real browser event hook), this function only
+ * decides what to show given the two known facts.
+ */
+export function deriveConnectivityBannerState(isOnline: boolean, wasOfflineRecently: boolean): import("./types").ConnectivityBannerState {
+  if (!isOnline) return "offline";
+  if (wasOfflineRecently) return "back-online";
+  return "hidden";
+}
