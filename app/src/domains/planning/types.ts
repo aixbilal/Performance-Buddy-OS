@@ -25,6 +25,8 @@ export type ScheduleBlock = {
   type: BlockType;
   /** Per §9.12: a locked block must survive plan regeneration untouched. */
   locked: boolean;
+  /** Day 18 fix: links back to the canonical Action this block schedules. Nullable — not every block needs one (e.g. a fixed class lecture). */
+  actionId: string | null;
 };
 
 /** Per §9.7: a deadline is a requirement, never itself a scheduled work block. */

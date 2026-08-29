@@ -43,7 +43,7 @@ export const NAVIGATION: NavGroup[] = [
     label: "Today",
     items: [
       { id: "today", label: "Today", path: "/", status: "structured" },
-      { id: "focus", label: "Focus", path: "/focus", status: "placeholder" },
+      { id: "focus", label: "Focus", path: "/focus", status: "structured" },
       { id: "goals", label: "Goals", path: "/goals", status: "structured" },
       { id: "calendar", label: "Calendar", path: "/calendar", status: "structured" },
     ],

@@ -23,6 +23,7 @@ type PerformanceContextValue = PerformanceState & {
   getActionsForSystem: (systemId: string) => Action[];
   getGoalForSystem: (systemId: string) => Goal | undefined;
   setActionStatus: (actionId: string, status: ActionStatus) => void;
+  addAction: (action: Omit<Action, "id" | "order">) => Action;
   /** Deterministic — recomputed from real action state, never guessed by AI. */
   computeSystemHealth: (systemId: string) => number;
 };
@@ -36,6 +37,12 @@ export function PerformanceProvider({ children }: { children: ReactNode }) {
 
   const setActionStatus = (actionId: string, status: ActionStatus) => {
     setActions((prev) => prev.map((a) => (a.id === actionId ? { ...a, status } : a)));
+  };
+
+  const addAction = (action: Omit<Action, "id" | "order">): Action => {
+    const newAction: Action = { ...action, id: `action-${Date.now()}`, order: actions.length + 1 };
+    setActions((prev) => [...prev, newAction]);
+    return newAction;
   };
 
   const getActionsForSystem = (systemId: string) =>
@@ -70,6 +77,7 @@ export function PerformanceProvider({ children }: { children: ReactNode }) {
       getActionsForSystem,
       getGoalForSystem,
       setActionStatus,
+      addAction,
       computeSystemHealth,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps

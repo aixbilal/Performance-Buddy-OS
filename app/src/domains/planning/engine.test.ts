@@ -5,11 +5,12 @@ import {
   tryFitBlock,
   rebuildUnlockedBlocks,
   computePlanFragility,
+  rescheduleBlock,
 } from "./engine";
 import type { ScheduleBlock } from "./types";
 
 function block(overrides: Partial<ScheduleBlock>): ScheduleBlock {
-  return { id: "b", title: "Block", domain: "Academics", day: 0, startMinute: 480, endMinute: 540, type: "flexible", locked: false, ...overrides };
+  return { id: "b", title: "Block", domain: "Academics", day: 0, startMinute: 480, endMinute: 540, type: "flexible", locked: false, actionId: null, ...overrides };
 }
 
 describe("detectConflicts — direct overlap only (§9.13)", () => {
@@ -104,5 +105,16 @@ describe("computePlanFragility — 'valid but fragile' (§9.18)", () => {
 
   it("reports exceeds when scheduled time is over capacity", () => {
     expect(computePlanFragility(1000, 900)).toBe("exceeds");
+  });
+});
+
+describe("rescheduleBlock — moving time ≠ creating a new Action (Day 18 §59)", () => {
+  it("carries id and actionId through unchanged when a block moves", () => {
+    const original = block({ id: "blk-1", actionId: "act-1", day: 2, startMinute: 600, endMinute: 660 });
+    const result = rescheduleBlock(original, 4, 900, 960);
+    expect(result.id).toBe("blk-1");
+    expect(result.actionId).toBe("act-1");
+    expect(result.day).toBe(4);
+    expect(result.startMinute).toBe(900);
   });
 });

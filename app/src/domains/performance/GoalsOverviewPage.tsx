@@ -1,6 +1,7 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
+import { EmptyState } from "../../components/EmptyState";
 import { ProposalCard, type Proposal } from "../intelligence/ProposalCard";
 import { usePerformance } from "./store";
 import { useState } from "react";
@@ -24,9 +25,21 @@ const AI_MICRO_GOAL_PROPOSAL: Proposal = {
 export function GoalsOverviewPage() {
   const { goals } = usePerformance();
   const [proposalHandled, setProposalHandled] = useState(false);
+  const navigate = useNavigate();
 
   const active = goals.filter((g) => g.status !== "completed" && g.status !== "paused");
   const needingAttention = goals.filter((g) => g.status === "needs-focus" || g.status === "behind");
+
+  if (goals.length === 0) {
+    return (
+      <EmptyState
+        icon="🎯"
+        title="No goals yet"
+        description="Goals give PBOS a clear outcome to connect systems, actions, and your daily work."
+        primaryAction={{ label: "Create Goal", onClick: () => navigate("/goals") }}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">

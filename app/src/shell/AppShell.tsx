@@ -1,6 +1,7 @@
 import { Outlet, useMatches } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
+import { CommandPalette } from "./CommandPalette";
 
 export function AppShell() {
   const matches = useMatches();
@@ -16,6 +17,7 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+      <CommandPalette />
     </div>
   );
 }

@@ -12,6 +12,9 @@ import { AICoachProvider } from "./domains/intelligence/store";
 import { PlanningProvider } from "./domains/planning/store";
 import { SettingsProvider } from "./domains/settings/store";
 import { OnboardingProvider } from "./domains/onboarding/store";
+import { SearchProvider } from "./domains/search/store";
+import { CaptureProvider } from "./domains/capture/store";
+import { FocusProvider } from "./domains/focus/store";
 
 export default function App() {
   return (
@@ -28,7 +31,13 @@ export default function App() {
                         <PlanningProvider>
                           <SettingsProvider>
                             <OnboardingProvider>
-                              <AppGate />
+                              <SearchProvider>
+                                <CaptureProvider>
+                                  <FocusProvider>
+                                    <AppGate />
+                                  </FocusProvider>
+                                </CaptureProvider>
+                              </SearchProvider>
                             </OnboardingProvider>
                           </SettingsProvider>
                         </PlanningProvider>

@@ -36,6 +36,7 @@ export function PlannerPage() {
       endMinute: 15 * 60,
       type: "flexible",
       locked: false,
+      actionId: null,
     };
     const result = checkFit(candidate);
     setTestResult(result.fits ? "Fits cleanly — no conflict or capacity issue." : `Could Not Fit: ${result.reason}`);

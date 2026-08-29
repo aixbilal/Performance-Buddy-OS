@@ -110,3 +110,17 @@ export function computePlanFragility(scheduledMinutes: number, capacityMinutes: 
   if (buffer < bufferThresholdMinutes) return "valid-fragile";
   return "valid";
 }
+
+/**
+ * Day 18 §59: "Moving scheduled time ≠ New Action." Rescheduling only ever
+ * changes day/time — `id` and `actionId` carry through unchanged, and no
+ * new block or Action is ever created.
+ */
+export function rescheduleBlock(
+  block: ScheduleBlock,
+  newDay: number,
+  newStartMinute: number,
+  newEndMinute: number
+): ScheduleBlock {
+  return { ...block, day: newDay, startMinute: newStartMinute, endMinute: newEndMinute };
+}
