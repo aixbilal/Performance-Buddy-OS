@@ -110,7 +110,7 @@ describe("PBOS native desktop shell — renderer E2E", () => {
 
   it("persists through the real Tauri → Rust → SQLite path", async () => {
     const status = await invokeCmd<{ schema_version: number; localstorage_migrated: boolean }>("db_status");
-    expect(status.schema_version).toBe(2); // Batch 1 migration
+    expect(status.schema_version).toBe(3); // Batch 2A migration v3 (Academic + Knowledge)
     expect(status.localstorage_migrated).toBe(true);
 
     await invokeCmd("kv_set", { key: "pbos:__e2e_probe__", value: JSON.stringify({ ok: true, n: 3 }) });
@@ -192,3 +192,138 @@ describe("PBOS Batch 1 — real-user Goal → System → Action scenario", () =>
     await invokeCmd("perf_reset_for_test");
   });
 });
+
+describe("PBOS Batch 2A — real-user Academic + Knowledge scenario", () => {
+  it("creates a course, topic, knowledge concept + evidence, links them, and verifies straight out of SQLite", async () => {
+    // 1. wipe both relational graphs (markers stay set → no re-import).
+    await invokeCmd("acad_reset_for_test");
+    await invokeCmd("know_reset_for_test");
+
+    // 2. Create the canonical Knowledge concept + one piece of evidence via the UI.
+    await nav("#/knowledge/new");
+    await waitForText("Add Knowledge Topic");
+    expect(await setByLabel("topic title", "Binary Trees")).toBe(true);
+    expect(await clickButton("^add topic$")).toBe(true);
+    await waitForText("No mastery evidence yet");
+    expect(await clickButton("record evidence")).toBe(true);
+    await waitForText("What was it");
+    expect(await setByLabel("what was it", "Inorder traversal drill")).toBe(true);
+    expect(await setByLabel("^score$", "8")).toBe(true);
+    expect(await clickButton("^record evidence$")).toBe(true);
+    await waitForText("80%"); // evidence-derived mastery
+
+    // 3. Create the Course + Academic Topic via the UI.
+    await nav("#/academics/new");
+    await waitForText("Add Course");
+    expect(await setByLabel("course name", "Data Structures")).toBe(true);
+    expect(await clickButton("^add course$")).toBe(true);
+    await waitForText("Weighted Score So Far");
+    expect(await clickButton("^add topic$")).toBe(true);
+    await waitForText("Topic title");
+    expect(await setByLabel("topic title", "Binary Trees")).toBe(true);
+    expect(await clickButton("^add topic$")).toBe(true);
+    await waitForText("Not linked");
+
+    // 4. Link the Academic Topic → the canonical Knowledge concept, through the UI.
+    expect(
+      await setField('select[id^="link-"]', await knowledgeTopicIdByTitle("Binary Trees")),
+    ).toBe(true);
+    expect(await clickButton("^link$")).toBe(true);
+    await waitForText("Unlink Knowledge concept");
+
+    // 5. Add an Assessment + marks via the UI.
+    expect(await clickButton("^add assessment$")).toBe(true);
+    await waitForText("Assessment title");
+    expect(await setByLabel("assessment title", "Quiz 1")).toBe(true);
+    expect(await setByLabel("total marks", "20")).toBe(true);
+    expect(await setByLabel("weight %", "100")).toBe(true);
+    expect(await clickButton("^add assessment$")).toBe(true);
+    await waitForText("Quiz 1");
+    expect(await setField('input[aria-label="Obtained marks for Quiz 1"]', "18")).toBe(true);
+    // the marks field commits on blur → React listens for `focusout` (which bubbles).
+    await browser.tauri.execute(() => {
+      const el = document.querySelector(
+        'input[aria-label="Obtained marks for Quiz 1"]',
+      ) as HTMLInputElement | null;
+      el?.dispatchEvent(new Event("focusout", { bubbles: true }));
+    });
+    await waitForText("90.0%"); // 18/20 * 100% weight, deterministic
+
+    // 6. Add a Knowledge Source via the UI (back on the topic).
+    await nav("#/knowledge");
+    await waitForText("Binary Trees");
+    await browser.pause(300);
+    await browser.tauri.execute(() => {
+      const link = [...document.querySelectorAll("a")].find((a) =>
+        /Binary Trees/i.test(a.textContent || ""),
+      );
+      (link as HTMLAnchorElement)?.click();
+    });
+    // Card <h3> titles are CSS-uppercased; match on body copy instead.
+    await waitForText("actual note content lives in Obsidian");
+    expect(await clickButton("^add source$")).toBe(true);
+    await waitForText("Source title");
+    expect(await setByLabel("source title", "DSA Lecture 08")).toBe(true);
+    await browser.pause(150); // let React flush the controlled-input change
+    expect(await clickButton("^add source$")).toBe(true);
+    await waitForText("DSA Lecture 08");
+    // let every fire-and-forget write-through (invoke → Rust → SQLite) flush.
+    await browser.pause(1200);
+
+    // 7. Verify canonical records + the ONE cross-domain relationship straight out of SQLite.
+    const acad = await invokeCmd<{
+      courses: { id: string; title: string }[];
+      topics: {
+        id: string;
+        title: string;
+        courseId: string;
+        professorCoverage: string;
+        personalStudyPercent: number;
+        knowledgeTopicId: string | null;
+        masterySelfAssessed: number | null;
+      }[];
+      assessments: { id: string; title: string; obtainedMarks: number | null; weightPercent: number }[];
+    }>("acad_load");
+    const know = await invokeCmd<{
+      topics: { id: string; title: string }[];
+      sources: { id: string; title: string; topicId: string }[];
+      evidence: { id: string; topicId: string; score: number; maxScore: number }[];
+    }>("know_load");
+
+    const course = acad.courses.find((c) => c.title === "Data Structures");
+    const acadTopic = acad.topics.find((t) => t.title === "Binary Trees");
+    const knowTopic = know.topics.find((t) => t.title === "Binary Trees");
+    expect(course).toBeTruthy();
+    expect(acadTopic).toBeTruthy();
+    expect(knowTopic).toBeTruthy();
+
+    // the ONE cross-domain link, owned by the Academic row
+    expect(acadTopic!.courseId).toBe(course!.id);
+    expect(acadTopic!.knowledgeTopicId).toBe(knowTopic!.id);
+    // NO duplicate mastery truth on the Academic side
+    expect(acadTopic!.masterySelfAssessed).toBeNull();
+    expect("masteryPercent" in acadTopic!).toBe(false);
+
+    // Knowledge owns evidence; exactly one concept, not duplicated by the link
+    expect(know.topics.filter((t) => t.title === "Binary Trees")).toHaveLength(1);
+    expect(know.evidence.filter((e) => e.topicId === knowTopic!.id)).toHaveLength(1);
+    expect(know.sources.filter((s) => s.topicId === knowTopic!.id)).toHaveLength(1);
+
+    // Assessment + marks persisted
+    const quiz = acad.assessments.find((a) => a.title === "Quiz 1");
+    expect(quiz!.obtainedMarks).toBe(18);
+    expect(quiz!.weightPercent).toBe(100);
+
+    // cleanup so reruns start clean
+    await invokeCmd("acad_reset_for_test");
+    await invokeCmd("know_reset_for_test");
+  });
+});
+
+/** read a knowledge topic id straight from SQLite by its title (for UI selects). */
+async function knowledgeTopicIdByTitle(title: string): Promise<string> {
+  const g = await invokeCmd<{ topics: { id: string; title: string }[] }>("know_load");
+  const t = g.topics.find((x) => x.title === title);
+  if (!t) throw new Error(`knowledge topic "${title}" not found`);
+  return t.id;
+}

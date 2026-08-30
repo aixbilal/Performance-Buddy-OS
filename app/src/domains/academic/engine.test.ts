@@ -5,6 +5,24 @@ import {
   calculateCGPA,
   calculateRequiredAverageForTarget,
 } from "./engine";
+import type { CourseAttempt, GradeLetter } from "./types";
+
+/** Test helper — attempts now carry timestamps; the calc functions ignore them. */
+const att = (
+  id: string,
+  courseId: string,
+  attemptNumber: number,
+  term: string,
+  finalGrade: GradeLetter | null,
+): CourseAttempt => ({
+  id,
+  courseId,
+  attemptNumber,
+  term,
+  finalGrade,
+  createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
+});
 
 describe("calculateWeightedScore", () => {
   it("computes a single assessment correctly", () => {
@@ -64,8 +82,8 @@ describe("calculateCGPA — repeat policy honesty (docs/13.10)", () => {
         { id: "c2", creditHours: 3 },
       ],
       {
-        c1: [{ id: "a1", courseId: "c1", attemptNumber: 1, term: "S1", finalGrade: "A" }],
-        c2: [{ id: "a2", courseId: "c2", attemptNumber: 1, term: "S1", finalGrade: "B" }],
+        c1: [att("a1", "c1", 1, "S1", "A")],
+        c2: [att("a2", "c2", 1, "S1", "B")],
       }
     );
     // (4*4.0 + 3*3.0) / 7 = 25/7 = 3.5714... -> 3.57
@@ -81,11 +99,8 @@ describe("calculateCGPA — repeat policy honesty (docs/13.10)", () => {
         { id: "c2", creditHours: 3 }, // single attempt
       ],
       {
-        c1: [
-          { id: "a1", courseId: "c1", attemptNumber: 1, term: "S1", finalGrade: "D" },
-          { id: "a2", courseId: "c1", attemptNumber: 2, term: "S2", finalGrade: "A-" },
-        ],
-        c2: [{ id: "a3", courseId: "c2", attemptNumber: 1, term: "S1", finalGrade: "B" }],
+        c1: [att("a1", "c1", 1, "S1", "D"), att("a2", "c1", 2, "S2", "A-")],
+        c2: [att("a3", "c2", 1, "S1", "B")],
       }
     );
     // c1 excluded entirely (repeat policy unresolved) — only c2 counts: 3*3.0/3 = 3.0
@@ -98,7 +113,7 @@ describe("calculateCGPA — repeat policy honesty (docs/13.10)", () => {
   it("does not include ungraded attempts as zero", () => {
     const result = calculateCGPA(
       [{ id: "c1", creditHours: 4 }],
-      { c1: [{ id: "a1", courseId: "c1", attemptNumber: 1, term: "S1", finalGrade: null }] }
+      { c1: [att("a1", "c1", 1, "S1", null)] }
     );
     expect(result.cgpa).toBeNull();
     expect(result.blockedByUnresolvedRepeatPolicy).toBe(false);
@@ -110,7 +125,7 @@ describe("calculateCGPA — repeat policy honesty (docs/13.10)", () => {
     // Total: (118.8 + 16) / (45 + 4) = 134.8 / 49 = 2.7510... -> 2.75
     const result = calculateCGPA(
       [{ id: "c1", creditHours: 4 }],
-      { c1: [{ id: "a1", courseId: "c1", attemptNumber: 1, term: "S3", finalGrade: "A" }] },
+      { c1: [att("a1", "c1", 1, "S3", "A")] },
       { credits: 45, points: 2.64 * 45 }
     );
     expect(result.cgpa).toBe(2.75);

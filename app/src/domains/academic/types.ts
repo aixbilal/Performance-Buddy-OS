@@ -1,5 +1,5 @@
 /**
- * Performance Buddy OS — Academic OS domain model.
+ * Performance Buddy OS — Academic OS domain model (Batch 2A: relational).
  *
  * IMPORTANT — read before touching the engine (engine.ts):
  *
@@ -11,20 +11,35 @@
  *   "Unknown policy blocks affected CGPA rather than selecting latest,
  *    highest, or average by convenience."
  *
- * The approved reference screenshot (PBOS-Academic-SGPA-CGPA-v1) shows a
- * specific score→letter scale AND a "Replace (Better Grade)" repeat policy
- * as if both were settled. Per the docs above, NEITHER is verified. This is
- * a genuine UI ↔ ARCHITECTURE conflict — see the flag in engine.ts.
+ * So this model:
+ *   - stores a user-entered letter grade or NULL — it never derives a letter
+ *     from a score%,
+ *   - stores every attempt immutably and NEVER auto-selects a repeat-inclusion
+ *     rule,
+ *   - keeps Professor Coverage, Personal Study Coverage and Mastery as THREE
+ *     independent facts. Mastery is NOT stored here at all: an Academic Topic
+ *     optionally links (`knowledgeTopicId`) to the canonical Knowledge concept,
+ *     and mastery is READ from that concept's evidence — never a second copy.
  *
- * What IS safe to treat as real: the letter→grade-point values printed in
- * the screenshot footer (A=4.00, A-=3.70, B+=3.30, B=3.00, B-=2.70, C+=2.30,
- * C=2.00, D=1.00, F=0.00) — these are just arithmetic once a letter grade is
- * known, not a policy judgment call, so they're used as-is below.
+ * What IS safe as plain arithmetic: the letter→grade-point table from the
+ * approved reference footer (A=4.00 … F=0.00) — used once a letter is known.
  */
 
 export type GradeLetter = "A" | "A-" | "B+" | "B" | "B-" | "C+" | "C" | "D" | "F";
 
-/** Sourced directly from the approved reference screenshot footer — arithmetic, not a policy decision. */
+export const GRADE_LETTERS: readonly GradeLetter[] = [
+  "A",
+  "A-",
+  "B+",
+  "B",
+  "B-",
+  "C+",
+  "C",
+  "D",
+  "F",
+];
+
+/** Sourced directly from the approved reference footer — arithmetic, not a policy decision. */
 export const GRADE_POINTS: Record<GradeLetter, number> = {
   A: 4.0,
   "A-": 3.7,
@@ -38,21 +53,76 @@ export const GRADE_POINTS: Record<GradeLetter, number> = {
 };
 
 export type CoverageStatus = "not-taught" | "in-progress" | "taught";
+export const COVERAGE_STATUSES: readonly CoverageStatus[] = ["not-taught", "in-progress", "taught"];
+
+export type CourseStatus = "on-track" | "at-risk" | "off-track";
+export const COURSE_STATUSES: readonly CourseStatus[] = ["on-track", "at-risk", "off-track"];
+
+export type AssessmentCategory = "quiz" | "assignment" | "lab" | "midterm" | "final" | "project";
+export const ASSESSMENT_CATEGORIES: readonly AssessmentCategory[] = [
+  "quiz",
+  "assignment",
+  "lab",
+  "midterm",
+  "final",
+  "project",
+];
+
+// ---------------------------------------------------------------------------
+// Canonical persisted rows (shape matches app/src-tauri/src/academic.rs)
+// ---------------------------------------------------------------------------
+
+export type Semester = {
+  id: string;
+  label: string;
+  position: number;
+  isCurrent: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Course = {
+  id: string;
+  semesterId: string | null;
+  code: string;
+  title: string;
+  creditHours: number;
+  professorName: string;
+  status: CourseStatus;
+  /** User-declared. NEVER auto-derived from a score. */
+  targetGrade: GradeLetter | null;
+  /**
+   * User's own estimate of where this course is heading. Deliberately NOT
+   * auto-computed from the weighted score — turning score% into a letter needs
+   * the interval policy docs/13.09 marks unverified.
+   */
+  projectedGrade: GradeLetter | null;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
 
 export type Topic = {
   id: string;
   courseId: string;
   title: string;
-  order: number;
-  /** What the professor/course has actually covered — separate from personal study. Per Master Handoff §4. */
+  position: number;
+  /** What the professor/course has actually covered. Independent of the two below. */
   professorCoverage: CoverageStatus;
-  /** What the user has personally studied — 0-100, independent of professor coverage. */
+  /** What the user has personally studied — 0-100. Independent of coverage and mastery. */
   personalStudyPercent: number;
-  /** What evidence/testing shows the user understands — 0-100, independent of the two above. */
-  masteryPercent: number;
+  /** The ONE cross-domain link. NULL = not linked to a Knowledge concept. */
+  knowledgeTopicId: string | null;
+  /**
+   * Legacy self-assessment migrated from the pre-2A seed model. Never edited
+   * in-app, never aggregated into a deterministic result. Superseded entirely
+   * by the linked Knowledge concept's evidence when one is present. Kept only
+   * so a returning user's old number is not silently destroyed.
+   */
+  masterySelfAssessed: number | null;
+  createdAt: string;
+  updatedAt: string;
 };
-
-export type AssessmentCategory = "quiz" | "assignment" | "lab" | "midterm" | "final";
 
 export type Assessment = {
   id: string;
@@ -61,47 +131,70 @@ export type Assessment = {
   title: string;
   obtainedMarks: number | null; // null = not graded yet
   totalMarks: number;
-  weightPercent: number; // this assessment's weight toward the course's final score
+  weightPercent: number; // weight toward the course's final score
   date: string; // ISO date
-};
-
-export type CourseStatus = "on-track" | "at-risk" | "off-track";
-
-export type Course = {
-  id: string;
-  code: string;
-  title: string;
-  creditHours: number;
-  semesterId: string;
-  professorName: string;
-  status: CourseStatus;
-  /** User-declared, per attempt — see CourseAttempt for the deterministic-repeat-safe version. */
-  targetGrade: GradeLetter | null;
-  /**
-   * User's own estimate of where this course is heading, given work still
-   * to come. Deliberately NOT auto-computed from the current weighted score,
-   * because turning a score% into a letter grade requires the score-interval
-   * policy that docs/13.09 marks unverified — see engine.ts header note.
-   */
-  projectedGrade: GradeLetter | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 /**
- * Every attempt is stored immutably (docs 13.10: "Every attempt remains
- * immutable and visible... Replacement changes derived inclusion, never the
- * historical grade."). `includedInCGPA` is NOT computed by guessing a
- * "best grade wins" rule — see engine.ts `resolveCGPAInclusion`.
+ * Every attempt is stored immutably (docs 13.10). Repeat-inclusion is NEVER
+ * auto-decided — see engine.ts `calculateCGPA`.
  */
 export type CourseAttempt = {
   id: string;
   courseId: string;
   attemptNumber: number;
-  term: string; // e.g. "Spring 2026"
+  term: string; // e.g. "Fall 2026"
   finalGrade: GradeLetter | null; // null = in progress, not yet graded
+  createdAt: string;
+  updatedAt: string;
 };
 
-export type Semester = {
-  id: string;
-  label: string; // e.g. "Semester 3 - Fall 2026"
-  courseIds: string[];
+export type AcademicGraph = {
+  semesters: Semester[];
+  courses: Course[];
+  topics: Topic[];
+  assessments: Assessment[];
+  attempts: CourseAttempt[];
 };
+
+// ---------------------------------------------------------------------------
+// Form inputs + validation result
+// ---------------------------------------------------------------------------
+
+export type CourseInput = {
+  code: string;
+  title: string;
+  creditHours: number;
+  professorName: string;
+  status: CourseStatus;
+  targetGrade: GradeLetter | null;
+  projectedGrade: GradeLetter | null;
+  semesterId: string | null;
+};
+
+export type TopicInput = {
+  title: string;
+  professorCoverage: CoverageStatus;
+  personalStudyPercent: number;
+};
+
+export type AssessmentInput = {
+  category: AssessmentCategory;
+  title: string;
+  obtainedMarks: number | null;
+  totalMarks: number;
+  weightPercent: number;
+  date: string;
+};
+
+export type AttemptInput = {
+  attemptNumber: number;
+  term: string;
+  finalGrade: GradeLetter | null;
+};
+
+export type Validated<T> =
+  | { ok: true; value: T }
+  | { ok: false; errors: Record<string, string> };

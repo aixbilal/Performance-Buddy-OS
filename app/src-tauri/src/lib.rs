@@ -1,4 +1,6 @@
+mod academic;
 mod db;
+mod knowledge;
 mod performance;
 
 use std::sync::Mutex;
@@ -54,6 +56,31 @@ pub fn run() {
             performance::perf_actions_reorder,
             performance::perf_import_graph,
             performance::perf_reset_for_test,
+            // Batch 2A — canonical relational Knowledge domain
+            knowledge::know_load,
+            knowledge::know_topic_upsert,
+            knowledge::know_topic_delete,
+            knowledge::know_source_upsert,
+            knowledge::know_source_delete,
+            knowledge::know_evidence_upsert,
+            knowledge::know_evidence_delete,
+            knowledge::know_import_graph,
+            knowledge::know_reset_for_test,
+            // Batch 2A — canonical relational Academic domain
+            academic::acad_load,
+            academic::acad_semester_upsert,
+            academic::acad_semester_delete,
+            academic::acad_course_upsert,
+            academic::acad_course_delete,
+            academic::acad_topic_upsert,
+            academic::acad_topic_delete,
+            academic::acad_assessment_upsert,
+            academic::acad_assessment_delete,
+            academic::acad_attempt_upsert,
+            academic::acad_attempt_delete,
+            academic::acad_topic_link_knowledge,
+            academic::acad_import_graph,
+            academic::acad_reset_for_test,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

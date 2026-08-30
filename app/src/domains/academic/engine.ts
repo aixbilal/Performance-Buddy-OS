@@ -4,10 +4,222 @@
  * Per Master Handoff §20 and docs/13.09: AI never calculates these numbers,
  * never guesses a grade, never picks a repeat-inclusion rule by convenience.
  * Every function here is pure — same input, same output, always — and is
- * covered by engine.test.ts with known-correct answers, not just "it runs."
+ * covered by engine.test.ts with known-correct answers.
+ *
+ * UNKNOWN ≠ ZERO. An incomplete assessment weighting is reported as a
+ * configuration problem; it is never silently normalized to make a number
+ * appear.
  */
 
-import { GRADE_POINTS, type Course, type CourseAttempt, type GradeLetter } from "./types";
+import {
+  ASSESSMENT_CATEGORIES,
+  COURSE_STATUSES,
+  COVERAGE_STATUSES,
+  GRADE_LETTERS,
+  GRADE_POINTS,
+  type AssessmentInput,
+  type AttemptInput,
+  type Course,
+  type CourseAttempt,
+  type CourseInput,
+  type CoverageStatus,
+  type GradeLetter,
+  type TopicInput,
+  type Validated,
+} from "./types";
+
+const MAX_TITLE = 140;
+const MIN_CREDIT_HOURS = 0.5;
+const MAX_CREDIT_HOURS = 12;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const WEIGHT_EPSILON = 0.01;
+
+function clean(raw: string): string {
+  return raw.replace(/\s+/g, " ").trim();
+}
+
+// ---------------------------------------------------------------------------
+// Type guards
+// ---------------------------------------------------------------------------
+
+export function isGradeLetter(v: unknown): v is GradeLetter {
+  return typeof v === "string" && (GRADE_LETTERS as readonly string[]).includes(v);
+}
+
+export function isCoverageStatus(v: unknown): v is CoverageStatus {
+  return typeof v === "string" && (COVERAGE_STATUSES as readonly string[]).includes(v);
+}
+
+// ---------------------------------------------------------------------------
+// Validation — create + edit share the same rules
+// ---------------------------------------------------------------------------
+
+export function validateCourseInput(input: CourseInput): Validated<CourseInput> {
+  const errors: Record<string, string> = {};
+  const title = clean(input.title);
+  const code = clean(input.code);
+  const professorName = clean(input.professorName);
+
+  if (title.length === 0) errors.title = "Give the course a title.";
+  else if (title.length > MAX_TITLE) errors.title = `Keep the title under ${MAX_TITLE} characters.`;
+
+  if (code.length > 40) errors.code = "Course code is too long.";
+
+  if (!Number.isFinite(input.creditHours)) {
+    errors.creditHours = "Credit hours must be a number.";
+  } else if (input.creditHours < MIN_CREDIT_HOURS || input.creditHours > MAX_CREDIT_HOURS) {
+    errors.creditHours = `Credit hours must be between ${MIN_CREDIT_HOURS} and ${MAX_CREDIT_HOURS}.`;
+  }
+
+  if (!(COURSE_STATUSES as readonly string[]).includes(input.status)) {
+    errors.status = "Choose a course status.";
+  }
+  if (input.targetGrade !== null && !isGradeLetter(input.targetGrade)) {
+    errors.targetGrade = "Invalid target grade.";
+  }
+  if (input.projectedGrade !== null && !isGradeLetter(input.projectedGrade)) {
+    errors.projectedGrade = "Invalid projected grade.";
+  }
+
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  return {
+    ok: true,
+    value: { ...input, title, code, professorName },
+  };
+}
+
+export function validateTopicInput(input: TopicInput): Validated<TopicInput> {
+  const errors: Record<string, string> = {};
+  const title = clean(input.title);
+
+  if (title.length === 0) errors.title = "Give the topic a title.";
+  else if (title.length > MAX_TITLE) errors.title = `Keep the title under ${MAX_TITLE} characters.`;
+
+  if (!isCoverageStatus(input.professorCoverage)) {
+    errors.professorCoverage = "Choose a professor-coverage state.";
+  }
+
+  if (!Number.isFinite(input.personalStudyPercent)) {
+    errors.personalStudyPercent = "Personal study must be a number.";
+  } else if (input.personalStudyPercent < 0 || input.personalStudyPercent > 100) {
+    errors.personalStudyPercent = "Personal study must be between 0 and 100.";
+  }
+
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  return {
+    ok: true,
+    value: { ...input, title, personalStudyPercent: Math.round(input.personalStudyPercent) },
+  };
+}
+
+export function validateAssessmentInput(input: AssessmentInput): Validated<AssessmentInput> {
+  const errors: Record<string, string> = {};
+  const title = clean(input.title);
+
+  if (title.length === 0) errors.title = "Give the assessment a title.";
+  else if (title.length > MAX_TITLE) errors.title = `Keep the title under ${MAX_TITLE} characters.`;
+
+  if (!(ASSESSMENT_CATEGORIES as readonly string[]).includes(input.category)) {
+    errors.category = "Choose an assessment category.";
+  }
+
+  if (!Number.isFinite(input.totalMarks) || input.totalMarks <= 0) {
+    errors.totalMarks = "Total marks must be greater than zero.";
+  }
+
+  if (!Number.isFinite(input.weightPercent) || input.weightPercent < 0 || input.weightPercent > 100) {
+    errors.weightPercent = "Weight must be between 0 and 100.";
+  }
+
+  if (input.obtainedMarks !== null) {
+    if (!Number.isFinite(input.obtainedMarks) || input.obtainedMarks < 0) {
+      errors.obtainedMarks = "Obtained marks can't be negative.";
+    } else if (Number.isFinite(input.totalMarks) && input.obtainedMarks > input.totalMarks) {
+      errors.obtainedMarks = "Obtained marks can't exceed the total.";
+    }
+  }
+
+  if (input.date && (!ISO_DATE.test(input.date) || Number.isNaN(Date.parse(input.date)))) {
+    errors.date = "Date must be a valid date.";
+  }
+
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  return { ok: true, value: { ...input, title } };
+}
+
+export function validateAttemptInput(input: AttemptInput): Validated<AttemptInput> {
+  const errors: Record<string, string> = {};
+  const term = clean(input.term);
+
+  if (!Number.isInteger(input.attemptNumber) || input.attemptNumber < 1) {
+    errors.attemptNumber = "Attempt number must be a whole number ≥ 1.";
+  }
+  if (input.finalGrade !== null && !isGradeLetter(input.finalGrade)) {
+    errors.finalGrade = "Invalid grade.";
+  }
+
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  return { ok: true, value: { ...input, term } };
+}
+
+// ---------------------------------------------------------------------------
+// Assessment weighting — a CONFIGURATION check, never a silent fix
+// ---------------------------------------------------------------------------
+
+export type WeightingAnalysis = {
+  totalWeight: number;
+  gradedWeight: number;
+  /**
+   *  "ok"     — weights sum to 100 (± epsilon)
+   *  "empty"  — no assessments configured yet
+   *  "under"  — weights sum to < 100 (course is under-specified)
+   *  "over"   — weights sum to > 100 (course is mis-configured)
+   */
+  status: "ok" | "empty" | "under" | "over";
+  /** True when the current weighted score is a partial/unreliable view. */
+  isConfigurationProblem: boolean;
+  message: string | null;
+};
+
+export function analyzeAssessmentWeighting(
+  assessments: { weightPercent: number; obtainedMarks: number | null }[],
+): WeightingAnalysis {
+  if (assessments.length === 0) {
+    return {
+      totalWeight: 0,
+      gradedWeight: 0,
+      status: "empty",
+      isConfigurationProblem: false,
+      message: "No assessments configured yet.",
+    };
+  }
+  const totalWeight = round2(assessments.reduce((s, a) => s + (a.weightPercent || 0), 0));
+  const gradedWeight = round2(
+    assessments.reduce((s, a) => s + (a.obtainedMarks !== null ? a.weightPercent || 0 : 0), 0),
+  );
+
+  let status: WeightingAnalysis["status"] = "ok";
+  let message: string | null = null;
+  if (totalWeight > 100 + WEIGHT_EPSILON) {
+    status = "over";
+    message = `Assessment weights add up to ${totalWeight}%, which is over 100%. Fix the configuration — the score below is not reliable.`;
+  } else if (totalWeight < 100 - WEIGHT_EPSILON) {
+    status = "under";
+    message = `Assessment weights add up to ${totalWeight}%, not 100%. The weighted score below only reflects the ${totalWeight}% that is configured.`;
+  }
+
+  return {
+    totalWeight,
+    gradedWeight,
+    status,
+    isConfigurationProblem: status === "over" || status === "under",
+    message,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Deterministic calculations (unchanged from Batch 1 — verified by tests)
+// ---------------------------------------------------------------------------
 
 export type WeightedScoreInput = {
   obtainedMarks: number;
@@ -15,7 +227,7 @@ export type WeightedScoreInput = {
   weightPercent: number;
 };
 
-/** Weighted contribution of one assessment toward a course's final score, in percentage points. */
+/** Weighted contribution of graded assessments toward a course's final score, in percentage points. */
 export function calculateWeightedScore(assessments: WeightedScoreInput[]): number {
   return assessments.reduce((sum, a) => {
     if (a.totalMarks === 0) return sum;
@@ -24,9 +236,14 @@ export function calculateWeightedScore(assessments: WeightedScoreInput[]): numbe
   }, 0);
 }
 
-/** SGPA for one semester: credit-hour-weighted average of grade points across the given courses. */
-export function calculateSGPA(courses: { creditHours: number; grade: GradeLetter | null }[]): number | null {
-  const graded = courses.filter((c) => c.grade !== null) as { creditHours: number; grade: GradeLetter }[];
+/** SGPA for one semester: credit-hour-weighted average of grade points. */
+export function calculateSGPA(
+  courses: { creditHours: number; grade: GradeLetter | null }[],
+): number | null {
+  const graded = courses.filter((c) => c.grade !== null) as {
+    creditHours: number;
+    grade: GradeLetter;
+  }[];
   if (graded.length === 0) return null;
   const totalCredits = graded.reduce((s, c) => s + c.creditHours, 0);
   if (totalCredits === 0) return null;
@@ -44,26 +261,14 @@ export type CGPAInclusionResult = {
 
 /**
  * Resolves which attempts count toward CGPA WITHOUT assuming a "best grade
- * wins" replacement rule, because docs/13.10 explicitly marks that rule as
- * RESEARCH REQUIRED for this user's actual institution policy. Courses with
- * more than one attempt are excluded from the CGPA total and reported in
- * `excludedCourseIds` — the UI must show this exclusion, not hide it.
- *
- * This is a deliberate, documented deviation from the approved reference
- * screenshot (which shows automatic "Replace (Better Grade)" behavior) —
- * see the note in types.ts and the UI ↔ ARCHITECTURE flag in
- * DAY-4-IMPLEMENTATION-NOTES.md.
+ * wins" replacement rule (docs/13.10 marks that RESEARCH REQUIRED). Courses
+ * with more than one graded attempt are excluded and reported — the UI must
+ * show this exclusion, not hide it.
  */
 export function calculateCGPA(
   courses: Pick<Course, "id" | "creditHours">[],
   attemptsByCourseId: Record<string, CourseAttempt[]>,
-  /**
-   * Already-settled historical credits/points from semesters completed
-   * before this app existed (e.g. an official transcript import). This is
-   * NOT a repeat-policy decision — it's just prior arithmetic already
-   * finalized by the institution, so it's safe to fold in directly.
-   */
-  priorRecord?: { credits: number; points: number }
+  priorRecord?: { credits: number; points: number },
 ): CGPAInclusionResult {
   let totalCredits = priorRecord?.credits ?? 0;
   let totalPoints = priorRecord?.points ?? 0;
@@ -72,11 +277,9 @@ export function calculateCGPA(
 
   for (const course of courses) {
     const attempts = (attemptsByCourseId[course.id] ?? []).filter((a) => a.finalGrade !== null);
-    if (attempts.length === 0) continue; // ungraded, not part of CGPA yet — not an error
+    if (attempts.length === 0) continue;
 
     if (attempts.length > 1) {
-      // Multiple graded attempts exist for this course — repeat-inclusion
-      // policy is unresolved, so this course is excluded rather than guessed.
       excludedCourseIds.push(course.id);
       blockedByUnresolvedRepeatPolicy = true;
       continue;
@@ -96,15 +299,13 @@ export function calculateCGPA(
 }
 
 /**
- * Given a target SGPA and a set of courses where some grades are already
- * fixed and others are still projected/editable, computes the average grade
- * points needed across the *remaining* (non-fixed) courses to hit the target.
- * Returns null if the target is mathematically unreachable (e.g. would
- * require > 4.0 average) rather than silently clamping to a false number.
+ * Average grade points needed across the remaining (non-fixed) courses to hit
+ * a target SGPA. Returns null / reachable:false rather than clamping to a
+ * false number when the target is mathematically unreachable.
  */
 export function calculateRequiredAverageForTarget(
   courses: { creditHours: number; grade: GradeLetter | null; isFixed: boolean }[],
-  targetSGPA: number
+  targetSGPA: number,
 ): { requiredAverage: number | null; reachable: boolean } {
   const totalCredits = courses.reduce((s, c) => s + c.creditHours, 0);
   if (totalCredits === 0) return { requiredAverage: null, reachable: false };
@@ -117,7 +318,6 @@ export function calculateRequiredAverageForTarget(
   const remainingCredits = remaining.reduce((s, c) => s + c.creditHours, 0);
 
   if (remainingCredits === 0) {
-    // everything is fixed — target is already determined, not "required"
     return { requiredAverage: null, reachable: fixedPoints / totalCredits >= targetSGPA };
   }
 

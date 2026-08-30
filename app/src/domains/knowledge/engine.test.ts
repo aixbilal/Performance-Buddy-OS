@@ -1,6 +1,25 @@
 import { describe, it, expect } from "vitest";
 import { deriveKnowledgeState, isReviewDue, computeMasteryFromEvidence } from "./engine";
-import type { Evidence } from "./types";
+import type { Evidence, EvidenceType } from "./types";
+
+const ev = (
+  id: string,
+  type: EvidenceType,
+  title: string,
+  score: number,
+  maxScore: number,
+  date: string,
+): Evidence => ({
+  id,
+  topicId: "t1",
+  type,
+  title,
+  score,
+  maxScore,
+  date,
+  createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
+});
 
 describe("deriveKnowledgeState", () => {
   it("maps 0% to new", () => {
@@ -40,9 +59,7 @@ describe("computeMasteryFromEvidence", () => {
   });
 
   it("computes a simple average correctly for equal single-item case", () => {
-    const evidence: Evidence[] = [
-      { id: "e1", topicId: "t1", type: "quiz", title: "Q1", score: 8, maxScore: 10, date: "2026-08-01" },
-    ];
+    const evidence: Evidence[] = [ev("e1", "quiz", "Q1", 8, 10, "2026-08-01")];
     expect(computeMasteryFromEvidence(evidence)).toBe(80);
   });
 
@@ -50,8 +67,8 @@ describe("computeMasteryFromEvidence", () => {
     // Old: 40% (weight 1). New: 90% (weight 2).
     // Weighted = (40*1 + 90*2) / (1+2) = (40+180)/3 = 220/3 = 73.33 -> rounds to 73
     const evidence: Evidence[] = [
-      { id: "e1", topicId: "t1", type: "quiz", title: "Old", score: 4, maxScore: 10, date: "2026-01-01" },
-      { id: "e2", topicId: "t1", type: "quiz", title: "New", score: 9, maxScore: 10, date: "2026-08-01" },
+      ev("e1", "quiz", "Old", 4, 10, "2026-01-01"),
+      ev("e2", "quiz", "New", 9, 10, "2026-08-01"),
     ];
     expect(computeMasteryFromEvidence(evidence)).toBe(73);
   });

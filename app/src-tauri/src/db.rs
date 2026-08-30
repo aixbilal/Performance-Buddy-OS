@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
 /// Bumped whenever a migration is added to `MIGRATIONS`.
-const CURRENT_SCHEMA_VERSION: i64 = 2;
+const CURRENT_SCHEMA_VERSION: i64 = 3;
 
 /// Ordered, forward-only migrations. `version` must be contiguous from 1.
 const MIGRATIONS: &[(i64, &str)] = &[
@@ -102,6 +102,134 @@ const MIGRATIONS: &[(i64, &str)] = &[
 
     CREATE INDEX IF NOT EXISTS idx_actions_system   ON actions(system_id);
     CREATE INDEX IF NOT EXISTS idx_links_system     ON goal_system_links(system_id);
+    "#,
+    ),
+    (
+        3,
+        // Batch 2A — user-owned configuration CRUD for ACADEMICS + KNOWLEDGE.
+        //
+        // Relationship truth (one source each, no reverse-collection columns):
+        //   semester -> course        : `academic_courses.semester_id` (FK; NULL = unassigned)
+        //   course   -> topic         : `academic_topics.course_id` (FK; CASCADE)
+        //   course   -> assessment    : `academic_assessments.course_id` (FK; CASCADE)
+        //   course   -> attempt       : `academic_attempts.course_id` (FK; CASCADE)
+        //   academic topic <-> knowledge concept : `academic_topics.knowledge_topic_id`
+        //       (FK; NULL = not linked). This is the ONE cross-domain link — mastery
+        //       for a linked academic topic is READ from the knowledge concept's
+        //       evidence-derived confidence, never stored a second time here.
+        //   knowledge topic -> source   : `knowledge_sources.topic_id` (FK; CASCADE)
+        //   knowledge topic -> evidence : `knowledge_evidence.topic_id` (FK; CASCADE)
+        //
+        // NO score->letter thresholds and NO repeat/replacement policy are encoded
+        // here (docs/13.09, 13.10 mark both RESEARCH REQUIRED). `final_grade` /
+        // `target_grade` / `projected_grade` hold a user-entered letter or NULL.
+        // Knowledge tables are created first so the academic->knowledge FK resolves.
+        r#"
+    CREATE TABLE IF NOT EXISTS knowledge_topics (
+        id               TEXT PRIMARY KEY NOT NULL,
+        title            TEXT NOT NULL,
+        category         TEXT NOT NULL DEFAULT 'general',
+        context          TEXT NOT NULL DEFAULT '',
+        last_studied     TEXT,
+        next_review_date TEXT,
+        related_goal_id  TEXT,
+        created_at       TEXT NOT NULL,
+        updated_at       TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS knowledge_sources (
+        id         TEXT PRIMARY KEY NOT NULL,
+        topic_id   TEXT NOT NULL REFERENCES knowledge_topics(id) ON DELETE CASCADE,
+        type       TEXT NOT NULL DEFAULT 'article',
+        title      TEXT NOT NULL,
+        reference  TEXT NOT NULL DEFAULT '',
+        added_date TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS knowledge_evidence (
+        id         TEXT PRIMARY KEY NOT NULL,
+        topic_id   TEXT NOT NULL REFERENCES knowledge_topics(id) ON DELETE CASCADE,
+        type       TEXT NOT NULL DEFAULT 'recall',
+        title      TEXT NOT NULL,
+        score      REAL NOT NULL,
+        max_score  REAL NOT NULL DEFAULT 10,
+        date       TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS academic_semesters (
+        id         TEXT PRIMARY KEY NOT NULL,
+        label      TEXT NOT NULL,
+        position   INTEGER NOT NULL DEFAULT 0,
+        is_current INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS academic_courses (
+        id              TEXT PRIMARY KEY NOT NULL,
+        semester_id     TEXT REFERENCES academic_semesters(id) ON DELETE SET NULL,
+        code            TEXT NOT NULL DEFAULT '',
+        title           TEXT NOT NULL,
+        credit_hours    REAL NOT NULL DEFAULT 3,
+        professor_name  TEXT NOT NULL DEFAULT '',
+        status          TEXT NOT NULL DEFAULT 'on-track',
+        target_grade    TEXT,
+        projected_grade TEXT,
+        archived        INTEGER NOT NULL DEFAULT 0,
+        created_at      TEXT NOT NULL,
+        updated_at      TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS academic_topics (
+        id                    TEXT PRIMARY KEY NOT NULL,
+        course_id             TEXT NOT NULL REFERENCES academic_courses(id) ON DELETE CASCADE,
+        title                 TEXT NOT NULL,
+        position              INTEGER NOT NULL DEFAULT 0,
+        professor_coverage    TEXT NOT NULL DEFAULT 'not-taught',
+        personal_study_percent REAL NOT NULL DEFAULT 0,
+        -- legacy self-assessment ONLY (migrated from the pre-2A seed model).
+        -- Never edited in-app, never aggregated into a deterministic result,
+        -- superseded by the linked knowledge concept's evidence when present.
+        mastery_self_assessed REAL,
+        knowledge_topic_id    TEXT REFERENCES knowledge_topics(id) ON DELETE SET NULL,
+        created_at            TEXT NOT NULL,
+        updated_at            TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS academic_assessments (
+        id             TEXT PRIMARY KEY NOT NULL,
+        course_id      TEXT NOT NULL REFERENCES academic_courses(id) ON DELETE CASCADE,
+        category       TEXT NOT NULL DEFAULT 'quiz',
+        title          TEXT NOT NULL,
+        obtained_marks REAL,
+        total_marks    REAL NOT NULL DEFAULT 100,
+        weight_percent REAL NOT NULL DEFAULT 0,
+        date           TEXT NOT NULL DEFAULT '',
+        created_at     TEXT NOT NULL,
+        updated_at     TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS academic_attempts (
+        id             TEXT PRIMARY KEY NOT NULL,
+        course_id      TEXT NOT NULL REFERENCES academic_courses(id) ON DELETE CASCADE,
+        attempt_number INTEGER NOT NULL DEFAULT 1,
+        term           TEXT NOT NULL DEFAULT '',
+        final_grade    TEXT,
+        created_at     TEXT NOT NULL,
+        updated_at     TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_acad_courses_sem    ON academic_courses(semester_id);
+    CREATE INDEX IF NOT EXISTS idx_acad_topics_course  ON academic_topics(course_id);
+    CREATE INDEX IF NOT EXISTS idx_acad_topics_know    ON academic_topics(knowledge_topic_id);
+    CREATE INDEX IF NOT EXISTS idx_acad_assess_course  ON academic_assessments(course_id);
+    CREATE INDEX IF NOT EXISTS idx_acad_attempt_course ON academic_attempts(course_id);
+    CREATE INDEX IF NOT EXISTS idx_know_sources_topic  ON knowledge_sources(topic_id);
+    CREATE INDEX IF NOT EXISTS idx_know_evidence_topic ON knowledge_evidence(topic_id);
     "#,
     ),
 ];
@@ -366,8 +494,7 @@ pub fn kv_delete(db: State<'_, Db>, key: String) -> DbResult<()> {
 #[tauri::command]
 pub fn db_status(db: State<'_, Db>) -> DbResult<DbStatus> {
     let conn = db.0.lock().unwrap();
-    let kv_count: i64 =
-        conn.query_row("SELECT COUNT(*) FROM kv_store", [], |r| r.get(0))?;
+    let kv_count: i64 = conn.query_row("SELECT COUNT(*) FROM kv_store", [], |r| r.get(0))?;
     let raw = meta_get(&conn, META_LOCALSTORAGE_MIGRATION)?;
     let parsed = raw
         .as_deref()
@@ -417,7 +544,12 @@ mod tests {
         let db = mem_db();
         let conn = db.0.lock().unwrap();
         kv_set_inner(&conn, "pbos:performance-goals", "[{\"id\":\"g1\"}]").unwrap();
-        kv_set_inner(&conn, "pbos:performance-goals", "[{\"id\":\"g1\"},{\"id\":\"g2\"}]").unwrap();
+        kv_set_inner(
+            &conn,
+            "pbos:performance-goals",
+            "[{\"id\":\"g1\"},{\"id\":\"g2\"}]",
+        )
+        .unwrap();
         let all = kv_get_all_inner(&conn).unwrap();
         assert_eq!(all.len(), 1);
         assert!(all[0].value.contains("g2"));
@@ -430,9 +562,18 @@ mod tests {
         let db = mem_db();
 
         let entries = vec![
-            KvEntry { key: "pbos:money-transactions".into(), value: "[]".into() },
-            KvEntry { key: "pbos:routine-logs".into(), value: "{\"a\":1}".into() },
-            KvEntry { key: "pbos:broken".into(), value: "{not json".into() },
+            KvEntry {
+                key: "pbos:money-transactions".into(),
+                value: "[]".into(),
+            },
+            KvEntry {
+                key: "pbos:routine-logs".into(),
+                value: "{\"a\":1}".into(),
+            },
+            KvEntry {
+                key: "pbos:broken".into(),
+                value: "{not json".into(),
+            },
         ];
 
         let r1 = migrate_from_localstorage_inner(&db, &entries).unwrap();
@@ -453,8 +594,14 @@ mod tests {
         {
             let conn = db.0.lock().unwrap();
             let all = kv_get_all_inner(&conn).unwrap();
-            let txn = all.iter().find(|e| e.key == "pbos:money-transactions").unwrap();
-            assert!(txn.value.contains("newer"), "newer SQLite value must survive re-migration");
+            let txn = all
+                .iter()
+                .find(|e| e.key == "pbos:money-transactions")
+                .unwrap();
+            assert!(
+                txn.value.contains("newer"),
+                "newer SQLite value must survive re-migration"
+            );
         }
     }
 }

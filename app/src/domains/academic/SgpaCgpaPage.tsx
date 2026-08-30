@@ -8,8 +8,9 @@ const TARGET_SGPA = 3.7;
 export function SgpaCgpaPage() {
   const { semester, courses, cgpa, projectedSGPA } = useAcademic();
 
+  const activeCourses = courses.filter((c) => !c.archived);
   const requiredForTarget = calculateRequiredAverageForTarget(
-    courses.map((c) => ({ creditHours: c.creditHours, grade: c.projectedGrade, isFixed: false })),
+    activeCourses.map((c) => ({ creditHours: c.creditHours, grade: c.projectedGrade, isFixed: false })),
     TARGET_SGPA
   );
 
@@ -65,7 +66,7 @@ export function SgpaCgpaPage() {
             </tr>
           </thead>
           <tbody>
-            {courses.map((c) => (
+            {activeCourses.map((c) => (
               <tr key={c.id} className="border-t border-border-subtle">
                 <td className="py-2 text-text-primary">{c.title}</td>
                 <td className="py-2 text-text-secondary">{c.creditHours}</td>
@@ -76,6 +77,13 @@ export function SgpaCgpaPage() {
                 </td>
               </tr>
             ))}
+            {activeCourses.length === 0 && (
+              <tr>
+                <td colSpan={5} className="py-3 text-text-muted text-xs">
+                  No courses yet — add courses in Academics to see projections.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </Card>

@@ -9,8 +9,11 @@ import { SystemsOverviewPage } from "../domains/performance/SystemsOverviewPage"
 import { SystemDetailPage } from "../domains/performance/SystemDetailPage";
 import { AcademicsOverviewPage } from "../domains/academic/AcademicsOverviewPage";
 import { CourseDetailPage } from "../domains/academic/CourseDetailPage";
+import { CourseBuilderPage } from "../domains/academic/CourseBuilderPage";
 import { SgpaCgpaPage } from "../domains/academic/SgpaCgpaPage";
 import { KnowledgeOverviewPage } from "../domains/knowledge/KnowledgeOverviewPage";
+import { KnowledgeTopicBuilderPage } from "../domains/knowledge/KnowledgeTopicBuilderPage";
+import { NotesHubPage } from "../domains/knowledge/NotesHubPage";
 import { TopicDetailPage } from "../domains/knowledge/TopicDetailPage";
 import { DevelopmentOverviewPage } from "../domains/development/DevelopmentOverviewPage";
 import { SkillDetailPage } from "../domains/development/SkillDetailPage";
@@ -58,10 +61,15 @@ export const router = createHashRouter([
       { path: "/systems", element: <SystemsOverviewPage />, handle: { title: "Systems" } },
       { path: "/systems/:systemId", element: <SystemDetailPage />, handle: { title: "System" } },
       { path: "/academics", element: <AcademicsOverviewPage />, handle: { title: "Academics" } },
+      { path: "/academics/new", element: <CourseBuilderPage />, handle: { title: "Add Course" } },
       { path: "/academics/sgpa-cgpa", element: <SgpaCgpaPage />, handle: { title: "SGPA / CGPA" } },
       { path: "/academics/:courseId", element: <CourseDetailPage />, handle: { title: "Course" } },
+      { path: "/academics/:courseId/edit", element: <CourseBuilderPage />, handle: { title: "Edit Course" } },
       { path: "/knowledge", element: <KnowledgeOverviewPage />, handle: { title: "Knowledge" } },
+      { path: "/knowledge/new", element: <KnowledgeTopicBuilderPage />, handle: { title: "Add Topic" } },
+      { path: "/knowledge/notes", element: <NotesHubPage />, handle: { title: "Notes Hub" } },
       { path: "/knowledge/:topicId", element: <TopicDetailPage />, handle: { title: "Topic" } },
+      { path: "/knowledge/:topicId/edit", element: <KnowledgeTopicBuilderPage />, handle: { title: "Edit Topic" } },
       { path: "/development", element: <DevelopmentOverviewPage />, handle: { title: "Development" } },
       { path: "/development/skills/:skillId", element: <SkillDetailPage />, handle: { title: "Skill" } },
       { path: "/fitness", element: <FitnessOverviewPage />, handle: { title: "Fitness" } },
