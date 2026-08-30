@@ -1,9 +1,7 @@
-import { useState } from "react";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { SaveIndicator } from "../../components/SaveIndicator";
 import { useRoutine } from "./store";
-import { setSimulateStorageFailure, isSimulatingFailure } from "../persistence/testControls";
 import type { CompletionState, TimeWindow } from "./types";
 
 const WINDOWS: { key: TimeWindow; label: string }[] = [
@@ -27,13 +25,6 @@ function nextState(current: CompletionState): CompletionState {
 
 export function RoutinesOverviewPage() {
   const { getByWindow, getTodayLog, getConsistency, setTodayState, saveState, loadError } = useRoutine();
-  const [simulating, setSimulating] = useState(isSimulatingFailure());
-
-  const toggleSimulation = () => {
-    const next = !simulating;
-    setSimulateStorageFailure(next);
-    setSimulating(next);
-  };
 
   return (
     <div className="space-y-6">
@@ -51,20 +42,6 @@ export function RoutinesOverviewPage() {
           the raw stored data is still on disk if you want to inspect it.
         </div>
       )}
-
-      <div className="bg-surface-inset border border-border-subtle rounded-md px-4 py-3 flex items-center justify-between">
-        <p className="text-text-disabled text-[11px]">
-          Real persistence: toggle a check above and it survives closing/reopening the app. This button is a
-          test-only control (like Onboarding's "Simulate Relaunch") that makes storage genuinely fail on write,
-          so you can see the real failure handling — never a production feature.
-        </p>
-        <button
-          onClick={toggleSimulation}
-          className={`shrink-0 ml-3 px-3 py-1.5 rounded-md text-xs font-medium ${simulating ? "bg-status-danger/20 text-status-danger" : "bg-action-secondary text-text-primary"}`}
-        >
-          {simulating ? "Stop Simulating Failure" : "Simulate Storage Failure"}
-        </button>
-      </div>
 
       {WINDOWS.map(({ key, label }) => {
         const routines = getByWindow(key);

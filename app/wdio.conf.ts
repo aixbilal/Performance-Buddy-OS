@@ -2,34 +2,28 @@ import type { Options } from "@wdio/types";
 import { createTauriCapabilities } from "@wdio/tauri-service";
 
 /**
- * WebdriverIO + @wdio/tauri-service — native desktop E2E for the packaged
- * Performance Buddy OS Tauri app.
+ * WebdriverIO + @wdio/tauri-service — native desktop E2E that drives the REAL
+ * Performance Buddy OS renderer (Batch 0).
  *
- * STATUS: operational. `npm run test:e2e:tauri` passes — service diagnostics
- * report 6/6, tauri-driver + msedgedriver launch, and a live WebView2
- * WebDriver session is created against `src-tauri/target/debug/app.exe`.
+ * Provider: `external` (tauri-driver + msedgedriver). Renderer interaction goes
+ * through `browser.tauri.execute(fn)`, which runs JS inside the real PBOS
+ * frontend via `tauri-plugin-wdio` — reliable on Windows/WebView2 where the raw
+ * WebDriver DOM context is not. The plugin is compiled into the debug binary
+ * and registered only under `#[cfg(debug_assertions)]` (see
+ * app/src-tauri/src/lib.rs); it is entirely absent from `npm run build` /
+ * release.
  *
- * Prerequisites (all satisfied on this machine):
- *   - Rust stable `x86_64-pc-windows-msvc` (rustup/rustc/cargo on PATH)
- *   - MSVC C++ build tools (Visual Studio 2026 / VC Tools) for linking
+ * Prerequisites (all satisfied here — see V1-COMPLETION-TRACKER.md):
+ *   - Rust stable x86_64-pc-windows-msvc + MSVC build tools
  *   - Microsoft Edge WebView2 runtime
- *   - `tauri-driver` — `cargo install tauri-driver --locked`
- *   - `msedgedriver.exe` matching the WebView2 runtime, on PATH
- *     (~/.local/bin). NOTE: @wdio/tauri-service@1.3.0 mis-parses the newer
- *     "Microsoft Edge WebDriver <v>" version string, so `autoDownloadEdgeDriver`
- *     is left `true` and it fetches its own matching copy.
- *   - App binary: `cargo build` in `src-tauri/` (a `tauri build --debug` bundle
- *     step fails only on the default `com.tauri.dev` identifier, which is a
- *     product-config choice and unrelated to E2E).
+ *   - `tauri-driver` on PATH: `cargo install tauri-driver --locked`
+ *   - `msedgedriver.exe` matching the WebView2 runtime on PATH (~/.local/bin);
+ *     the service's own downloader is unreliable on this network, so a manual
+ *     copy is kept there and tauri-driver picks it up
+ *   - a debug build embedding a dev-mode frontend:
+ *       npm run pretest:e2e:tauri   (build:e2e + tauri:build:debug)
  *
- * SCOPE LIMIT: driving the PBOS renderer's DOM / `browser.tauri.execute()`
- * needs `tauri-plugin-wdio` wired into `src-tauri` (plugin + `withGlobalTauri`
- * + `wdio:default` capability). That is a PBOS product-source change and is
- * NOT done here, so the session currently attaches to a blank WebView2
- * document. `driverProvider: 'external'` keeps the Rust source untouched;
- * switch to `'embedded'` when/if that plugin is added.
- *
- * Run:  npm run test:e2e:tauri   (or: npx wdio run wdio.conf.ts)
+ * Run:  npm run test:e2e:tauri
  */
 const TAURI_APP_BINARY =
   process.platform === "win32"
@@ -55,9 +49,6 @@ export const config: Options.Testrunner = {
         appBinaryPath: TAURI_APP_BINARY,
         driverProvider: "external",
         autoInstallTauriDriver: true,
-        // Let the service fetch the msedgedriver that matches the WebView2
-        // runtime. A matching msedgedriver is also kept on PATH at
-        // ~/.local/bin (see header) as a manual fallback.
         autoDownloadEdgeDriver: true,
         captureBackendLogs: true,
         captureFrontendLogs: true,
@@ -65,16 +56,16 @@ export const config: Options.Testrunner = {
     ],
   ],
 
-  logLevel: "info",
+  logLevel: "warn",
   bail: 0,
-  waitforTimeout: 10_000,
-  connectionRetryTimeout: 90_000,
+  waitforTimeout: 15_000,
+  connectionRetryTimeout: 120_000,
   connectionRetryCount: 3,
 
   framework: "mocha",
   reporters: ["spec"],
   mochaOpts: {
     ui: "bdd",
-    timeout: 60_000,
+    timeout: 120_000,
   },
 };

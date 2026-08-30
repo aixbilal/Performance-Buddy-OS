@@ -1,5 +1,6 @@
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
+import { PersistenceStatusLine } from "../../components/PersistenceStatusLine";
 import { useSettings } from "./store";
 import type { NotificationCategory, OperatingMode } from "./types";
 
@@ -99,6 +100,10 @@ export function SettingsPage() {
           <span className="text-text-secondary">Reduced Motion</span>
           <Badge tone={appearance.reducedMotion ? "success" : "neutral"}>{appearance.reducedMotion ? "On" : "Off"}</Badge>
         </button>
+      </Card>
+
+      <Card title="Data & Storage">
+        <PersistenceStatusLine />
       </Card>
 
       <Card title="Reset">
