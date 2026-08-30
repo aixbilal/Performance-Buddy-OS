@@ -24,12 +24,13 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
 /// Bumped whenever a migration is added to `MIGRATIONS`.
-const CURRENT_SCHEMA_VERSION: i64 = 1;
+const CURRENT_SCHEMA_VERSION: i64 = 2;
 
 /// Ordered, forward-only migrations. `version` must be contiguous from 1.
-const MIGRATIONS: &[(i64, &str)] = &[(
-    1,
-    r#"
+const MIGRATIONS: &[(i64, &str)] = &[
+    (
+        1,
+        r#"
     CREATE TABLE IF NOT EXISTS kv_store (
         key        TEXT PRIMARY KEY NOT NULL,
         value      TEXT NOT NULL,
@@ -40,7 +41,70 @@ const MIGRATIONS: &[(i64, &str)] = &[(
         value TEXT NOT NULL
     );
     "#,
-)];
+    ),
+    (
+        2,
+        // Batch 1 — canonical relational persistence for the Performance spine
+        // (Goal -> System -> Action). ONE source of truth per relationship:
+        //   goal <-> system  : the `goal_system_links` join table (many-to-many)
+        //   system -> action : `actions.system_id` (the FK; NULL = direct commitment)
+        // No reverse-collection columns anywhere. Derived state (health,
+        // progress, attention) is NEVER stored — it is computed in the engine.
+        r#"
+    CREATE TABLE IF NOT EXISTS goals (
+        id             TEXT PRIMARY KEY NOT NULL,
+        title          TEXT NOT NULL,
+        type           TEXT NOT NULL,
+        domain         TEXT NOT NULL,
+        lifecycle      TEXT NOT NULL,
+        priority       TEXT NOT NULL,
+        deadline       TEXT,
+        metric_current REAL,
+        metric_target  REAL,
+        metric_unit    TEXT,
+        detail         TEXT NOT NULL DEFAULT '',
+        created_by     TEXT NOT NULL,
+        created_at     TEXT NOT NULL,
+        updated_at     TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS systems (
+        id          TEXT PRIMARY KEY NOT NULL,
+        title       TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        domain      TEXT NOT NULL,
+        cadence     TEXT NOT NULL DEFAULT '',
+        tags        TEXT NOT NULL DEFAULT '[]',
+        starred     INTEGER NOT NULL DEFAULT 0,
+        created_at  TEXT NOT NULL,
+        updated_at  TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS actions (
+        id          TEXT PRIMARY KEY NOT NULL,
+        system_id   TEXT REFERENCES systems(id) ON DELETE SET NULL,
+        title       TEXT NOT NULL,
+        context     TEXT NOT NULL DEFAULT '',
+        status      TEXT NOT NULL,
+        est_minutes INTEGER,
+        priority    TEXT NOT NULL,
+        timing      TEXT NOT NULL DEFAULT '',
+        position    INTEGER NOT NULL DEFAULT 0,
+        created_at  TEXT NOT NULL,
+        updated_at  TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS goal_system_links (
+        goal_id   TEXT NOT NULL REFERENCES goals(id)   ON DELETE CASCADE,
+        system_id TEXT NOT NULL REFERENCES systems(id) ON DELETE CASCADE,
+        PRIMARY KEY (goal_id, system_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_actions_system   ON actions(system_id);
+    CREATE INDEX IF NOT EXISTS idx_links_system     ON goal_system_links(system_id);
+    "#,
+    ),
+];
 
 /// Key in `meta` recording that the one-time localStorage import ran.
 const META_LOCALSTORAGE_MIGRATION: &str = "localstorage_migration";
@@ -55,6 +119,8 @@ pub enum DbError {
     Io(#[from] std::io::Error),
     #[error("app data dir unavailable: {0}")]
     Path(String),
+    #[error("forbidden: {0}")]
+    Forbidden(String),
 }
 
 // Tauri commands need the error to be Serialize.
@@ -112,6 +178,12 @@ fn run_migrations(conn: &Connection) -> DbResult<()> {
         }
     }
     Ok(())
+}
+
+/// Exposed for the `performance` module's Rust tests (in-memory DB).
+#[cfg(test)]
+pub(crate) fn run_migrations_for_test(conn: &Connection) -> DbResult<()> {
+    run_migrations(conn)
 }
 
 fn schema_version(conn: &Connection) -> i64 {

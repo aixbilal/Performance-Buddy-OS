@@ -1,4 +1,5 @@
 mod db;
+mod performance;
 
 use std::sync::Mutex;
 use tauri::Manager;
@@ -35,11 +36,24 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // Batch 0 — transitional KV store
             db::kv_get_all,
             db::kv_set,
             db::kv_delete,
             db::db_status,
             db::migrate_from_localstorage,
+            // Batch 1 — canonical relational Performance spine
+            performance::perf_load,
+            performance::perf_goal_upsert,
+            performance::perf_goal_delete,
+            performance::perf_system_upsert,
+            performance::perf_system_delete,
+            performance::perf_action_upsert,
+            performance::perf_action_delete,
+            performance::perf_link_set,
+            performance::perf_actions_reorder,
+            performance::perf_import_graph,
+            performance::perf_reset_for_test,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

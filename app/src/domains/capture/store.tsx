@@ -41,11 +41,12 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
       if (!item || !item.proposal) return prev;
 
       if (item.proposal.type === "action") {
-        addAction({
-          systemId: "sys-weekly-study", // default system — real UI would let the user pick
+        // Batch 1: routes into the canonical Action engine as a direct
+        // commitment (no parent system). A proper system-picker is Batch 2.
+        void addAction({
+          systemId: null,
           title: String(item.proposal.fields.title ?? item.rawText),
           context: "Quick Capture",
-          status: "not-started",
           estMinutes: 30,
           priority: "medium",
           triggerTiming: "Unscheduled",

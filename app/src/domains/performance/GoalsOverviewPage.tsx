@@ -2,44 +2,64 @@ import { Link, useNavigate } from "react-router-dom";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { EmptyState } from "../../components/EmptyState";
-import { ProposalCard, type Proposal } from "../intelligence/ProposalCard";
+import { SaveIndicator } from "../../components/SaveIndicator";
 import { usePerformance } from "./store";
-import { useState } from "react";
+import type { GoalAttention } from "./engine";
 
-const STATUS_TONE = {
-  "on-track": "success",
-  "needs-focus": "warning",
-  behind: "danger",
-  completed: "neutral",
+const LIFECYCLE_TONE = {
+  draft: "neutral",
+  active: "success",
+  maintenance: "neutral",
   paused: "neutral",
+  achieved: "success",
+  retired: "neutral",
+  cancelled: "neutral",
 } as const;
 
-const AI_MICRO_GOAL_PROPOSAL: Proposal = {
-  id: "goal-proposal-1",
-  recommendation: "Micro-goal: Learn 30 important cars this month.",
-  reason: "Based on your knowledge goals and available time.",
-  evidence: ["Knowledge domain has capacity this week", "Matches your recurring reading habit"],
-  confidence: "medium",
+const ATTENTION_TONE: Record<GoalAttention["state"], "success" | "warning" | "neutral"> = {
+  "on-track": "success",
+  "needs-attention": "warning",
+  "no-signal": "neutral",
 };
 
+const ATTENTION_LABEL: Record<GoalAttention["state"], string> = {
+  "on-track": "On track",
+  "needs-attention": "Needs attention",
+  "no-signal": "No signal yet",
+};
+
+const ACTIVE_LIFECYCLES = ["draft", "active", "maintenance", "paused"];
+
 export function GoalsOverviewPage() {
-  const { goals } = usePerformance();
-  const [proposalHandled, setProposalHandled] = useState(false);
+  const {
+    loaded,
+    goals,
+    goalProgress,
+    goalAttention,
+    systemsForGoal,
+    saveState,
+    saveError,
+  } = usePerformance();
   const navigate = useNavigate();
 
-  const active = goals.filter((g) => g.status !== "completed" && g.status !== "paused");
-  const needingAttention = goals.filter((g) => g.status === "needs-focus" || g.status === "behind");
+  if (!loaded) {
+    return <div className="text-text-muted text-sm">Loading your goals…</div>;
+  }
 
   if (goals.length === 0) {
     return (
       <EmptyState
         icon="🎯"
         title="No goals yet"
-        description="Goals give PBOS a clear outcome to connect systems, actions, and your daily work."
-        primaryAction={{ label: "Create Goal", onClick: () => navigate("/goals") }}
+        description="A goal is a desired outcome. PBOS connects it to repeatable systems and concrete actions. Create your first one."
+        primaryAction={{ label: "Create Goal", onClick: () => navigate("/goals/new") }}
       />
     );
   }
+
+  const active = goals.filter((g) => ACTIVE_LIFECYCLES.includes(g.lifecycle));
+  const other = goals.filter((g) => !ACTIVE_LIFECYCLES.includes(g.lifecycle));
+  const needingAttention = active.filter((g) => goalAttention(g.id).state === "needs-attention");
 
   return (
     <div className="space-y-6">
@@ -47,10 +67,25 @@ export function GoalsOverviewPage() {
         <div>
           <h2 className="text-text-primary text-xl font-semibold">Goals</h2>
           <p className="text-text-muted text-sm">
-            Track and manage your goals across academics, development, fitness, knowledge, language, money, and life.
+            Desired outcomes across every domain — what's active, progressing, or needs attention.
           </p>
         </div>
+        <div className="flex items-center gap-3">
+          <SaveIndicator state={saveState} />
+          <button
+            onClick={() => navigate("/goals/new")}
+            className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
+          >
+            + Create Goal
+          </button>
+        </div>
       </div>
+
+      {saveError && (
+        <div className="bg-status-danger/10 border border-status-danger/30 rounded-md px-4 py-2 text-xs text-status-danger">
+          Last change couldn't be saved: {saveError}. Your edit is still here — it will retry on the next change.
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-4">
         <Card>
@@ -62,69 +97,94 @@ export function GoalsOverviewPage() {
           <div className="text-text-primary text-lg font-semibold">{needingAttention.length}</div>
         </Card>
         <Card>
-          <div className="text-text-muted text-xs mb-1">Goal Consistency</div>
-          <div className="text-text-primary text-lg font-semibold">
-            {Math.round(goals.reduce((s, g) => s + g.consistency7d, 0) / (goals.length || 1))}%
-          </div>
-          <div className="text-text-secondary text-xs">7-day average</div>
+          <div className="text-text-muted text-xs mb-1">Completed / Retired</div>
+          <div className="text-text-primary text-lg font-semibold">{other.length}</div>
         </Card>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        <Card title="Active Goals" className="col-span-2">
+      <Card title="Active Goals">
+        {active.length === 0 ? (
+          <div className="text-text-muted text-xs">No active goals — everything is paused, achieved or retired.</div>
+        ) : (
           <div className="space-y-1">
-            {active.map((goal) => (
+            {active.map((goal) => {
+              const p = goalProgress(goal.id);
+              const att = goalAttention(goal.id);
+              return (
+                <Link
+                  key={goal.id}
+                  to={`/goals/${goal.id}`}
+                  className="flex items-center justify-between py-2.5 border-b border-border-subtle last:border-0 hover:bg-surface-inset -mx-2 px-2 rounded-md"
+                >
+                  <div>
+                    <div className="text-text-primary text-sm">{goal.title}</div>
+                    <div className="text-text-muted text-xs capitalize">
+                      {goal.domain} · {goal.type} · {systemsForGoal(goal.id).length} system(s)
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-text-secondary text-xs">
+                      {p.kind === "metric"
+                        ? `${p.current} / ${p.target} ${p.unit} · ${p.percent}%`
+                        : "No measurable target"}
+                    </span>
+                    <Badge tone={ATTENTION_TONE[att.state]}>{ATTENTION_LABEL[att.state]}</Badge>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      {needingAttention.length > 0 && (
+        <Card title="Goals Needing Attention">
+          <div className="space-y-2">
+            {needingAttention.map((g) => (
+              <div key={g.id} className="text-sm">
+                <Link to={`/goals/${g.id}`} className="text-text-primary hover:underline">
+                  {g.title}
+                </Link>
+                <ul className="text-text-muted text-xs list-disc list-inside">
+                  {goalAttention(g.id).reasons.map((r) => (
+                    <li key={r}>{r}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {other.length > 0 && (
+        <Card title="Completed / Retired / Paused">
+          <div className="space-y-1">
+            {other.map((g) => (
               <Link
-                key={goal.id}
-                to={`/goals/${goal.id}`}
-                className="flex items-center justify-between py-2.5 border-b border-border-subtle last:border-0 hover:bg-surface-inset -mx-2 px-2 rounded-md"
+                key={g.id}
+                to={`/goals/${g.id}`}
+                className="flex items-center justify-between py-2 border-b border-border-subtle last:border-0 hover:bg-surface-inset -mx-2 px-2 rounded-md"
               >
-                <div>
-                  <div className="text-text-primary text-sm">{goal.title}</div>
-                  <div className="text-text-muted text-xs capitalize">{goal.domain}</div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <span className="text-text-secondary text-xs">
-                    {goal.progress.current}
-                    {goal.progress.unit === "%" ? "%" : ` ${goal.progress.unit}`} / {goal.progress.target}
-                    {goal.progress.unit === "%" ? "%" : ` ${goal.progress.unit}`}
-                  </span>
-                  <Badge tone={STATUS_TONE[goal.status]}>{goal.status.replace("-", " ")}</Badge>
-                </div>
+                <span className="text-text-secondary text-sm">{g.title}</span>
+                <Badge tone={LIFECYCLE_TONE[g.lifecycle]}>{g.lifecycle}</Badge>
               </Link>
             ))}
           </div>
         </Card>
+      )}
 
-        <div className="space-y-4">
-          <Card title="Goals Needing Attention">
-            <div className="space-y-2">
-              {needingAttention.map((g) => (
-                <div key={g.id} className="text-sm">
-                  <div className="text-text-primary">{g.title}</div>
-                  <div className="text-text-muted text-xs capitalize">{g.domain}</div>
-                </div>
-              ))}
-              {needingAttention.length === 0 && (
-                <div className="text-text-muted text-xs">Nothing needs attention right now.</div>
-              )}
-            </div>
-          </Card>
-
-          <Card title="AI Recommendation">
-            {proposalHandled ? (
-              <div className="text-text-muted text-xs">Handled — this proposal is closed.</div>
-            ) : (
-              <ProposalCard
-                proposal={AI_MICRO_GOAL_PROPOSAL}
-                onApprove={() => setProposalHandled(true)}
-                onModify={() => setProposalHandled(true)}
-                onReject={() => setProposalHandled(true)}
-              />
-            )}
-          </Card>
-        </div>
-      </div>
+      <Card title="Suggested by AI">
+        <p className="text-text-secondary text-xs mb-2">
+          PBOS can propose a micro-goal from your patterns. A proposal is never created automatically —
+          you review it in the builder first.
+        </p>
+        <button
+          onClick={() => navigate("/goals/new?tab=ai")}
+          className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
+        >
+          Review AI proposal
+        </button>
+      </Card>
     </div>
   );
 }

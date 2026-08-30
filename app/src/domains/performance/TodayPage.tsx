@@ -22,16 +22,16 @@ import { useAICoach } from "../intelligence/store";
 const JS_DAY_TO_MONDAY_INDEX = [6, 0, 1, 2, 3, 4, 5]; // JS getDay(): 0=Sun..6=Sat -> our 0=Mon..6=Sun
 
 export function TodayPage() {
-  const { actions, systems, computeSystemHealth } = usePerformance();
+  const { actions, systems, systemHealth } = usePerformance();
   const { blocks } = usePlanning();
   const { visibleRecommendations } = useAICoach();
 
   const todayIndex = JS_DAY_TO_MONDAY_INDEX[new Date().getDay()];
   const todaysBlocks = blocks.filter((b) => b.day === todayIndex).sort((a, b) => a.startMinute - b.startMinute);
 
-  const completedActions = actions.filter((a) => a.status === "completed").length;
-  const primarySystem = systems[0];
-  const primarySystemHealth = primarySystem ? computeSystemHealth(primarySystem.id) : null;
+  const completedActions = actions.filter((a) => a.status === "done").length;
+  const primarySystem = systems.find((s) => s.starred) ?? systems[0];
+  const primarySystemHealth = primarySystem ? systemHealth(primarySystem.id) : null;
 
   const topRecommendation = visibleRecommendations[0] ?? null;
 
@@ -53,7 +53,11 @@ export function TodayPage() {
         <StatCard label="Scheduled Today" value={`${todaysBlocks.length} block(s)`} />
         <StatCard
           label={primarySystem ? `${primarySystem.title} Health` : "System Health"}
-          value={primarySystemHealth !== null ? `${primarySystemHealth}%` : "—"}
+          value={
+            primarySystemHealth == null || primarySystemHealth.ratio === null
+              ? "—"
+              : `${Math.round(primarySystemHealth.ratio * 100)}%`
+          }
         />
       </div>
 

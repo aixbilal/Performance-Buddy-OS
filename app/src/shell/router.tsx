@@ -4,6 +4,7 @@ import { PlaceholderPage } from "./PlaceholderPage";
 import { TodayPage } from "../domains/performance/TodayPage";
 import { GoalsOverviewPage } from "../domains/performance/GoalsOverviewPage";
 import { GoalDetailPage } from "../domains/performance/GoalDetailPage";
+import { GoalBuilderPage } from "../domains/performance/GoalBuilderPage";
 import { SystemsOverviewPage } from "../domains/performance/SystemsOverviewPage";
 import { SystemDetailPage } from "../domains/performance/SystemDetailPage";
 import { AcademicsOverviewPage } from "../domains/academic/AcademicsOverviewPage";
@@ -51,7 +52,9 @@ export const router = createHashRouter([
     children: [
       { index: true, element: <TodayPage />, handle: { title: "Today" } },
       { path: "/goals", element: <GoalsOverviewPage />, handle: { title: "Goals" } },
+      { path: "/goals/new", element: <GoalBuilderPage />, handle: { title: "Goal Builder" } },
       { path: "/goals/:goalId", element: <GoalDetailPage />, handle: { title: "Goal" } },
+      { path: "/goals/:goalId/edit", element: <GoalBuilderPage />, handle: { title: "Edit Goal" } },
       { path: "/systems", element: <SystemsOverviewPage />, handle: { title: "Systems" } },
       { path: "/systems/:systemId", element: <SystemDetailPage />, handle: { title: "System" } },
       { path: "/academics", element: <AcademicsOverviewPage />, handle: { title: "Academics" } },

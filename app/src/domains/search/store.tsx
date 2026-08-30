@@ -37,7 +37,7 @@ export function SearchProvider({ children }: { children: ReactNode }) {
       subtitle: g.domain,
       domain: "Goals",
       canonicalRoute: `/goals/${g.id}`,
-      keywords: [g.domain, g.status],
+      keywords: [g.domain, g.lifecycle, g.type],
       updatedAt: g.deadline ?? "",
     })),
     ...systems.map((s) => ({

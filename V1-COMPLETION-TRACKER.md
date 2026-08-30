@@ -14,8 +14,8 @@ A finding is `VERIFIED` only when runtime and/or automated-test evidence exists 
 
 | Batch | Scope | Status |
 |---|---|---|
-| **0** | Foundation lock: SQLite persistence, localStorage migration, native renderer E2E, UI test pattern, dev-control cleanup | **IMPLEMENTED — pending commit** |
-| 1 | PBOS Spine: Goal → System → Action (engines + CRUD + tests) | NOT STARTED |
+| **0** | Foundation lock: SQLite persistence, localStorage migration, native renderer E2E, UI test pattern, dev-control cleanup | **VERIFIED** (commit `59e629a`) |
+| **1** | PBOS Spine: Goal → System → Action (engines + CRUD + relational SQLite + tests) | **VERIFIED** |
 | 2 | Creation/edit across the remaining configuration entities + Quick Capture repair | NOT STARTED |
 | 3 | Planner / Calendar / Plan Builder + Today (scheduled blocks, collapse model, open-day state) | NOT STARTED |
 | 4 | Focus & Academic completeness (Normal Study, Mastery Assessment/Results, Course Detail depth) | NOT STARTED |
@@ -50,14 +50,34 @@ A finding is `VERIFIED` only when runtime and/or automated-test evidence exists 
 
 ---
 
+## Batch 1 — PBOS Spine: Goal → System → Action (acceptance detail)
+
+| Item | Status | Verification / evidence |
+|---|---|---|
+| Real Goal / System / Action engine, tested | VERIFIED | `performance/engine.ts` (pure; validation, `canTransitionGoal`, relationship resolution, `deriveSystemHealth`/`deriveGoalProgress`/`deriveGoalAttention`). `engine.test.ts` 24 tests. |
+| Goals user-creatable / -editable + safe status transitions | VERIFIED | `/goals/new` + `/goals/:id/edit` (`GoalBuilderPage` + shared `GoalForm`); `store.createGoal/updateGoal/transitionGoal`; Playwright + native E2E. |
+| One shared Goal Builder for manual + AI-proposed goals; AI never auto-creates | VERIFIED | `GoalBuilderPage` Manual/AI tabs; Accept/Modify only *prefill* the same form (`createdBy: "ai-approved"`); Reject creates nothing. `performance.dom.test.tsx` asserts both paths. |
+| Systems user-creatable / -editable; link to 0..n Goals | VERIFIED | `SystemForm` (inline sheet) on Systems Overview + System Detail; `?newFor=<goalId>` creates-and-links from Goal Detail; `store.createSystem/updateSystem/deleteSystem/toggleSystemStar`. |
+| Actions user-creatable / -editable; genuine status control; canonical + reused | VERIFIED | `ActionForm` on System Detail; explicit status `<select>` (not a hidden click-cycle), Edit, Delete, keyboard reorder; `capture/store` routes through the same `addAction` shim → `createAction` (no second task type). |
+| ONE relationship truth | VERIFIED | `goal_system_links` join table (goal↔system, many-to-many) + `actions.system_id` FK (`ON DELETE SET NULL` → direct commitment). No reverse arrays anywhere. `cargo test` `crud_and_one_relationship_truth`, `repo.test.ts`, native E2E `perf_load` assertion. |
+| Derived health not stored as competing state; Unknown ≠ Zero | VERIFIED | `System` has no `healthPercent`/`consistency`/`streak` columns; `deriveSystemHealth([])` → `insufficient-data`, ratio `null`; `deriveGoalProgress` with no metric → `{kind:"none"}`. Engine tests + UI ("Not enough activity yet"). |
+| Fresh profile does not depend on seed data | VERIFIED | store initial state `[]`; no `SEED_*` import; `mockData.ts` reduced to a test-only `LEGACY_KV` fixture; honest empty states on both overviews. |
+| Relational SQLite persistence for the spine | VERIFIED | `db.rs` migration **v2** (`goals`, `systems`, `actions`, `goal_system_links` + indexes, FKs on); `performance.rs` commands `perf_load/goal_upsert/goal_delete/system_upsert/system_delete/action_upsert/action_delete/link_set/actions_reorder/import_graph`. |
+| Legacy performance-data migration — safe, idempotent, non-destructive | VERIFIED | `legacyImport.ts` (pure: parses the Batch 0 `pbos:performance-*` blobs, unions the dueling `Goal.systemIds`/`System.goalId` into one link list, `Action.systemId` wins over `System.actionIds`, drops fabricated consistency/streak numbers, preserves IDs, reports repairs). `perf_import_graph` is `INSERT OR IGNORE` + a `meta.performance_relational_import` marker. `cargo test` `import_is_idempotent_and_non_destructive`, `legacyImport.test.ts` 9, `repo.test.ts`. |
+| Created data survives Tauri restart | VERIFIED | native E2E: `perf_reset_for_test` → `location.reload()` → create spine via UI → `perf_load` reads the canonical rows back out of SQLite with correct relationships. |
+| Today keeps consuming canonical Actions; no domain rebuilt | VERIFIED | `TodayPage` diff is 3 lines (`"completed"`→`"done"`, `computeSystemHealth`→`systemHealth`, honest "—" for insufficient data). `search/store` diff 1 line (`g.status`→`g.lifecycle`). No other domain touched. |
+| Tests / lint / build / cargo / axe | VERIFIED | vitest 27 files / 231 (was 190, +41); lint 0 errors; `npm run build` ✓; `cargo build` debug+release 0 warnings; `cargo test` 6/6; Playwright 4/4 (incl. scoped form axe = 0 critical/serious); native E2E 3/3. |
+
+---
+
 ## P0 Findings → Batch assignment
 
 | ID | Finding (audit §20) | Batch | Status | Verified when |
 |---|---|---|---|---|
-| P0-1 | No create/edit UI for any configuration entity | 1 (Goal/System/Action), 2 (all others) | NOT STARTED | user can create + edit each entity in-app, persisted, no seed/code edit — runtime + Playwright per entity |
+| P0-1 | No create/edit UI for any configuration entity | 1 (Goal/System/Action — **DONE**), 2 (all others) | IN PROGRESS | user can create + edit each entity in-app, persisted, no seed/code edit — runtime + Playwright per entity. **Batch 1: Goal, System, Action fully create/edit/delete + status + link; verified by React interaction tests, Playwright, native E2E + SQLite read-back. Remaining entities are Batch 2.** |
 | P0-2 | Planner / Calendar / Plan Builder do not exist; planning has no mutations | 3 | NOT STARTED | user builds a plan, schedules blocks, Generate→Apply works, locks survive regen — runtime + tests |
 | P0-3 | Quick Capture broken (unreachable, non-persisted inbox; `/capture-inbox` 404) | 2 | NOT STARTED | capture from palette → persisted inbox → confirm → routes to real engine — runtime + test |
-| P0-4 | Core operating loop cannot be completed | spans 1–3, 6 | NOT STARTED | full loop Goal→…→Re-plan demonstrated end to end — native E2E in Batch 10 |
+| P0-4 | Core operating loop cannot be completed | spans 1–3, 6 | IN PROGRESS | full loop Goal→…→Re-plan demonstrated end to end — native E2E in Batch 10. **Batch 1 restored the creation stages: (create) GOAL, GOAL→SYSTEM, SYSTEM→ACTION are now PASS (audit §8). PLAN stage still MISSING (Batch 3).** |
 | P0-5 | No real AI provider anywhere | 6 | NOT STARTED | provider abstraction + one real call path (capture classification) with key/error handling — tests + runtime |
 | P0-6 | Zero UI / workflow / integration test coverage | 0 (pattern), then every batch, full in 10 | IN PROGRESS | pattern exists now; each batch ships tests for its surface |
 
@@ -67,7 +87,7 @@ A finding is `VERIFIED` only when runtime and/or automated-test evidence exists 
 
 | # | Finding | Batch | Status |
 |---|---|---|---|
-| P1-1 | Goal Detail is a shell (no milestones/actions/evidence/AI panel) | 1 | NOT STARTED |
+| P1-1 | Goal Detail is a shell | 1 | **IMPLEMENTED** — now a real management surface: Edit Goal, meta (type/priority/deadline/progress), Why-this-goal, Linked Systems with Manage (link existing / create-for-goal / unlink), actions-from-linked-systems view, safe lifecycle transitions, delete. Milestones + Evidence panel + AI Insight remain deferred (docs 11.05 milestones = later; Evidence infra = P1-17). |
 | P1-2 | 19 decided screens have no route | 2–6 (per domain) | NOT STARTED |
 | P1-3 | Obsidian V1 integration entirely absent | 5 | NOT STARTED |
 | P1-4 | No workout session logging (Actual side of Base≠Prescription≠Actual) | 2 | NOT STARTED |
@@ -82,8 +102,8 @@ A finding is `VERIFIED` only when runtime and/or automated-test evidence exists 
 | P1-13 | Typography incomplete — Space Grotesk & JetBrains Mono not loaded | 9 | NOT STARTED |
 | P1-14 | App Shell missing regions (context rail, notifications, companion entry) | 9 | NOT STARTED |
 | P1-15 | Today missing collapse model / priority bands / open-day state | 3 | NOT STARTED |
-| P1-16 | `performance` domain has zero tests | 1 | NOT STARTED |
-| P1-17 | No shared Evidence infrastructure | 1 (introduce), 4–6 (adopt) | NOT STARTED |
+| P1-16 | `performance` domain has zero tests | 1 | **VERIFIED** — `engine.test.ts` (24: validation, transitions, relationship resolution, health/insufficient-data, progress, attention), `legacyImport.test.ts` (9), `repo.test.ts` (7: CRUD, FK integrity, cascade, reorder, import idempotence), `performance.dom.test.tsx` (6: create/edit/link/add-action/status/validation-preserves-input, AI-proposal-never-auto-creates), plus `cargo test` (3: relational CRUD, FK rejection, import idempotence), Playwright + native E2E. |
+| P1-17 | No shared Evidence infrastructure | 4–6 (introduce + adopt) | NOT STARTED — deferred out of Batch 1. The spine's health/consistency is derived deterministically in `engine.ts` (`deriveSystemHealth`, honest `insufficient-data`) without an Evidence layer; a shared Evidence model is introduced when the first evidence-producing domain lands (Batch 4). |
 | P1-18 | Per-entity create/edit gaps (Course/attempt, Topic/Source, Project/Skill/Milestone, Budget/Savings, Book, Block, Capacity) | 2 | NOT STARTED |
 | P1-19 | Analytics Weekly Review not persisted; Monthly Review absent | 6 | NOT STARTED |
 | P1-20 | No append-only revision / audit event store (`docs/32` data class 3) | 6 (with AI audit trail) or 8 | NOT STARTED |
@@ -121,4 +141,5 @@ SQLite-for-V1 was an open decision in the audit; **resolved by this batch** — 
 | Date | Batch | Overall | Functional | Visual/UX | Note |
 |---|---|---|---|---|---|
 | — | pre-0 | 38% | 30% | 55% | audit baseline |
-| (this batch) | 0 | 38% | 30% | 55% | **infrastructure only — headline % deliberately unchanged.** Durable persistence, migration, native E2E capability, and a UI test pattern do not by themselves complete any decided user workflow. |
+| — | 0 | 38% | 30% | 55% | **infrastructure only — headline % deliberately unchanged.** Durable persistence, migration, native E2E capability, and a UI test pattern do not by themselves complete any decided user workflow. |
+| — | 1 | **45%** | **38%** | **57%** | Goal→System→Action spine now genuinely operable. Changed audited gaps: audit §3 problems A (read-only), B (dueling relationship arrays), C (health stored twice), D (seed masquerading as user data) — all resolved. §8 core loop: (create) GOAL, GOAL→SYSTEM, SYSTEM→ACTION BROKEN → PASS. §9 CRUD matrix: Goal C/U, System C/U, Action C/U + full status, Goal↔System link — all now ✓. §12: "No Goal Engine / No System Engine" ABSENT → PRESENT (relational model + `engine.ts`). §6 screens: Goal Builder MISSING→PASS, Goal Detail SHELL→operational, Systems Overview + System Detail PARTIAL→operational. Test coverage: a formerly-zero-test domain now has 46 tests across 6 layers. **Not moved:** Planner (Batch 3), 12 other config entities (Batch 2), AI apply (Batch 6), global visual normalization (Batch 9). |

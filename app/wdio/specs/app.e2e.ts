@@ -1,14 +1,14 @@
 /**
- * Native desktop E2E — proves WebdriverIO drives the REAL Performance Buddy OS
- * renderer inside the packaged Tauri window (Batch 0 infrastructure proof).
+ * Native desktop E2E — drives the REAL Performance Buddy OS renderer inside the
+ * packaged Tauri window.
  *
  * Interaction goes through `browser.tauri.execute(fn)` (from @wdio/tauri-service
  * + tauri-plugin-wdio), which runs JS inside the actual PBOS frontend — the
- * supported, reliable path on Windows/WebView2. Everything asserted below is
- * the real renderer, real routes, and a real click handler firing.
+ * supported, reliable path on Windows/WebView2.
  *
- * Not a full suite. It must: launch PBOS, see the real renderer, locate a real
- * PBOS element, interact with a real control, navigate two routes, assert state.
+ *   Spec 1 (Batch 0): renderer proof + Tauri→Rust→SQLite round-trip.
+ *   Spec 2 (Batch 1): the real-user Goal → System → Action scenario, then
+ *                     verified straight out of SQLite via `perf_load`.
  */
 
 // @wdio/tauri-service augments `browser` with `.tauri`; declare it loosely here.
@@ -20,9 +20,69 @@ async function frontendText(): Promise<string> {
   return await browser.tauri.execute(() => document.body?.innerText || "");
 }
 
+async function invokeCmd<T = unknown>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  // args must be inlined into the executed function body (it is serialized).
+  const src = `return window.__TAURI__.core.invoke(${JSON.stringify(cmd)}, ${JSON.stringify(args ?? {})})`;
+  // eslint-disable-next-line no-new-func
+  return (await browser.tauri.execute(new Function(src) as () => T)) as T;
+}
+
+/** set an <input>/<textarea> value the React way, or pick a <select> option. */
+async function setField(selector: string, value: string): Promise<boolean> {
+  const src = `
+    const el = document.querySelector(${JSON.stringify(selector)});
+    if (!el) return false;
+    if (el.tagName === 'SELECT') {
+      el.value = ${JSON.stringify(value)};
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    }
+    const proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, ${JSON.stringify(value)});
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;`;
+  // eslint-disable-next-line no-new-func
+  return (await browser.tauri.execute(new Function(src) as () => boolean)) as boolean;
+}
+
+/** click the first <button> whose trimmed text matches `re`. */
+async function clickButton(re: string): Promise<boolean> {
+  const src = `
+    const rx = new RegExp(${JSON.stringify(re)}, 'i');
+    const btn = [...document.querySelectorAll('button')].find(b => rx.test((b.textContent||'').trim()));
+    if (!btn) return false; btn.click(); return true;`;
+  // eslint-disable-next-line no-new-func
+  return (await browser.tauri.execute(new Function(src) as () => boolean)) as boolean;
+}
+
+/** id of the input/textarea whose <label> text matches `re`. */
+async function fieldIdByLabel(re: string): Promise<string | null> {
+  const src = `
+    const rx = new RegExp(${JSON.stringify(re)}, 'i');
+    const lab = [...document.querySelectorAll('label')].find(l => rx.test(l.textContent||''));
+    return lab && lab.getAttribute('for');`;
+  // eslint-disable-next-line no-new-func
+  return (await browser.tauri.execute(new Function(src) as () => string | null)) as string | null;
+}
+
+async function setByLabel(labelRe: string, value: string): Promise<boolean> {
+  const id = await fieldIdByLabel(labelRe);
+  return id ? setField(`#${id}`, value) : false;
+}
+
+async function nav(hash: string) {
+  await browser.tauri.execute(new Function(`window.location.hash = ${JSON.stringify(hash)}`) as () => void);
+}
+
+async function waitForText(needle: string, timeout = 20_000) {
+  await browser.waitUntil(async () => (await frontendText()).includes(needle), {
+    timeout,
+    timeoutMsg: `never saw "${needle}"`,
+  });
+}
+
 describe("PBOS native desktop shell — renderer E2E", () => {
   it("renders the real app, fires a real control, and navigates two routes", async () => {
-    // 1. Real renderer: past the startup splash the PBOS app shell has mounted.
     await browser.waitUntil(
       async () => /Today|Focus Mode|Goals|Onboarding/.test(await frontendText()),
       { timeout: 60_000, timeoutMsg: "PBOS app shell never rendered" },
@@ -33,74 +93,102 @@ describe("PBOS native desktop shell — renderer E2E", () => {
     );
     expect(hasRoot).toBe(true);
 
-    // 2. Route one — Focus. Locate a real element, fire its real click handler.
-    await browser.tauri.execute(() => {
-      window.location.hash = "#/focus";
-    });
-    await browser.waitUntil(async () => (await frontendText()).includes("Focus Mode"), {
-      timeout: 20_000,
-      timeoutMsg: "Focus route did not render",
-    });
+    await nav("#/focus");
+    await waitForText("Focus Mode");
+    expect(await clickButton("^Start$")).toBe(true);
+    await waitForText("Pause", 15_000);
 
-    const clickedStart = await browser.tauri.execute(() => {
-      const btn = [...document.querySelectorAll("button")].find(
-        (b) => b.textContent?.trim() === "Start",
-      ) as HTMLButtonElement | undefined;
-      if (!btn) return false;
-      btn.click();
-      return true;
-    });
-    expect(clickedStart).toBe(true);
-
-    await browser.waitUntil(async () => (await frontendText()).includes("Pause"), {
-      timeout: 15_000,
-      timeoutMsg: "Focus session did not start after the real Start click",
-    });
-
-    // 3. Route two — Goals. Assert the resulting UI state.
-    await browser.tauri.execute(() => {
-      window.location.hash = "#/goals";
-    });
-    await browser.waitUntil(async () => (await frontendText()).includes("Active Goals"), {
-      timeout: 20_000,
-      timeoutMsg: "Goals route did not render",
-    });
-
-    const goalsText = await frontendText();
-    expect(goalsText).toContain("Active Goals");
-    expect(goalsText).toContain("GOALS NEEDING ATTENTION");
+    await nav("#/goals");
+    await browser.waitUntil(
+      async () => {
+        const t = await frontendText();
+        return t.includes("No goals yet") || t.includes("Create Goal");
+      },
+      { timeout: 20_000, timeoutMsg: "Goals route did not render" },
+    );
   });
 
   it("persists through the real Tauri → Rust → SQLite path", async () => {
-    // db_status proves the migrated schema is live.
-    const status = await browser.tauri.execute(() =>
-      (window as unknown as { __TAURI__: { core: { invoke: (c: string, a?: unknown) => Promise<unknown> } } }).__TAURI__.core.invoke("db_status"),
-    );
-    expect((status as { schema_version: number }).schema_version).toBe(1);
-    expect((status as { localstorage_migrated: boolean }).localstorage_migrated).toBe(true);
+    const status = await invokeCmd<{ schema_version: number; localstorage_migrated: boolean }>("db_status");
+    expect(status.schema_version).toBe(2); // Batch 1 migration
+    expect(status.localstorage_migrated).toBe(true);
 
-    // Write via the real command, then read it back via the real command.
-    const probeKey = "pbos:__e2e_probe__";
-    await browser.tauri.execute(() =>
-      (window as unknown as { __TAURI__: { core: { invoke: (c: string, a?: unknown) => Promise<unknown> } } }).__TAURI__.core.invoke("kv_set", {
-        key: "pbos:__e2e_probe__",
-        value: JSON.stringify({ ok: true, n: 3 }),
-      }),
-    );
-    const all = (await browser.tauri.execute(() =>
-      (window as unknown as { __TAURI__: { core: { invoke: (c: string, a?: unknown) => Promise<unknown> } } }).__TAURI__.core.invoke("kv_get_all"),
-    )) as { key: string; value: string }[];
-
-    const probe = all.find((e) => e.key === probeKey);
+    await invokeCmd("kv_set", { key: "pbos:__e2e_probe__", value: JSON.stringify({ ok: true, n: 3 }) });
+    const all = await invokeCmd<{ key: string; value: string }[]>("kv_get_all");
+    const probe = all.find((e) => e.key === "pbos:__e2e_probe__");
     expect(probe).toBeTruthy();
     expect(JSON.parse(probe!.value)).toEqual({ ok: true, n: 3 });
+    expect(all.filter((e) => e.key === "pbos:__e2e_probe__")).toHaveLength(1);
+    await invokeCmd("kv_delete", { key: "pbos:__e2e_probe__" });
+  });
+});
 
-    // No duplication: exactly one row for the key.
-    expect(all.filter((e) => e.key === probeKey)).toHaveLength(1);
+describe("PBOS Batch 1 — real-user Goal → System → Action scenario", () => {
+  it("creates the spine through the UI and verifies it straight out of SQLite", async () => {
+    // 1. wipe the SQLite Performance spine (marker stays set → no re-import).
+    await invokeCmd("perf_reset_for_test");
 
-    // Clean up the probe so reruns start clean.
-    await browser.tauri.execute(() =>
-      (window as unknown as { __TAURI__: { core: { invoke: (c: string, a?: unknown) => Promise<unknown> } } }).__TAURI__.core.invoke("kv_delete", { key: "pbos:__e2e_probe__" }),
-    );
+    // 2. Create a Goal via the builder (route always works regardless of the
+    //    store's in-memory list; the final assertion reads SQLite, which the
+    //    reset left empty).
+    await nav("#/goals/new");
+    await waitForText("Goal Builder");
+    expect(await setByLabel("goal name", "Complete DSA revision")).toBe(true);
+    expect(await clickButton("^create goal$")).toBe(true);
+    await waitForText("Complete DSA revision");
+
+    // 3. Create + link a System from the goal
+    expect(await clickButton("manage systems")).toBe(true);
+    await browser.pause(200);
+    expect(await clickButton("create a system for this goal")).toBe(true);
+    await waitForText("System name");
+    expect(await setByLabel("system name", "Weekly DSA Study")).toBe(true);
+    expect(await clickButton("^create system$")).toBe(true);
+    await waitForText("Weekly DSA Study");
+    await waitForText("Not enough activity yet"); // Unknown ≠ Zero
+
+    // 4. Add an Action + progress its status via the explicit control
+    expect(await clickButton("add action")).toBe(true);
+    await waitForText("Estimate, minutes");
+    expect(await setByLabel("^action$", "Revise Binary Trees")).toBe(true);
+    expect(await clickButton("^add action$")).toBe(true);
+    await waitForText("Revise Binary Trees");
+    expect(await setField('select[id^="st-"]', "done")).toBe(true);
+    await waitForText("100%");
+
+    // 5. Verify the relationship from the Goal
+    await nav("#/goals");
+    await browser.pause(500);
+    await browser.tauri.execute(() => {
+      const link = [...document.querySelectorAll("a")].find((a) => /Complete DSA revision/i.test(a.textContent || ""));
+      (link as HTMLAnchorElement)?.click();
+    });
+    await waitForText("Weekly DSA Study");
+
+    // 6. Verify canonical records + relationships straight out of SQLite.
+    //    The reset left SQLite empty, so this graph is exactly what the UI made.
+    const graph = await invokeCmd<{
+      goals: { id: string; title: string; lifecycle: string; metricTarget: number | null }[];
+      systems: { id: string; title: string }[];
+      actions: { id: string; title: string; status: string; systemId: string | null }[];
+      links: { goalId: string; systemId: string }[];
+    }>("perf_load");
+
+    expect(graph.goals).toHaveLength(1);
+    expect(graph.systems).toHaveLength(1);
+    expect(graph.actions).toHaveLength(1);
+    const goal = graph.goals.find((g) => g.title === "Complete DSA revision");
+    const system = graph.systems.find((s) => s.title === "Weekly DSA Study");
+    const action = graph.actions.find((a) => a.title === "Revise Binary Trees");
+    expect(goal).toBeTruthy();
+    expect(system).toBeTruthy();
+    expect(action).toBeTruthy();
+    expect(action!.systemId).toBe(system!.id); // one FK truth
+    expect(action!.status).toBe("done");
+    expect(graph.links).toEqual([{ goalId: goal!.id, systemId: system!.id }]); // one link truth
+    expect(graph.links.filter((l) => l.goalId === goal!.id && l.systemId === system!.id)).toHaveLength(1);
+
+    // cleanup so reruns start clean
+    await invokeCmd("perf_reset_for_test");
   });
 });
