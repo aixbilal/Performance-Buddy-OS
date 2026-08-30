@@ -1,0 +1,9 @@
+# Claude Code — skills managed by the `skills` CLI are pinned in
+# skills-lock.json and restored with `npx skills experimental_install`.
+# They are not vendored into the repo (large third-party payloads).
+/.claude/skills/impeccable/
+/.claude/skills/vercel-react-best-practices/
+/.claude/skills/web-design-guidelines/
+
+# Local, machine-specific Claude Code settings
+/.claude/settings.local.json

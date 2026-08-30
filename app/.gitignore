@@ -22,3 +22,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Test artifacts (Playwright Test, WebdriverIO)
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/.wdio/
+/wdio-logs/
+/logs/
