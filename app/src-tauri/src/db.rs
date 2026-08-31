@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
 /// Bumped whenever a migration is added to `MIGRATIONS`.
-const CURRENT_SCHEMA_VERSION: i64 = 6;
+const CURRENT_SCHEMA_VERSION: i64 = 7;
 
 /// Ordered, forward-only migrations. `version` must be contiguous from 1.
 const MIGRATIONS: &[(i64, &str)] = &[
@@ -708,6 +708,76 @@ const MIGRATIONS: &[(i64, &str)] = &[
     CREATE INDEX IF NOT EXISTS idx_mastery_checks_atopic  ON mastery_checks(academic_topic_id);
     CREATE INDEX IF NOT EXISTS idx_mastery_checks_ktopic  ON mastery_checks(knowledge_topic_id);
     CREATE INDEX IF NOT EXISTS idx_mastery_checks_evid    ON mastery_checks(evidence_id);
+    "#,
+    ),
+    (
+        7,
+        // Batch 5 — the KNOWLEDGE / OBSIDIAN boundary + shared cross-domain
+        // Evidence wiring.
+        //
+        // Ownership lock enforced by shape:
+        //   OBSIDIAN owns the authoritative Markdown note body. PBOS stores
+        //     METADATA ONLY — path, title, filesystem mtime/size, existence.
+        //     There is deliberately NO `content` / `body` column: a preview is
+        //     read on demand from disk, never cached here as a second truth.
+        //   The index is DISPOSABLE (docs 16.05 / 16.09): `obsidian_notes` can
+        //     be wiped and rebuilt by a rescan without any data loss.
+        //   `knowledge_topic_note_links` is a GOVERNED REFERENCE keyed by the
+        //     stable relative path, so a link SURVIVES a rescan and a missing
+        //     file (the Knowledge Topic, its Evidence and its mastery are never
+        //     touched because a note moved). CASCADE only on the Topic side.
+        //
+        //   DEVELOPMENT ↔ KNOWLEDGE (docs 15.02 / 18.08): a Skill may REFERENCE
+        //     one canonical Knowledge concept (`development_skills.knowledge_topic_id`,
+        //     SET NULL) — Development still owns practice/capability, Knowledge
+        //     still owns conceptual mastery. A single Skill-evidence row may be
+        //     handed to Knowledge exactly once
+        //     (`development_skill_evidence.knowledge_evidence_id`, set-once guard,
+        //     SET NULL if that evidence is deleted).
+        r#"
+    CREATE TABLE IF NOT EXISTS obsidian_config (
+        id           INTEGER PRIMARY KEY CHECK (id = 1),
+        vault_path   TEXT NOT NULL,
+        vault_id     TEXT NOT NULL,
+        status       TEXT NOT NULL DEFAULT 'connected',
+        connected_at TEXT,
+        last_scan_at TEXT,
+        created_at   TEXT NOT NULL,
+        updated_at   TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS obsidian_notes (
+        id            TEXT PRIMARY KEY NOT NULL,   -- stable: derived from relative_path
+        relative_path TEXT NOT NULL UNIQUE,
+        title         TEXT NOT NULL DEFAULT '',
+        filename      TEXT NOT NULL DEFAULT '',
+        modified_at   TEXT,                        -- filesystem mtime marker
+        size_bytes    INTEGER NOT NULL DEFAULT 0,
+        exists_on_disk INTEGER NOT NULL DEFAULT 1, -- 0 = indexed before, now missing/stale
+        indexed_at    TEXT NOT NULL,
+        created_at    TEXT NOT NULL,
+        updated_at    TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS knowledge_topic_note_links (
+        id            TEXT PRIMARY KEY NOT NULL,
+        topic_id      TEXT NOT NULL REFERENCES knowledge_topics(id) ON DELETE CASCADE,
+        relative_path TEXT NOT NULL,               -- the durable reference (survives rescan)
+        title         TEXT NOT NULL DEFAULT '',
+        linked_at     TEXT NOT NULL,
+        created_at    TEXT NOT NULL,
+        updated_at    TEXT NOT NULL,
+        UNIQUE (topic_id, relative_path)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_obsidian_notes_path  ON obsidian_notes(relative_path);
+    CREATE INDEX IF NOT EXISTS idx_ktnl_topic           ON knowledge_topic_note_links(topic_id);
+    CREATE INDEX IF NOT EXISTS idx_ktnl_path            ON knowledge_topic_note_links(relative_path);
+
+    ALTER TABLE development_skills
+        ADD COLUMN knowledge_topic_id TEXT REFERENCES knowledge_topics(id) ON DELETE SET NULL;
+    ALTER TABLE development_skill_evidence
+        ADD COLUMN knowledge_evidence_id TEXT REFERENCES knowledge_evidence(id) ON DELETE SET NULL;
     "#,
     ),
 ];

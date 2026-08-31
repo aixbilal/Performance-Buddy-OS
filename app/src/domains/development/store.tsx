@@ -24,6 +24,7 @@ import type { SaveState } from "../resilience/types";
 import {
   computeEvidenceScore,
   deriveProjectProgress,
+  knowledgeHandoffWeight,
   validateEvidenceInput,
   validateMilestoneInput,
   validateProjectInput,
@@ -31,6 +32,7 @@ import {
   type EvidenceScoreResult,
   type ProjectProgress,
 } from "./engine";
+import { useKnowledge } from "../knowledge/store";
 import { newId } from "./ids";
 import { resolveLegacyDevelopment, type DevLegacyReport } from "./legacyImport";
 import { makeDevelopmentRepo, type DevelopmentRepo } from "./repo";
@@ -50,6 +52,9 @@ import type {
 } from "./types";
 
 type MutResult = { ok: true; id: string } | { ok: false; errors: Record<string, string> };
+export type HandoffResult =
+  | { ok: true; id: string; already: boolean }
+  | { ok: false; reason: "not-found" | "no-knowledge-link" | "unreviewed-ai" | string };
 
 type DevelopmentContextValue = {
   loaded: boolean;
@@ -89,6 +94,10 @@ type DevelopmentContextValue = {
   archiveSkill: (id: string, archived?: boolean) => Promise<void>;
   deleteSkill: (id: string) => Promise<void>;
   setSkillRoadmap: (id: string, input: RoadmapInput) => Promise<MutResult>;
+  /** Batch 5 — set (topicId) or clear (null) a Skill's Knowledge concept reference. */
+  linkSkillKnowledge: (skillId: string, topicId: string | null) => Promise<void>;
+  /** Batch 5 — explicit, idempotent handoff of ONE skill-evidence row to Knowledge. */
+  sendEvidenceToKnowledge: (evidenceId: string) => Promise<HandoffResult>;
 
   // milestone CRUD
   createMilestone: (projectId: string, input: MilestoneInput) => Promise<MutResult>;
@@ -120,6 +129,7 @@ export function DevelopmentProvider({ children }: { children: ReactNode }) {
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [legacyImport, setLegacyImport] = useState<DevLegacyReport | null>(null);
+  const knowledge = useKnowledge();
 
   useEffect(() => {
     let cancelled = false;
@@ -163,9 +173,23 @@ export function DevelopmentProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // A Skill's Knowledge reference resolves to null if that concept no longer
+  // exists — same "dangling reference → none" posture the Rust FK enforces
+  // (ON DELETE SET NULL), applied here so the browser-dev path matches.
+  const resolvedSkills: Skill[] = useMemo(
+    () =>
+      graph.skills.map((s) =>
+        s.knowledgeTopicId && !knowledge.getTopic(s.knowledgeTopicId)
+          ? { ...s, knowledgeTopicId: null }
+          : s,
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [graph.skills, knowledge],
+  );
+
   // --- reads ------------------------------------------------------------
   const getProject = (id: string) => graph.projects.find((p) => p.id === id);
-  const getSkill = (id: string) => graph.skills.find((s) => s.id === id);
+  const getSkill = (id: string) => resolvedSkills.find((s) => s.id === id);
   const getMilestonesForProject = (projectId: string) =>
     graph.milestones.filter((m) => m.projectId === projectId).sort((a, b) => a.position - b.position);
   const getEvidenceForSkill = (skillId: string) =>
@@ -244,6 +268,7 @@ export function DevelopmentProvider({ children }: { children: ReactNode }) {
       ...v.value,
       roadmapPosition: null,
       roadmapTargetLevel: null,
+      knowledgeTopicId: null,
       archived: false,
       createdAt: nowIso(),
       updatedAt: nowIso(),
@@ -372,6 +397,7 @@ export function DevelopmentProvider({ children }: { children: ReactNode }) {
       skillId,
       ...v.value,
       projectId,
+      knowledgeEvidenceId: null,
       createdAt: nowIso(),
       updatedAt: nowIso(),
     };
@@ -416,6 +442,53 @@ export function DevelopmentProvider({ children }: { children: ReactNode }) {
     await persist(() => repoRef.current.linkSet(projectId, skillId, false));
   };
 
+  // --- Batch 5: Development ↔ Knowledge --------------------------------
+  const linkSkillKnowledge = async (skillId: string, topicId: string | null) => {
+    const existing = getSkill(skillId);
+    if (!existing) return;
+    const resolved = topicId && knowledge.getTopic(topicId) ? topicId : null;
+    setGraph((g) => ({
+      ...g,
+      skills: g.skills.map((s) =>
+        s.id === skillId ? { ...s, knowledgeTopicId: resolved, updatedAt: nowIso() } : s,
+      ),
+    }));
+    await persist(() => repoRef.current.skillLinkKnowledge(skillId, resolved));
+  };
+
+  const sendEvidenceToKnowledge = async (evidenceId: string): Promise<HandoffResult> => {
+    const ev = graph.evidence.find((e) => e.id === evidenceId);
+    if (!ev) return { ok: false, reason: "not-found" };
+    if (ev.knowledgeEvidenceId) return { ok: true, id: ev.knowledgeEvidenceId, already: true };
+    const skill = getSkill(ev.skillId);
+    if (!skill?.knowledgeTopicId) return { ok: false, reason: "no-knowledge-link" };
+    const weight = knowledgeHandoffWeight(ev.provenance);
+    if (!weight) return { ok: false, reason: "unreviewed-ai" };
+
+    const res = await knowledge.addEvidence(skill.knowledgeTopicId, {
+      type: "practice",
+      title: `Skill evidence — ${skill.title}: ${ev.title}`,
+      score: weight.score,
+      maxScore: weight.maxScore,
+      date: ev.date || new Date().toISOString().slice(0, 10),
+    });
+    if (!res.ok) return { ok: false, reason: res.reason };
+
+    const effective = await repoRef.current.skillEvidenceLinkKnowledge(evidenceId, res.id);
+    const linkedId = effective ?? res.id;
+    if (linkedId !== res.id) {
+      // lost a race — drop the duplicate we just created
+      await knowledge.deleteEvidence(res.id);
+    }
+    setGraph((g) => ({
+      ...g,
+      evidence: g.evidence.map((e) =>
+        e.id === evidenceId ? { ...e, knowledgeEvidenceId: linkedId, updatedAt: nowIso() } : e,
+      ),
+    }));
+    return { ok: true, id: linkedId, already: false };
+  };
+
   const value = useMemo<DevelopmentContextValue>(
     () => ({
       loaded,
@@ -426,7 +499,7 @@ export function DevelopmentProvider({ children }: { children: ReactNode }) {
       backend: repoRef.current.kind,
       legacyImport,
       projects: graph.projects,
-      skills: graph.skills,
+      skills: resolvedSkills,
       milestones: graph.milestones,
       evidence: graph.evidence,
       getProject,
@@ -447,6 +520,8 @@ export function DevelopmentProvider({ children }: { children: ReactNode }) {
       archiveSkill,
       deleteSkill,
       setSkillRoadmap,
+      linkSkillKnowledge,
+      sendEvidenceToKnowledge,
       createMilestone,
       updateMilestone,
       toggleMilestone,
@@ -458,8 +533,10 @@ export function DevelopmentProvider({ children }: { children: ReactNode }) {
       linkProjectSkill,
       unlinkProjectSkill,
     }),
+    // `knowledge` is included so the cross-domain handoff closures never read a
+    // stale Knowledge snapshot (this provider re-renders on Knowledge changes).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [graph, loaded, loadError, saveState, saveError, legacyImport],
+    [graph, loaded, loadError, saveState, saveError, legacyImport, knowledge, resolvedSkills],
   );
 
   return <DevelopmentContext.Provider value={value}>{children}</DevelopmentContext.Provider>;

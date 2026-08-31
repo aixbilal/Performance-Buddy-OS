@@ -105,11 +105,12 @@ test("Academic Binary Trees links to the Knowledge Binary Trees concept and read
   await expect(page.getByText("80%")).toBeVisible();
 });
 
-test("Notes Hub is honest — Obsidian not connected, no fake files", async ({ page }) => {
+test("Notes Hub is honest — no vault connected, no fake files, offers to connect", async ({ page }) => {
   await freshProfile(page);
   await gotoRoute(page, "#/knowledge/notes");
-  await expect(page.getByText(/obsidian not connected/i)).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText(/no files have been scanned/i)).toBeVisible();
+  await expect(page.getByText(/no vault connected/i)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByLabel(/vault folder path/i)).toBeVisible();
+  await expect(page.getByText(/indexed notes \(/i)).toHaveCount(0);
 });
 
 test("no critical/serious a11y violations on the Knowledge Topic form", async ({ page }) => {

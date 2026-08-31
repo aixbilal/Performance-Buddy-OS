@@ -16,12 +16,14 @@ import { SearchProvider } from "./domains/search/store";
 import { CaptureProvider } from "./domains/capture/store";
 import { MasteryProvider } from "./domains/academic/masteryStore";
 import { FocusProvider } from "./domains/focus/store";
+import { ObsidianProvider } from "./domains/obsidian/store";
 
 export default function App() {
   return (
     <PerformanceProvider>
       <AcademicProvider>
         <KnowledgeProvider>
+          <ObsidianProvider>
           <DevelopmentProvider>
             <FitnessProvider>
               <RoutineProvider>
@@ -51,6 +53,7 @@ export default function App() {
               </RoutineProvider>
             </FitnessProvider>
           </DevelopmentProvider>
+          </ObsidianProvider>
         </KnowledgeProvider>
       </AcademicProvider>
     </PerformanceProvider>

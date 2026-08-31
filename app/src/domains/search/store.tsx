@@ -6,6 +6,7 @@ import { useAcademic } from "../academic/store";
 import { useKnowledge } from "../knowledge/store";
 import { useDevelopment } from "../development/store";
 import { useRoutine } from "../routine/store";
+import { useObsidian } from "../obsidian/store";
 
 const MAX_RECENTS = 15;
 
@@ -25,6 +26,7 @@ export function SearchProvider({ children }: { children: ReactNode }) {
   const { topics } = useKnowledge();
   const { skills } = useDevelopment();
   const { routines } = useRoutine();
+  const { notes } = useObsidian();
 
   // §10: this index is built FRESH from real domain state every render — it
   // is never stored as a second authoritative copy. If any of these stores
@@ -90,6 +92,17 @@ export function SearchProvider({ children }: { children: ReactNode }) {
       keywords: [r.category, r.timeWindow],
       updatedAt: "",
     })),
+    // Obsidian note METADATA only (docs 16.09) — no note bodies are indexed.
+    ...notes.map((n) => ({
+      id: n.id,
+      entityType: "note" as const,
+      title: n.title,
+      subtitle: n.relativePath,
+      domain: "Notes",
+      canonicalRoute: `/knowledge/notes`,
+      keywords: [n.filename, n.relativePath, n.existsOnDisk ? "" : "stale"],
+      updatedAt: n.indexedAt,
+    })),
     {
       id: "page-settings",
       entityType: "setting-page" as const,
@@ -114,7 +127,7 @@ export function SearchProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({ search, recordRecent, recentIds }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [goals, systems, courses, topics, skills, routines, recentIds]
+    [goals, systems, courses, topics, skills, routines, notes, recentIds]
   );
 
   return <SearchContext.Provider value={value}>{children}</SearchContext.Provider>;

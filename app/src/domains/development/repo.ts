@@ -29,6 +29,13 @@ export interface DevelopmentRepo {
   evidenceUpsert(evidence: SkillEvidence): Promise<void>;
   evidenceDelete(id: string): Promise<void>;
   linkSet(projectId: string, skillId: string, linked: boolean): Promise<void>;
+  /** Batch 5 — set/clear a Skill's Knowledge concept reference (dangling-safe). */
+  skillLinkKnowledge(skillId: string, topicId: string | null): Promise<void>;
+  /** Batch 5 — set-once handoff; returns the effective Knowledge Evidence id. */
+  skillEvidenceLinkKnowledge(
+    evidenceId: string,
+    knowledgeEvidenceId: string,
+  ): Promise<string | null>;
   importGraph(graph: DevGraph): Promise<DevImportReport>;
 }
 
@@ -82,6 +89,17 @@ class SqliteRepo implements DevelopmentRepo {
   }
   async linkSet(projectId: string, skillId: string, linked: boolean) {
     await invoke("dev_link_set", { projectId, skillId, linked });
+  }
+  async skillLinkKnowledge(skillId: string, topicId: string | null) {
+    await invoke("dev_skill_link_knowledge", { skillId, topicId });
+  }
+  async skillEvidenceLinkKnowledge(evidenceId: string, knowledgeEvidenceId: string) {
+    return (
+      (await invoke<string | null>("dev_skill_evidence_link_knowledge", {
+        evidenceId,
+        knowledgeEvidenceId,
+      })) ?? null
+    );
   }
   async importGraph(graph: DevGraph) {
     return normReport(await invoke("dev_import_graph", { import: graph }));
@@ -143,8 +161,33 @@ export class LocalRepo implements DevelopmentRepo {
   }
   async skillUpsert(skill: Skill) {
     const g = this.read();
-    g.skills = this.upsert(g.skills, skill);
+    // knowledgeTopicId is owned by skillLinkKnowledge — never clobbered by a
+    // plain skill upsert (mirrors the Rust column ownership).
+    const prev = g.skills.find((s) => s.id === skill.id);
+    g.skills = this.upsert(g.skills, {
+      ...skill,
+      knowledgeTopicId: prev ? prev.knowledgeTopicId : (skill.knowledgeTopicId ?? null),
+    });
     this.write(g);
+  }
+  async skillLinkKnowledge(skillId: string, topicId: string | null) {
+    const g = this.read();
+    const resolved = topicId && g.skills.length ? topicId : topicId; // adapter: no topics table
+    g.skills = g.skills.map((s) =>
+      s.id === skillId ? { ...s, knowledgeTopicId: resolved ?? null } : s,
+    );
+    this.write(g);
+  }
+  async skillEvidenceLinkKnowledge(evidenceId: string, knowledgeEvidenceId: string) {
+    const g = this.read();
+    const ev = g.evidence.find((e) => e.id === evidenceId);
+    if (!ev) return null;
+    if (ev.knowledgeEvidenceId) return ev.knowledgeEvidenceId; // set-once
+    g.evidence = g.evidence.map((e) =>
+      e.id === evidenceId ? { ...e, knowledgeEvidenceId } : e,
+    );
+    this.write(g);
+    return knowledgeEvidenceId;
   }
   async skillDelete(id: string) {
     const g = this.read();
@@ -180,7 +223,15 @@ export class LocalRepo implements DevelopmentRepo {
       evidence.projectId && g.projects.some((p) => p.id === evidence.projectId)
         ? evidence.projectId
         : null;
-    g.evidence = this.upsert(g.evidence, { ...evidence, projectId });
+    // knowledgeEvidenceId is set-once, owned by skillEvidenceLinkKnowledge.
+    const prev = g.evidence.find((e) => e.id === evidence.id);
+    g.evidence = this.upsert(g.evidence, {
+      ...evidence,
+      projectId,
+      knowledgeEvidenceId: prev
+        ? prev.knowledgeEvidenceId
+        : (evidence.knowledgeEvidenceId ?? null),
+    });
     this.write(g);
   }
   async evidenceDelete(id: string) {

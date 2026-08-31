@@ -61,6 +61,12 @@ export type Skill = {
   /** Learning Path / Skill Roadmap: null = not on the path. */
   roadmapPosition: number | null;
   roadmapTargetLevel: SkillLevel | null;
+  /**
+   * Batch 5 — optional REFERENCE to ONE canonical Knowledge concept (docs
+   * 15.02 / 18.08). Development still owns practice/capability; Knowledge still
+   * owns conceptual mastery. Managed only via `linkSkillKnowledge`.
+   */
+  knowledgeTopicId: string | null;
   archived: boolean;
   createdAt: string;
   updatedAt: string;
@@ -83,6 +89,12 @@ export type SkillEvidence = {
   title: string;
   provenance: Provenance;
   date: string;
+  /**
+   * Batch 5 — the ONE Knowledge Evidence row this was handed to, if any.
+   * Set-once via `sendEvidenceToKnowledge`; SET NULL if that evidence is
+   * deleted. Raw `ai-assisted` evidence can never be handed off.
+   */
+  knowledgeEvidenceId: string | null;
   createdAt: string;
   updatedAt: string;
 };

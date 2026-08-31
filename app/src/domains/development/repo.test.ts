@@ -24,6 +24,7 @@ const skill = (id: string): Skill => ({
   practicePercent: 10,
   roadmapPosition: null,
   roadmapTargetLevel: null,
+  knowledgeTopicId: null,
   archived: false,
   createdAt: TS,
   updatedAt: TS,
@@ -44,6 +45,7 @@ const evidence = (id: string, skillId: string, projectId: string | null): SkillE
   title: `Ev ${id}`,
   provenance: "independent",
   date: "2026-08-01",
+  knowledgeEvidenceId: null,
   createdAt: TS,
   updatedAt: TS,
 });

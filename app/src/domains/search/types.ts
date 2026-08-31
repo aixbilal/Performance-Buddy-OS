@@ -17,6 +17,7 @@ export type SearchEntityType =
   | "skill"
   | "routine"
   | "language-unit"
+  | "note"
   | "setting-page";
 
 export type SearchResult = {

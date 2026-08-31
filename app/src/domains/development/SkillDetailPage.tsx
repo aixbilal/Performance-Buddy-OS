@@ -3,7 +3,9 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { SaveIndicator } from "../../components/SaveIndicator";
+import { EvidenceList, type EvidenceView } from "../../components/EvidenceList";
 import { useDevelopment } from "./store";
+import { useKnowledge } from "../knowledge/store";
 import { derivePercentToLevel } from "./engine";
 import { PROVENANCES, SKILL_LEVELS, type Provenance, type SkillLevel } from "./types";
 
@@ -28,7 +30,9 @@ export function SkillDetailPage() {
   const { skillId } = useParams();
   const navigate = useNavigate();
   const dev = useDevelopment();
+  const knowledge = useKnowledge();
   const skill = dev.getSkill(skillId ?? "");
+  const [handoffMsg, setHandoffMsg] = useState<string | null>(null);
 
   const [evForm, setEvForm] = useState({
     title: "",
@@ -118,6 +122,45 @@ export function SkillDetailPage() {
           AI writing code does not automatically count as you independently understanding it.
         </div>
       )}
+
+      <Card title="Linked Knowledge concept">
+        <p className="text-text-disabled text-[10px] mb-2">
+          Development owns practice and capability; Knowledge owns conceptual mastery. Linking a
+          concept references it — it does not copy or change its mastery.
+        </p>
+        <div className="flex items-center gap-2">
+          <label htmlFor="skill-knowledge-link" className="sr-only">
+            Link {skill.title} to a Knowledge concept
+          </label>
+          <select
+            id="skill-knowledge-link"
+            value={skill.knowledgeTopicId ?? ""}
+            onChange={(e) => dev.linkSkillKnowledge(skill.id, e.target.value || null)}
+            className="bg-surface-inset border border-border-subtle rounded px-2 py-1 text-text-primary text-xs outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
+          >
+            <option value="">— not linked —</option>
+            {knowledge.topics.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.title}
+              </option>
+            ))}
+          </select>
+          {skill.knowledgeTopicId &&
+            (() => {
+              const kt = knowledge.getTopic(skill.knowledgeTopicId);
+              return kt ? (
+                <span className="text-text-muted text-xs">
+                  Knowledge mastery:{" "}
+                  <span className="text-text-secondary">
+                    {kt.hasEvidence ? `${kt.masteryPercent}% (${kt.state})` : "no evidence yet"}
+                  </span>
+                </span>
+              ) : (
+                <span className="text-text-muted text-xs">linked concept was deleted</span>
+              );
+            })()}
+        </div>
+      </Card>
 
       <Card title="Learning Path / Roadmap">
         <div className="flex items-center gap-3 text-xs">
@@ -266,36 +309,61 @@ export function SkillDetailPage() {
           </form>
         )}
 
+        {handoffMsg && (
+          <p role="status" className="text-text-secondary text-[11px] mb-2">
+            {handoffMsg}
+          </p>
+        )}
         {evidenceList.length === 0 && !showEvForm ? (
           <div className="text-text-muted text-xs">
             No evidence recorded yet — capability is unknown until it is.
           </div>
         ) : (
-          <div className="space-y-2">
-            {evidenceList.map((e) => (
-              <div
-                key={e.id}
-                className="flex items-center justify-between py-2 border-b border-border-subtle last:border-0"
-              >
-                <div>
-                  <div className="text-text-primary text-sm">{e.title}</div>
-                  <div className="text-text-muted text-xs">
-                    {e.date || "no date"}
-                    {e.projectId && ` · ${dev.getProject(e.projectId)?.title ?? "project"}`}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge tone={PROVENANCE_TONE[e.provenance]}>{PROVENANCE_LABEL[e.provenance]}</Badge>
+          <EvidenceList
+            items={evidenceList.map<EvidenceView>((e) => {
+              const handedOff = !!e.knowledgeEvidenceId;
+              const eligible = e.provenance !== "ai-assisted";
+              return {
+                id: e.id,
+                title: e.title,
+                kind: "practice",
+                date: e.date || null,
+                context: e.projectId
+                  ? (dev.getProject(e.projectId)?.title ?? "project")
+                  : null,
+                provenance: PROVENANCE_LABEL[e.provenance],
+                provenanceTone: PROVENANCE_TONE[e.provenance],
+                onDelete: () => dev.deleteEvidence(e.id),
+                action: handedOff ? (
+                  <span className="text-text-disabled text-[11px]">in Knowledge</span>
+                ) : skill.knowledgeTopicId && eligible ? (
                   <button
-                    onClick={() => dev.deleteEvidence(e.id)}
-                    className="text-text-muted text-[11px] hover:text-status-danger underline"
+                    onClick={async () => {
+                      const res = await dev.sendEvidenceToKnowledge(e.id);
+                      setHandoffMsg(
+                        res.ok
+                          ? res.already
+                            ? "Already recorded in Knowledge — no duplicate."
+                            : "Recorded as one Knowledge Evidence record."
+                          : res.reason === "unreviewed-ai"
+                            ? "Unreviewed AI-assisted evidence can't be handed to Knowledge."
+                            : res.reason === "no-knowledge-link"
+                              ? "Link a Knowledge concept first."
+                              : `Could not record: ${res.reason}`,
+                      );
+                    }}
+                    aria-label={`Send evidence "${e.title}" to Knowledge`}
+                    className="text-text-secondary text-[11px] underline hover:text-text-primary"
                   >
-                    Delete
+                    Send to Knowledge
                   </button>
-                </div>
-              </div>
-            ))}
-          </div>
+                ) : !eligible ? (
+                  <span className="text-text-disabled text-[11px]">not independent</span>
+                ) : undefined,
+              };
+            })}
+            emptyLabel="No evidence recorded yet — capability is unknown until it is."
+          />
         )}
       </Card>
 

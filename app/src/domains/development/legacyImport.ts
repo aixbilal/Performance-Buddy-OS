@@ -108,6 +108,7 @@ export function resolveLegacyDevelopment(raw: {
       practicePercent: Number.isFinite(pr) ? clampPercent(pr) : 0,
       roadmapPosition: Number.isInteger(r.roadmapPosition) ? (r.roadmapPosition as number) : null,
       roadmapTargetLevel: isSkillLevel(r.roadmapTargetLevel) ? r.roadmapTargetLevel : null,
+      knowledgeTopicId: null,
       archived: r.archived === true,
       createdAt: NOW(),
       updatedAt: NOW(),
@@ -224,6 +225,7 @@ export function resolveLegacyDevelopment(raw: {
       title: typeof r.title === "string" ? r.title : "Recorded evidence",
       provenance: coerceProvenance(r.provenance, report, `evidence ${id}`),
       date: typeof r.date === "string" ? r.date : "",
+      knowledgeEvidenceId: null,
       createdAt: NOW(),
       updatedAt: NOW(),
     });

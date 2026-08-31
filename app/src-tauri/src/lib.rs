@@ -6,6 +6,7 @@ mod fitness;
 mod knowledge;
 mod language;
 mod money;
+mod obsidian;
 mod performance;
 mod planning;
 mod routine;
@@ -172,6 +173,20 @@ pub fn run() {
             study::study_mastery_link_evidence,
             study::study_import_graph,
             study::study_reset_for_test,
+            // Batch 5 — Knowledge / Obsidian vault boundary (read-only, metadata only)
+            obsidian::obsidian_load,
+            obsidian::obsidian_connect_vault,
+            obsidian::obsidian_disconnect_vault,
+            obsidian::obsidian_scan,
+            obsidian::obsidian_link_note,
+            obsidian::obsidian_unlink_note,
+            obsidian::obsidian_read_note,
+            obsidian::obsidian_open_note,
+            obsidian::obsidian_reveal_note,
+            obsidian::obsidian_reset_for_test,
+            // Batch 5 — Development ↔ Knowledge reference + evidence handoff
+            development::dev_skill_link_knowledge,
+            development::dev_skill_evidence_link_knowledge,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

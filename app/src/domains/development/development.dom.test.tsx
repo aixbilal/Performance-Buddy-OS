@@ -5,6 +5,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { DevelopmentProvider } from "./store";
+import { KnowledgeProvider } from "../knowledge/store";
 import { DevelopmentOverviewPage } from "./DevelopmentOverviewPage";
 import { ProjectDetailPage } from "./ProjectDetailPage";
 import { SkillDetailPage } from "./SkillDetailPage";
@@ -15,6 +16,7 @@ vi.mock("@tauri-apps/api/core", () => ({ isTauri: () => false, invoke: vi.fn() }
 
 function App({ start = "/development" }: { start?: string }) {
   return (
+    <KnowledgeProvider>
     <DevelopmentProvider>
       <MemoryRouter initialEntries={[start]}>
         <Routes>
@@ -29,6 +31,7 @@ function App({ start = "/development" }: { start?: string }) {
         </Routes>
       </MemoryRouter>
     </DevelopmentProvider>
+    </KnowledgeProvider>
   );
 }
 

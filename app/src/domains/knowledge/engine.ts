@@ -85,6 +85,18 @@ export type TopicView = {
   state: KnowledgeState;
 };
 
+/**
+ * Deterministic next-review interval after an explicit "Mark reviewed" action.
+ * A review updates the schedule ONLY — it never touches evidence or mastery
+ * (Master Handoff §5: a review occurring is not a mastery increase).
+ * Stronger states get a longer gap; brand-new gets the shortest.
+ */
+export function nextReviewDateFor(state: KnowledgeState, from: Date = new Date()): string {
+  const days = state === "strong" ? 14 : state === "developing" ? 7 : state === "learning" ? 3 : 2;
+  const d = new Date(from.getFullYear(), from.getMonth(), from.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 /** The evidence-derived view of a topic — the ONE place "insufficient evidence" is decided. */
 export function deriveTopicView(evidence: Evidence[]): TopicView {
   const hasEvidence = evidence.length > 0;

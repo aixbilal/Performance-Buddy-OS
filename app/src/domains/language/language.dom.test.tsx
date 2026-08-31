@@ -5,6 +5,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { KnowledgeProvider } from "../knowledge/store";
+import { ObsidianProvider } from "../obsidian/store";
 import { RoutineProvider } from "../routine/store";
 import { LanguageProvider } from "./store";
 import { ReadingLanguageOverviewPage } from "./ReadingLanguageOverviewPage";
@@ -75,6 +76,7 @@ function seedRoutine() {
 function App({ start = "/language" }: { start?: string }) {
   return (
     <KnowledgeProvider>
+      <ObsidianProvider>
       <RoutineProvider>
         <LanguageProvider>
           <MemoryRouter initialEntries={[start]}>
@@ -91,6 +93,7 @@ function App({ start = "/language" }: { start?: string }) {
           </MemoryRouter>
         </LanguageProvider>
       </RoutineProvider>
+      </ObsidianProvider>
     </KnowledgeProvider>
   );
 }

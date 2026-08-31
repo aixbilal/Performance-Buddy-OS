@@ -4,8 +4,10 @@ import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { SaveIndicator } from "../../components/SaveIndicator";
 import { TextField } from "../../components/FormFields";
+import { EvidenceList, type EvidenceView } from "../../components/EvidenceList";
 import { useKnowledge } from "./store";
 import { useAcademic } from "../academic/store";
+import { useObsidian } from "../obsidian/store";
 import { EMPTY_SOURCE_FORM, SourceForm } from "./SourceForm";
 import { EVIDENCE_TYPES, type EvidenceType, type SourceType } from "./types";
 
@@ -30,9 +32,11 @@ export function TopicDetailPage() {
   const navigate = useNavigate();
   const knowledge = useKnowledge();
   const academic = useAcademic();
+  const obs = useObsidian();
   const { getTopic, getSourcesForTopic, getEvidenceForTopic, saveState } = knowledge;
 
   const topic = getTopic(topicId ?? "");
+  const [notePick, setNotePick] = useState("");
   const [addingSource, setAddingSource] = useState(false);
   const [editingSourceId, setEditingSourceId] = useState<string | null>(null);
   const [addingEvidence, setAddingEvidence] = useState(false);
@@ -96,6 +100,15 @@ export function TopicDetailPage() {
           </div>
           <p className="text-text-disabled text-[10px] mt-1">
             "Strong" and "Review Due" can both be true — tracked separately.
+          </p>
+          <button
+            onClick={() => knowledge.markReviewed(topic.id)}
+            className="mt-2 px-2.5 py-1 rounded-md bg-action-secondary text-text-primary text-[11px] font-medium"
+          >
+            Mark reviewed
+          </button>
+          <p className="text-text-disabled text-[10px] mt-1">
+            Updates the review schedule only — never mastery.
           </p>
         </Card>
         <Card>
@@ -331,36 +344,122 @@ export function TopicDetailPage() {
               No evidence recorded yet — mastery is unknown until it is.
             </div>
           ) : (
-            <div className="space-y-2">
-              {evidenceList.map((e) => (
-                <div
-                  key={e.id}
-                  className="flex items-center justify-between py-1.5 border-b border-border-subtle last:border-0"
-                >
-                  <div>
-                    <div className="text-text-primary text-sm">{e.title}</div>
-                    <div className="text-text-muted text-xs capitalize">
-                      {e.type}
-                      {e.date && ` · ${e.date}`}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-text-secondary text-xs">
-                      {e.score} / {e.maxScore}
-                    </span>
-                    <button
-                      onClick={() => knowledge.deleteEvidence(e.id)}
-                      className="text-text-muted text-[11px] hover:text-status-danger underline"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <EvidenceList
+              items={evidenceList.map<EvidenceView>((e) => ({
+                id: e.id,
+                title: e.title,
+                kind: e.type,
+                date: e.date || null,
+                result: `${e.score} / ${e.maxScore}`,
+                onDelete: () => knowledge.deleteEvidence(e.id),
+              }))}
+              emptyLabel="No evidence recorded yet — mastery is unknown until it is."
+            />
           )}
         </Card>
       </div>
+
+      <Card
+        title={`Linked Notes — Obsidian (${obs.linksForTopic(topic.id).length})`}
+        action={
+          <Link
+            to="/knowledge/notes"
+            className="text-text-secondary text-[11px] underline hover:text-text-primary"
+          >
+            Notes Hub
+          </Link>
+        }
+      >
+        <p className="text-text-disabled text-[10px] mb-2">
+          References to note files in your Obsidian vault. Obsidian owns the note bodies; linking a
+          note is not evidence of understanding and never changes mastery.
+        </p>
+
+        {obs.hubState !== "indexed" && obs.hubState !== "empty" ? (
+          <div className="text-text-muted text-xs">
+            No vault connected. <Link to="/knowledge/notes" className="underline">Connect one in the Notes Hub</Link> to
+            link notes.
+          </div>
+        ) : (
+          <>
+            {obs.linksForTopic(topic.id).length === 0 ? (
+              <div className="text-text-muted text-xs mb-2">No notes linked to this topic yet.</div>
+            ) : (
+              <ul className="space-y-1.5 mb-3">
+                {obs.linksForTopic(topic.id).map((l) => {
+                  const state = obs.resolveLinkState(l);
+                  return (
+                    <li
+                      key={l.id}
+                      className="flex items-center justify-between py-1.5 border-b border-border-subtle last:border-0"
+                    >
+                      <div className="min-w-0">
+                        <div className="text-text-primary text-sm truncate">{l.title}</div>
+                        <div className="text-text-muted text-xs truncate">{l.relativePath}</div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {state === "ok" && <Badge tone="success">in vault</Badge>}
+                        {state === "stale" && <Badge tone="danger">missing / stale</Badge>}
+                        {state === "unindexed" && <Badge tone="warning">not indexed</Badge>}
+                        <button
+                          onClick={() => obs.openNote(l.relativePath)}
+                          aria-label={`Open ${l.title} in Obsidian`}
+                          disabled={state !== "ok"}
+                          className="text-text-secondary text-[11px] underline hover:text-text-primary disabled:opacity-40 disabled:no-underline"
+                        >
+                          Open
+                        </button>
+                        <button
+                          onClick={() => obs.unlinkNote(l.id)}
+                          aria-label={`Unlink ${l.title} from ${topic.title}`}
+                          className="text-text-muted text-[11px] hover:text-status-danger underline"
+                        >
+                          Unlink
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <div className="flex items-center gap-2">
+              <label htmlFor="topic-note-link" className="sr-only">
+                Link an indexed note to {topic.title}
+              </label>
+              <select
+                id="topic-note-link"
+                value={notePick}
+                onChange={(e) => setNotePick(e.target.value)}
+                className="bg-surface-inset border border-border-subtle rounded px-2 py-1 text-text-primary text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
+              >
+                <option value="">Link an indexed note…</option>
+                {obs.notes
+                  .filter(
+                    (n) =>
+                      n.existsOnDisk &&
+                      !obs.linksForTopic(topic.id).some((l) => l.relativePath === n.relativePath),
+                  )
+                  .map((n) => (
+                    <option key={n.id} value={n.relativePath}>
+                      {n.title} — {n.relativePath}
+                    </option>
+                  ))}
+              </select>
+              <button
+                onClick={async () => {
+                  if (!notePick) return;
+                  const res = await obs.linkNote(topic.id, notePick);
+                  if (res.ok) setNotePick("");
+                }}
+                disabled={!notePick}
+                className="px-2 py-1 rounded bg-action-primary text-text-inverse text-[11px] font-medium disabled:opacity-40"
+              >
+                Link note
+              </button>
+            </div>
+          </>
+        )}
+      </Card>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { SaveIndicator } from "../../components/SaveIndicator";
 import { useKnowledge } from "../knowledge/store";
+import { useObsidian } from "../obsidian/store";
 import { useLanguage } from "./store";
 import { BOOK_STATUSES } from "./types";
 
@@ -22,6 +23,7 @@ export function BookDetailPage() {
   const navigate = useNavigate();
   const lang = useLanguage();
   const { topics } = useKnowledge();
+  const obs = useObsidian();
   const book = lang.getBook(bookId ?? "");
 
   const [page, setPage] = useState("");
@@ -217,15 +219,40 @@ export function BookDetailPage() {
           )}
           <div className="text-text-muted text-xs mt-4 mb-1">Note reference</div>
           {book.noteRef ? (
-            <p className="text-text-secondary text-xs break-all">
-              {book.noteRef}
-              <span className="text-text-disabled block text-[11px] mt-0.5">
-                A plain pointer you entered. PBOS does not open, read, or index it.
-              </span>
-            </p>
+            (() => {
+              const vaultConnected =
+                obs.hubState === "indexed" || obs.hubState === "empty";
+              const matched = vaultConnected
+                ? obs.findNoteByReference(book.noteRef)
+                : undefined;
+              return (
+                <p className="text-text-secondary text-xs break-all">
+                  {book.noteRef}
+                  {matched ? (
+                    <span className="block mt-1">
+                      <Badge tone="success">matched in vault</Badge>{" "}
+                      <button
+                        onClick={() => obs.openNote(matched.relativePath)}
+                        className="text-text-secondary text-[11px] underline hover:text-text-primary"
+                      >
+                        Open note
+                      </button>
+                    </span>
+                  ) : vaultConnected ? (
+                    <span className="text-text-disabled block text-[11px] mt-0.5">
+                      Unresolved — no indexed note in the connected vault matches this reference.
+                    </span>
+                  ) : (
+                    <span className="text-text-disabled block text-[11px] mt-0.5">
+                      A plain pointer you entered. Connect a vault in the Notes Hub to resolve it.
+                    </span>
+                  )}
+                </p>
+              );
+            })()
           ) : (
             <p className="text-text-muted text-xs">
-              No note reference. Obsidian is not connected — nothing is read from disk.
+              No note reference. Add one in the book's editor, or link notes from the Notes Hub.
             </p>
           )}
         </Card>

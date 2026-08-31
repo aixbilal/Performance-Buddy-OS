@@ -53,6 +53,25 @@ export function derivePercentToLevel(percent: number): SkillLevel {
 /** Only these provenance values count as independent evidence (§14). */
 const COUNTS_AS_INDEPENDENT: Provenance[] = ["independent", "ai-assisted-reviewed"];
 
+/**
+ * Batch 5 — the deterministic strength a Skill-evidence row carries when it is
+ * explicitly handed to Knowledge as `practice` evidence. Raw `ai-assisted`
+ * evidence is not handoff-eligible at all (returns null): "AI writing code is
+ * not you independently understanding it" (§14 / docs 18.08).
+ */
+export function knowledgeHandoffWeight(
+  provenance: Provenance,
+): { score: number; maxScore: number } | null {
+  switch (provenance) {
+    case "independent":
+      return { score: 1, maxScore: 1 };
+    case "ai-assisted-reviewed":
+      return { score: 0.7, maxScore: 1 };
+    default:
+      return null; // ai-assisted (unreviewed) — never independent proof
+  }
+}
+
 export type EvidenceScoreResult = {
   evidencePercent: number;
   countedCount: number;

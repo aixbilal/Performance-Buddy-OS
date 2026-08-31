@@ -23,6 +23,7 @@ import {
   deriveKnowledgeState,
   deriveTopicView,
   isReviewDue,
+  nextReviewDateFor,
   validateEvidenceInput,
   validateReviewStateInput,
   validateSourceInput,
@@ -73,6 +74,8 @@ type KnowledgeContextValue = {
   updateTopic: (id: string, input: TopicInput) => Promise<MutResult>;
   deleteTopic: (id: string) => Promise<void>;
   updateReviewState: (topicId: string, input: ReviewStateInput) => Promise<MutResult>;
+  /** Explicit "I reviewed this" — bumps last-studied + next-review only, never evidence. */
+  markReviewed: (topicId: string) => Promise<MutResult>;
 
   // source CRUD
   createSource: (topicId: string, input: SourceInput) => Promise<MutResult>;
@@ -223,6 +226,22 @@ export function KnowledgeProvider({ children }: { children: ReactNode }) {
     return { ok: true, id: topicId };
   };
 
+  const markReviewed = async (topicId: string): Promise<MutResult> => {
+    const existing = graph.topics.find((t) => t.id === topicId);
+    if (!existing) return { ok: false, errors: { _: "Topic not found." } };
+    const view = deriveTopicView(evidenceByTopic[topicId] ?? []);
+    const today = todayIso();
+    const topic: KnowledgeTopic = {
+      ...existing,
+      lastStudied: today,
+      nextReviewDate: nextReviewDateFor(view.state, new Date()),
+      updatedAt: nowIso(),
+    };
+    setGraph((g) => ({ ...g, topics: g.topics.map((t) => (t.id === topicId ? topic : t)) }));
+    await persist(() => repoRef.current.topicUpsert(topic));
+    return { ok: true, id: topicId };
+  };
+
   // --- source CRUD ----------------------------------------------
   const createSource = async (topicId: string, input: SourceInput): Promise<MutResult> => {
     if (!graph.topics.some((t) => t.id === topicId)) {
@@ -324,6 +343,7 @@ export function KnowledgeProvider({ children }: { children: ReactNode }) {
       updateTopic,
       deleteTopic,
       updateReviewState,
+      markReviewed,
       createSource,
       updateSource,
       deleteSource,

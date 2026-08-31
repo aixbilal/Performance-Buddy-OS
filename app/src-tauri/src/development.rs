@@ -17,7 +17,7 @@
 //!   evidence -> project  : `development_skill_evidence.project_id` (FK; SET NULL)
 //!   project <-> skill    : `development_project_skill_links` (many-to-many)
 
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -53,6 +53,10 @@ pub struct SkillRow {
     pub practice_percent: f64,
     pub roadmap_position: Option<i64>,
     pub roadmap_target_level: Option<String>,
+    /// Batch 5 — optional REFERENCE to one canonical Knowledge concept. Owned by
+    /// `dev_skill_link_knowledge`; `skill_upsert` never writes it. Development
+    /// still owns practice/capability; Knowledge still owns conceptual mastery.
+    pub knowledge_topic_id: Option<String>,
     pub archived: bool,
     pub created_at: String,
     pub updated_at: String,
@@ -79,6 +83,10 @@ pub struct SkillEvidenceRow {
     pub title: String,
     pub provenance: String,
     pub date: String,
+    /// Batch 5 — the ONE Knowledge Evidence row this skill-evidence was handed
+    /// to, if any. Set-once by `dev_skill_evidence_link_knowledge`; SET NULL if
+    /// that evidence is deleted. `evidence_upsert` never writes it.
+    pub knowledge_evidence_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -150,7 +158,7 @@ fn load_inner(conn: &Connection) -> DbResult<DevGraph> {
 
     let mut ss = conn.prepare(
         "SELECT id,title,category,knowledge_percent,practice_percent,
-                roadmap_position,roadmap_target_level,archived,created_at,updated_at
+                roadmap_position,roadmap_target_level,knowledge_topic_id,archived,created_at,updated_at
          FROM development_skills ORDER BY created_at",
     )?;
     let skills = ss
@@ -163,9 +171,10 @@ fn load_inner(conn: &Connection) -> DbResult<DevGraph> {
                 practice_percent: r.get(4)?,
                 roadmap_position: r.get(5)?,
                 roadmap_target_level: r.get(6)?,
-                archived: r.get::<_, i64>(7)? != 0,
-                created_at: r.get(8)?,
-                updated_at: r.get(9)?,
+                knowledge_topic_id: r.get(7)?,
+                archived: r.get::<_, i64>(8)? != 0,
+                created_at: r.get(9)?,
+                updated_at: r.get(10)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -189,7 +198,7 @@ fn load_inner(conn: &Connection) -> DbResult<DevGraph> {
         .collect::<Result<Vec<_>, _>>()?;
 
     let mut es = conn.prepare(
-        "SELECT id,skill_id,project_id,title,provenance,date,created_at,updated_at
+        "SELECT id,skill_id,project_id,title,provenance,date,knowledge_evidence_id,created_at,updated_at
          FROM development_skill_evidence ORDER BY skill_id, date, created_at",
     )?;
     let evidence = es
@@ -201,8 +210,9 @@ fn load_inner(conn: &Connection) -> DbResult<DevGraph> {
                 title: r.get(3)?,
                 provenance: r.get(4)?,
                 date: r.get(5)?,
-                created_at: r.get(6)?,
-                updated_at: r.get(7)?,
+                knowledge_evidence_id: r.get(6)?,
+                created_at: r.get(7)?,
+                updated_at: r.get(8)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -622,6 +632,87 @@ pub fn dev_evidence_delete(db: State<'_, Db>, id: String) -> DbResult<()> {
     Ok(())
 }
 
+// --- Batch 5: Development ↔ Knowledge -----------------------------------------
+
+/// Set (or clear, with `topic_id == None`) a Skill's optional Knowledge concept
+/// reference. A non-existent topic is stored as NULL, never an FK error — the
+/// same dangling-safe posture used elsewhere.
+fn skill_link_knowledge_inner(
+    conn: &Connection,
+    skill_id: &str,
+    topic_id: Option<&str>,
+) -> DbResult<()> {
+    let resolved: Option<String> = match topic_id {
+        Some(id) if !id.is_empty() => conn
+            .query_row(
+                "SELECT id FROM knowledge_topics WHERE id = ?1",
+                params![id],
+                |r| r.get(0),
+            )
+            .optional()?,
+        _ => None,
+    };
+    let n = conn.execute(
+        "UPDATE development_skills SET knowledge_topic_id = ?2, updated_at = datetime('now')
+         WHERE id = ?1",
+        params![skill_id, resolved],
+    )?;
+    if n == 0 {
+        return Err(DbError::Path(format!("no skill '{skill_id}'")));
+    }
+    Ok(())
+}
+
+/// Idempotent, set-once handoff: records which ONE Knowledge Evidence row this
+/// skill-evidence produced. Returns the effective id (the existing one if a
+/// link was already recorded). Mirrors `study::mastery_link_evidence`.
+fn skill_evidence_link_knowledge_inner(
+    conn: &Connection,
+    evidence_id: &str,
+    knowledge_evidence_id: &str,
+) -> DbResult<Option<String>> {
+    let current: Option<Option<String>> = conn
+        .query_row(
+            "SELECT knowledge_evidence_id FROM development_skill_evidence WHERE id = ?1",
+            params![evidence_id],
+            |r| r.get(0),
+        )
+        .optional()?;
+    match current {
+        None => Ok(None),                           // no such evidence row
+        Some(Some(existing)) => Ok(Some(existing)), // already handed off — never overwrite
+        Some(None) => {
+            conn.execute(
+                "UPDATE development_skill_evidence
+                 SET knowledge_evidence_id = ?2, updated_at = datetime('now')
+                 WHERE id = ?1 AND knowledge_evidence_id IS NULL",
+                params![evidence_id, knowledge_evidence_id],
+            )?;
+            Ok(Some(knowledge_evidence_id.to_string()))
+        }
+    }
+}
+
+#[tauri::command]
+pub fn dev_skill_link_knowledge(
+    db: State<'_, Db>,
+    skill_id: String,
+    topic_id: Option<String>,
+) -> DbResult<()> {
+    let conn = db.0.lock().unwrap();
+    skill_link_knowledge_inner(&conn, &skill_id, topic_id.as_deref())
+}
+
+#[tauri::command]
+pub fn dev_skill_evidence_link_knowledge(
+    db: State<'_, Db>,
+    evidence_id: String,
+    knowledge_evidence_id: String,
+) -> DbResult<Option<String>> {
+    let conn = db.0.lock().unwrap();
+    skill_evidence_link_knowledge_inner(&conn, &evidence_id, &knowledge_evidence_id)
+}
+
 #[tauri::command]
 pub fn dev_link_set(
     db: State<'_, Db>,
@@ -712,6 +803,7 @@ mod tests {
             practice_percent: 20.0,
             roadmap_position: None,
             roadmap_target_level: None,
+            knowledge_topic_id: None,
             archived: false,
             created_at: "2026-01-01".into(),
             updated_at: "2026-01-01".into(),
@@ -741,9 +833,107 @@ mod tests {
             title: format!("Evidence {id}"),
             provenance: prov.into(),
             date: "2026-02-01".into(),
+            knowledge_evidence_id: None,
             created_at: "2026-02-01".into(),
             updated_at: "2026-02-01".into(),
         }
+    }
+
+    fn seed_knowledge(c: &Connection, id: &str, title: &str) {
+        c.execute(
+            "INSERT INTO knowledge_topics
+                (id,title,category,context,last_studied,next_review_date,related_goal_id,created_at,updated_at)
+             VALUES (?1,?2,'development','',NULL,NULL,NULL,'t','t')",
+            params![id, title],
+        )
+        .unwrap();
+    }
+    fn seed_knowledge_evidence(c: &Connection, id: &str, topic_id: &str) {
+        c.execute(
+            "INSERT INTO knowledge_evidence
+                (id,topic_id,type,title,score,max_score,date,created_at,updated_at)
+             VALUES (?1,?2,'practice','ev',1,1,'2026-02-02','t','t')",
+            params![id, topic_id],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn a_skill_references_one_knowledge_concept_and_survives_its_deletion() {
+        let c = mem();
+        skill_upsert_inner(&c, &skill("s1")).unwrap();
+        seed_knowledge(&c, "kt1", "React Hooks");
+
+        skill_link_knowledge_inner(&c, "s1", Some("kt1")).unwrap();
+        assert_eq!(
+            load_inner(&c).unwrap().skills[0]
+                .knowledge_topic_id
+                .as_deref(),
+            Some("kt1")
+        );
+
+        // a full skill re-upsert must NOT clobber the reference
+        skill_upsert_inner(&c, &skill("s1")).unwrap();
+        assert_eq!(
+            load_inner(&c).unwrap().skills[0]
+                .knowledge_topic_id
+                .as_deref(),
+            Some("kt1"),
+            "skill_upsert never writes knowledge_topic_id"
+        );
+
+        // deleting the concept SET NULLs the link; the skill stays
+        c.execute("DELETE FROM knowledge_topics WHERE id = 'kt1'", [])
+            .unwrap();
+        let g = load_inner(&c).unwrap();
+        assert_eq!(g.skills.len(), 1);
+        assert!(g.skills[0].knowledge_topic_id.is_none());
+
+        // clearing + a dangling id both land as NULL, never an FK error
+        skill_link_knowledge_inner(&c, "s1", Some("kt1")).unwrap(); // kt1 gone -> NULL
+        assert!(load_inner(&c).unwrap().skills[0]
+            .knowledge_topic_id
+            .is_none());
+    }
+
+    #[test]
+    fn skill_evidence_handoff_to_knowledge_is_set_once() {
+        let c = mem();
+        skill_upsert_inner(&c, &skill("s1")).unwrap();
+        seed_knowledge(&c, "kt1", "React Hooks");
+        seed_knowledge_evidence(&c, "ke1", "kt1");
+        seed_knowledge_evidence(&c, "ke2", "kt1");
+        evidence_upsert_inner(&c, &evidence("e1", "s1", None, "independent")).unwrap();
+
+        let first = skill_evidence_link_knowledge_inner(&c, "e1", "ke1").unwrap();
+        assert_eq!(first.as_deref(), Some("ke1"));
+        // a second attempt with a different id returns the first, never overwrites
+        let second = skill_evidence_link_knowledge_inner(&c, "e1", "ke2").unwrap();
+        assert_eq!(second.as_deref(), Some("ke1"));
+        assert_eq!(
+            load_inner(&c).unwrap().evidence[0]
+                .knowledge_evidence_id
+                .as_deref(),
+            Some("ke1")
+        );
+        // a full evidence re-upsert never touches the handoff column
+        evidence_upsert_inner(&c, &evidence("e1", "s1", None, "independent")).unwrap();
+        assert_eq!(
+            load_inner(&c).unwrap().evidence[0]
+                .knowledge_evidence_id
+                .as_deref(),
+            Some("ke1")
+        );
+        // deleting that Knowledge evidence SET NULLs the link; the skill-evidence stays
+        c.execute("DELETE FROM knowledge_evidence WHERE id = 'ke1'", [])
+            .unwrap();
+        let g = load_inner(&c).unwrap();
+        assert_eq!(g.evidence.len(), 1);
+        assert!(g.evidence[0].knowledge_evidence_id.is_none());
+        // unknown ids are reported, not panicked
+        assert!(skill_evidence_link_knowledge_inner(&c, "nope", "ke2")
+            .unwrap()
+            .is_none());
     }
 
     #[test]

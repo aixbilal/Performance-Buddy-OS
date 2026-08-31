@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { KnowledgeProvider } from "./store";
 import { AcademicProvider } from "../academic/store";
+import { ObsidianProvider } from "../obsidian/store";
 import { KnowledgeOverviewPage } from "./KnowledgeOverviewPage";
 import { KnowledgeTopicBuilderPage } from "./KnowledgeTopicBuilderPage";
 import { TopicDetailPage } from "./TopicDetailPage";
@@ -17,6 +18,7 @@ function App({ start = "/knowledge" }: { start?: string }) {
   return (
     <AcademicProvider>
       <KnowledgeProvider>
+        <ObsidianProvider>
         <MemoryRouter initialEntries={[start]}>
           <Routes>
             <Route path="/knowledge" element={<KnowledgeOverviewPage />} />
@@ -26,6 +28,7 @@ function App({ start = "/knowledge" }: { start?: string }) {
             <Route path="/knowledge/:topicId/edit" element={<KnowledgeTopicBuilderPage />} />
           </Routes>
         </MemoryRouter>
+        </ObsidianProvider>
       </KnowledgeProvider>
     </AcademicProvider>
   );
@@ -134,9 +137,42 @@ describe("Knowledge — driven through the real UI", () => {
     expect(screen.getByText(/mastery is unknown until it is/i)).toBeInTheDocument();
   });
 
-  it("Notes Hub is honest: Obsidian not connected, no fake files", async () => {
+  it("Notes Hub is honest: no vault connected, no fake files, offers to connect one", async () => {
     render(<App start="/knowledge/notes" />);
-    expect(await screen.findByText(/obsidian not connected/i)).toBeInTheDocument();
-    expect(screen.getByText(/no files have been scanned/i)).toBeInTheDocument();
+    expect(await screen.findByText(/no vault connected/i)).toBeInTheDocument();
+    // no note list is rendered before a vault + scan
+    expect(screen.queryByText(/indexed notes \(/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/vault folder path/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /connect vault/i })).toBeInTheDocument();
+  });
+
+  it("Notes Hub: connect the dev adapter → scan indexes real fixture notes → link one to a topic (mastery unchanged)", async () => {
+    const user = userEvent.setup();
+    render(<App start="/knowledge" />);
+    await addTopic(user, "Binary Trees");
+    // topic starts with no evidence / no mastery
+    expect(screen.getByText(/mastery is unknown until it is/i)).toBeInTheDocument();
+
+    // go to the Notes Hub, connect + scan
+    await user.click(screen.getAllByRole("link", { name: /notes hub/i })[0]);
+    await user.type(await screen.findByLabelText(/vault folder path/i), "demo-vault");
+    await user.click(screen.getByRole("button", { name: /connect vault/i }));
+    // fixture vault: "Binary Trees.md" among others
+    expect(await screen.findByText("Binary Trees.md")).toBeInTheDocument();
+    expect(screen.getByText(/indexed notes \(/i)).toBeInTheDocument();
+
+    // link the note row to the Binary Trees topic
+    const row = screen.getByText("Binary Trees.md").closest("li")!;
+    await user.selectOptions(
+      within(row).getByRole("combobox", { name: /link binary trees.*to a knowledge topic/i }),
+      within(row).getByRole("option", { name: "Binary Trees" }),
+    );
+    await user.click(within(row).getByRole("button", { name: /^link$/i }));
+    expect(await within(row).findByText(/linked to Binary Trees/i)).toBeInTheDocument();
+
+    // back on the topic: the note link shows, but mastery is still unknown
+    await user.click(screen.getAllByRole("link", { name: /Binary Trees/ })[0]);
+    expect(await screen.findByText(/Linked Notes — Obsidian \(1\)/)).toBeInTheDocument();
+    expect(screen.getByText(/mastery is unknown until it is/i)).toBeInTheDocument();
   });
 });
