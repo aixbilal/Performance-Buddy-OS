@@ -3,7 +3,17 @@
  * arithmetic — no AI is ever involved in computing an effective value.
  */
 
-import type { BaseConfig, ModeOverride, ResetScope, ResetScopeResult, TemporaryOverride } from "./types";
+import type {
+  BaseConfig,
+  EffectiveConfig,
+  ModeOverride,
+  OperatingMode,
+  ResetScope,
+  ResetScopeResult,
+  SettingsConfig,
+  TemporaryOverride,
+} from "./types";
+import { MODE_WEEKDAY_DELTA } from "./types";
 
 /**
  * §5: Base → Mode → Temporary → Effective. Matches the handoff's own
@@ -24,6 +34,44 @@ export function computeEffectiveWeekdayCapacity(
     .reduce((s, t) => s + t.weekdayAcademicDeltaMinutes, 0);
 
   return base.weekdayAcademicCapacityMinutes + modeDelta + activeTempDelta;
+}
+
+/** The delta a mode applies — a pure lookup, never a write to the baseline. */
+export function modeDeltaFor(mode: OperatingMode): number {
+  return MODE_WEEKDAY_DELTA[mode] ?? 0;
+}
+
+/** True when the override is still in effect at `now`. */
+export function isTemporaryOverrideActive(o: TemporaryOverride, now: Date = new Date()): boolean {
+  const t = new Date(o.expiresAt).getTime();
+  return !Number.isNaN(t) && t > now.getTime();
+}
+
+/**
+ * §5/§6 — Base → Mode → Temporary → Effective, deterministic, with an explicit
+ * precedence trace. `temporary > mode > base`, but:
+ *   - computing the effective value NEVER mutates base / mode / overrides;
+ *   - an expired temporary override drops out automatically;
+ *   - with no mode and no active override, effective === base.
+ */
+export function resolveEffectiveConfig(
+  config: SettingsConfig,
+  now: Date = new Date(),
+): EffectiveConfig {
+  const base = config.baseConfig.weekdayAcademicCapacityMinutes;
+  const modeDelta = modeDeltaFor(config.mode);
+  const activeTemporaryOverrides = config.temporaryOverrides.filter((o) =>
+    isTemporaryOverrideActive(o, now),
+  );
+  const temporaryDelta = activeTemporaryOverrides.reduce(
+    (s, o) => s + o.weekdayAcademicDeltaMinutes,
+    0,
+  );
+  return {
+    weekdayAcademicCapacityMinutes: base + modeDelta + temporaryDelta,
+    protectedSleepHours: config.baseConfig.protectedSleepHours,
+    precedence: { base, modeDelta, temporaryDelta, activeTemporaryOverrides },
+  };
 }
 
 const INTERFACE_SCOPE_FIELDS = ["notifications", "appearance", "sidebarState", "windowState", "startupDestination"];

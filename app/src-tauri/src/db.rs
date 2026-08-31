@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
 /// Bumped whenever a migration is added to `MIGRATIONS`.
-const CURRENT_SCHEMA_VERSION: i64 = 8;
+const CURRENT_SCHEMA_VERSION: i64 = 9;
 
 /// Ordered, forward-only migrations. `version` must be contiguous from 1.
 const MIGRATIONS: &[(i64, &str)] = &[
@@ -861,6 +861,51 @@ const MIGRATIONS: &[(i64, &str)] = &[
     CREATE INDEX IF NOT EXISTS idx_ai_recs_status  ON ai_recommendations(status);
     CREATE INDEX IF NOT EXISTS idx_ai_events_rec   ON ai_decision_events(recommendation_id);
     CREATE INDEX IF NOT EXISTS idx_ana_reviews_kind ON analytics_reviews(kind, period_start);
+    "#,
+    ),
+    (
+        9,
+        // Batch 7 — the entry / configuration lifecycle: first-run onboarding
+        // state + the canonical Settings config.
+        //
+        // Locks enforced by shape (docs 14 / 15):
+        //   ONE onboarding truth. `onboarding_state` is a single row (CHECK id=1)
+        //     — status / current step / the cinematic first-boot flag (played
+        //     once, ever) / entered personal setup / recorded system choices /
+        //     timestamps. Completion is NOT inferred from domain entity counts.
+        //   ONE settings truth. `settings_config` is a single row holding the
+        //     BASE configuration + the active operating mode + the list of
+        //     temporary overrides + notification/appearance preferences. The
+        //     EFFECTIVE value is derived deterministically at read time
+        //     (Base -> Mode -> Temporary) and is never stored here.
+        //   Settings CONFIGURES canonical domains; it does not copy planning
+        //     capacity, AI permissions, or the Obsidian vault path (those stay
+        //     in their own tables). Onboarding INITIALISES via the same stores.
+        r#"
+    CREATE TABLE IF NOT EXISTS onboarding_state (
+        id                        INTEGER PRIMARY KEY CHECK (id = 1),
+        status                    TEXT NOT NULL DEFAULT 'not_started', -- not_started|in_progress|completed|skipped
+        current_step              TEXT NOT NULL DEFAULT 'welcome',
+        first_boot_experience_seen INTEGER NOT NULL DEFAULT 0,
+        flow_version              INTEGER NOT NULL DEFAULT 1,
+        personal_setup            TEXT NOT NULL DEFAULT '{}',  -- JSON: name/weekStart/sleep/capacity/priorities/defaultMode
+        system_choices            TEXT NOT NULL DEFAULT '{}',  -- JSON: { obsidian, ai } -> connected|skipped|not-set
+        started_at                TEXT,
+        completed_at              TEXT,
+        created_at                TEXT NOT NULL,
+        updated_at                TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS settings_config (
+        id                  INTEGER PRIMARY KEY CHECK (id = 1),
+        base_config         TEXT NOT NULL DEFAULT '{}',  -- JSON BaseConfig
+        mode                TEXT NOT NULL DEFAULT 'normal',
+        temporary_overrides TEXT NOT NULL DEFAULT '[]',  -- JSON TemporaryOverride[]
+        notifications       TEXT NOT NULL DEFAULT '{}',  -- JSON NotificationSettings
+        appearance          TEXT NOT NULL DEFAULT '{}',  -- JSON AppearanceSettings
+        created_at          TEXT NOT NULL,
+        updated_at          TEXT NOT NULL
+    );
     "#,
     ),
 ];

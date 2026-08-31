@@ -113,3 +113,22 @@ describe("determineFullStartupRoute — Day 15B §23 full routing tree", () => {
     expect(determineFullStartupRoute(true, "completed", true)).toBe("startup-recovery");
   });
 });
+
+// --- Batch 7 additions -------------------------------------------------------
+import { deriveInitialOnboardingStatus, getPrevStep, stepIndex, STEP_ORDER } from "./engine";
+
+describe("Batch 7 — step navigation + initial status (§28)", () => {
+  it("getPrevStep walks backwards and stops at welcome", () => {
+    expect(getPrevStep("connect-systems")).toBe("personal-setup");
+    expect(getPrevStep("welcome")).toBeNull();
+  });
+  it("stepIndex is 0-based over the canonical order", () => {
+    expect(stepIndex("welcome")).toBe(0);
+    expect(stepIndex("review-launch")).toBe(STEP_ORDER.length - 1);
+  });
+  it("deriveInitialOnboardingStatus: persisted row wins; else migrated user = completed; else fresh = not_started", () => {
+    expect(deriveInitialOnboardingStatus(true, false)).toBe("in_progress");
+    expect(deriveInitialOnboardingStatus(false, true)).toBe("completed"); // never forced through first-run
+    expect(deriveInitialOnboardingStatus(false, false)).toBe("not_started");
+  });
+});

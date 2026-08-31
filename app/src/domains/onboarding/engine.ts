@@ -5,11 +5,42 @@
 
 import type { FullStartupRoute, LaunchCheck, LaunchValidationResult, OnboardingState, OnboardingStep, StartupRoute } from "./types";
 
-const STEP_ORDER: OnboardingStep[] = ["welcome", "personal-setup", "connect-systems", "review-launch"];
+export const STEP_ORDER: OnboardingStep[] = [
+  "welcome",
+  "personal-setup",
+  "connect-systems",
+  "review-launch",
+];
 
 export function getNextStep(current: OnboardingStep): OnboardingStep | null {
   const idx = STEP_ORDER.indexOf(current);
   return idx >= 0 && idx < STEP_ORDER.length - 1 ? STEP_ORDER[idx + 1] : null;
+}
+
+export function getPrevStep(current: OnboardingStep): OnboardingStep | null {
+  const idx = STEP_ORDER.indexOf(current);
+  return idx > 0 ? STEP_ORDER[idx - 1] : null;
+}
+
+export function stepIndex(step: OnboardingStep): number {
+  return Math.max(0, STEP_ORDER.indexOf(step));
+}
+
+/**
+ * §28 — deciding first-run status WITHOUT guessing from entity counts.
+ *   - a persisted onboarding row is authoritative;
+ *   - otherwise, a real profile migrated from an earlier build
+ *     (`existingUserMarker`) is treated as already-onboarded so the user is
+ *     never forced back through first-run;
+ *   - a genuinely fresh database requires onboarding.
+ */
+export function deriveInitialOnboardingStatus(
+  persisted: boolean,
+  existingUserMarker: boolean,
+): OnboardingState["status"] {
+  if (persisted) return "in_progress"; // caller overrides with the stored status
+  if (existingUserMarker) return "completed"; // migrated existing user
+  return "not_started";
 }
 
 /**

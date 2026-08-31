@@ -12,7 +12,7 @@ import AxeBuilder from "@axe-core/playwright";
  * (never deletes Knowledge) → links + evidence survive a reload.
  */
 
-const APP_READY = /Onboarding|Today's Plan|Resume step|No topics yet|Knowledge|Notes Hub/;
+const APP_READY = /Performance Buddy OS|Onboarding|Today's Plan|Resume step|No topics yet|Knowledge|Notes Hub/;
 
 async function boot(page: Page) {
   await page.goto("/");

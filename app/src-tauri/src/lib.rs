@@ -11,6 +11,7 @@ mod obsidian;
 mod performance;
 mod planning;
 mod routine;
+mod setup;
 mod study;
 
 use std::sync::Mutex;
@@ -198,6 +199,12 @@ pub fn run() {
             ai::analytics_review_append,
             ai::ai_import_graph,
             ai::ai_reset_for_test,
+            // Batch 7 — first-run onboarding state + canonical Settings config
+            setup::setup_load,
+            setup::setup_onboarding_upsert,
+            setup::setup_settings_upsert,
+            setup::setup_reset_onboarding,
+            setup::setup_reset_for_test,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

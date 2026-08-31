@@ -1,6 +1,10 @@
+import { useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { useOnboarding } from "./store";
+import { STEP_ORDER } from "./engine";
+import type { OperatingMode } from "../settings/types";
 
 const STATE_TONE = {
   configured: "success",
@@ -8,170 +12,378 @@ const STATE_TONE = {
   "not-set-up": "neutral",
   "disabled-optional": "neutral",
 } as const;
-
 const STATE_LABEL = {
   configured: "Configured",
   partial: "Partial",
-  "not-set-up": "Not Set Up",
-  "disabled-optional": "Disabled / Optional",
+  "not-set-up": "Not set up",
+  "disabled-optional": "Optional — not connected",
 } as const;
 
+const STEP_TITLE: Record<string, string> = {
+  welcome: "Welcome",
+  "personal-setup": "Personal setup",
+  "connect-systems": "Connect your systems",
+  "review-launch": "Review & launch",
+};
 const PRIORITY_OPTIONS = ["Academics", "Development", "Fitness", "Language", "Knowledge"];
+const MODES: OperatingMode[] = ["normal", "midterm", "final", "recovery"];
 
 export function OnboardingPage() {
-  const { state, personalSetup, setPersonalSetup, goToNextStep, saveAndExit, systemStatuses, resumeStep, startupRoute, launchCheck, completeOnboarding, simulateRelaunch } =
-    useOnboarding();
+  const navigate = useNavigate();
+  const {
+    loaded,
+    state,
+    personalSetup,
+    setPersonalSetup,
+    systemChoices,
+    setSystemChoice,
+    goToNextStep,
+    goToPrevStep,
+    stepIndex,
+    totalSteps,
+    systemStatuses,
+    resumeStep,
+    launchCheck,
+    completeOnboarding,
+    simulateRelaunch,
+  } = useOnboarding();
+
+  const step = state.currentStep;
+  const headingRef = useRef<HTMLHeadingElement>(null);
+
+  // A completed profile should never sit on the wizard.
+  useEffect(() => {
+    if (loaded && (state.status === "completed" || state.status === "skipped")) {
+      navigate("/", { replace: true });
+    }
+  }, [loaded, state.status, navigate]);
+
+  // move focus to the step heading after each step change (§44)
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, [step]);
 
   const togglePriority = (p: string) => {
     const has = personalSetup.priorities.includes(p);
-    setPersonalSetup({ priorities: has ? personalSetup.priorities.filter((x) => x !== p) : [...personalSetup.priorities, p] });
+    setPersonalSetup({
+      priorities: has
+        ? personalSetup.priorities.filter((x) => x !== p)
+        : [...personalSetup.priorities, p],
+    });
+  };
+
+  const launch = () => {
+    completeOnboarding();
+    navigate("/", { replace: true });
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-text-primary text-xl font-semibold">Onboarding</h2>
-        <p className="text-text-muted text-sm">Status: {state.status.replace("_", " ")} · Step: {state.currentStep}</p>
-      </div>
-
-      <div className="bg-surface-inset border border-border-subtle rounded-md px-4 py-3 text-xs text-text-muted">
-        Resume step if interrupted right now: <b className="text-text-secondary">{resumeStep ?? "none — would go straight to Today"}</b>{" "}
-        · Startup route this state would produce: <b className="text-text-secondary">{startupRoute}</b>
-      </div>
-
-      <div className="flex items-center justify-between bg-surface-inset border border-border-subtle rounded-md px-4 py-3">
-        <p className="text-text-disabled text-[11px]">
-          No real disk persistence exists yet, so a genuine app restart can't be demonstrated. This button
-          replays the Day 15B splash/routing gate in place, using your current onboarding status — the
-          cinematic splash will NOT replay (first-boot already seen), only the short splash + correct
-          destination will.
-        </p>
-        <button onClick={simulateRelaunch} className="shrink-0 ml-3 px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium">
-          Simulate Relaunch
-        </button>
-      </div>
-
-      {state.currentStep === "welcome" && (
-        <Card title="Welcome">
-          <p className="text-text-secondary text-sm mb-3">
-            Plan → Act → Evidence → Understand → Adjust. Goals become Systems and Actions. PBOS separates what
-            you planned from what actually happened. AI interprets and recommends — you stay in control. The
-            core is local-first; external AI is optional.
-          </p>
-          <button onClick={goToNextStep} className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium">
-            Get Started
-          </button>
-        </Card>
-      )}
-
-      {state.currentStep === "personal-setup" && (
-        <Card title="Personal Setup">
-          <p className="text-text-disabled text-[11px] mb-3">Minimum useful baseline only — not a full configuration of every domain.</p>
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <div>
-              <label className="text-text-muted text-xs block mb-1">Name</label>
-              <input
-                value={personalSetup.name}
-                onChange={(e) => setPersonalSetup({ name: e.target.value })}
-                className="w-full bg-surface-inset border border-border-subtle rounded-md px-2 py-1.5 text-text-primary text-sm"
-              />
-            </div>
-            <div>
-              <label className="text-text-muted text-xs block mb-1">Sleep target (hours)</label>
-              <input
-                type="number"
-                value={personalSetup.sleepTargetHours}
-                onChange={(e) => setPersonalSetup({ sleepTargetHours: parseFloat(e.target.value) || 0 })}
-                className="w-full bg-surface-inset border border-border-subtle rounded-md px-2 py-1.5 text-text-primary text-sm"
-              />
-            </div>
-          </div>
-          <label className="text-text-muted text-xs block mb-2">
-            Initial priorities (affects Planner prominence only — does not disable other domains)
-          </label>
-          <div className="flex gap-2 mb-4 flex-wrap">
-            {PRIORITY_OPTIONS.map((p) => (
-              <button
-                key={p}
-                onClick={() => togglePriority(p)}
-                className={`px-3 py-1 rounded-md text-xs ${
-                  personalSetup.priorities.includes(p) ? "bg-action-primary text-text-inverse" : "bg-surface-inset text-text-secondary"
+    <div className="min-h-screen bg-surface-base px-6 py-10">
+      <div className="mx-auto max-w-2xl space-y-6">
+        <div>
+          <div className="text-text-secondary text-xs tracking-wide">Performance Buddy OS · Setup</div>
+          <ol className="flex gap-2 mt-2" aria-label="Onboarding progress">
+            {STEP_ORDER.map((s, i) => (
+              <li
+                key={s}
+                aria-current={s === step ? "step" : undefined}
+                className={`flex-1 rounded-full h-1.5 ${
+                  i <= stepIndex ? "bg-action-primary" : "bg-surface-overlay"
                 }`}
-              >
-                {p}
-              </button>
+              />
             ))}
-          </div>
-          <div className="flex gap-2">
-            <button onClick={goToNextStep} className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium">
-              Continue
-            </button>
-            <button onClick={saveAndExit} className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium">
-              Save &amp; Exit
-            </button>
-          </div>
-        </Card>
-      )}
-
-      {state.currentStep === "connect-systems" && (
-        <Card title="Connect Your Systems">
-          <p className="text-text-disabled text-[11px] mb-3">
-            Reads real state from each domain's own store — not a duplicate onboarding-only model. Each system
-            is independent; none are required to launch.
+          </ol>
+          <p className="text-text-secondary text-xs mt-1">
+            Step {stepIndex + 1} of {totalSteps} — {STEP_TITLE[step]}
           </p>
-          <div className="space-y-2 mb-4">
-            {systemStatuses.map((s) => (
-              <div key={s.domain} className="flex items-center justify-between py-1.5 border-b border-border-subtle last:border-0 text-sm">
-                <span className="text-text-primary">
-                  {s.domain} {s.isOptional && <span className="text-text-disabled text-[10px]">(optional)</span>}
-                </span>
-                <Badge tone={STATE_TONE[s.state]}>{STATE_LABEL[s.state]}</Badge>
-              </div>
-            ))}
-          </div>
-          <button onClick={goToNextStep} className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium">
-            Continue
-          </button>
-        </Card>
-      )}
+        </div>
 
-      {state.currentStep === "review-launch" && (
-        <Card title="Review & Launch">
-          <div className="space-y-2 mb-4 text-sm">
-            <div className="flex justify-between"><span className="text-text-muted">Name</span><span className="text-text-primary">{personalSetup.name || "—"}</span></div>
-            <div className="flex justify-between"><span className="text-text-muted">Sleep target</span><span className="text-text-primary">{personalSetup.sleepTargetHours}h</span></div>
-            <div className="flex justify-between"><span className="text-text-muted">Priorities</span><span className="text-text-primary">{personalSetup.priorities.join(", ") || "None selected"}</span></div>
-          </div>
-
-          <div className="bg-surface-inset border border-border-subtle rounded-md p-3 mb-4">
-            <div className="text-text-muted text-xs mb-1">Launch Readiness</div>
-            <Badge tone={launchCheck.canLaunch ? "success" : "danger"}>
-              {launchCheck.canLaunch ? "Ready to Launch" : "Blocked"}
-            </Badge>
-            <p className="text-text-disabled text-[10px] mt-2">
-              "Ready to Launch," not "100% Complete" — partial/optional configuration (Money, Obsidian, AI all
-              disabled above) is legitimate and does not block this.
-            </p>
-          </div>
-
-          <button
-            onClick={completeOnboarding}
-            disabled={!launchCheck.canLaunch}
-            className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium disabled:opacity-50"
+        {state.status === "in_progress" && step !== "welcome" && (
+          <div
+            role="status"
+            className="bg-surface-inset border border-border-subtle rounded-md px-4 py-2 text-xs text-text-secondary"
           >
-            Launch PBOS
-          </button>
-        </Card>
-      )}
+            Setup is in progress. If you close PBOS now it resumes here ({resumeStep}) — nothing you
+            entered is lost.
+          </div>
+        )}
 
-      {state.status === "completed" && (
-        <Card title="Onboarding Complete">
-          <p className="text-text-secondary text-sm">
-            Completed at {state.completedAt}. On a real launch, this state means Welcome is never shown again —
-            startup routes straight to Today.
-          </p>
-        </Card>
-      )}
+        {step === "welcome" && (
+          <Card>
+            <h2 ref={headingRef} tabIndex={-1} className="text-text-primary text-xl font-semibold outline-none">
+              Welcome
+            </h2>
+            <p className="text-text-secondary text-sm my-3">
+              Plan → Act → Evidence → Understand → Adjust. Goals become Systems and Actions; PBOS
+              keeps what you planned separate from what actually happened. AI interprets and
+              recommends — you stay in control. Everything core is local-first; external AI is
+              optional and off by default.
+            </p>
+            <p className="text-text-secondary text-xs mb-4">
+              No account, no cloud sign-up. This is your machine.
+            </p>
+            <button
+              onClick={goToNextStep}
+              className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
+            >
+              {state.status === "in_progress" ? "Resume setup" : "Start setup"}
+            </button>
+          </Card>
+        )}
+
+        {step === "personal-setup" && (
+          <Card>
+            <h2 ref={headingRef} tabIndex={-1} className="text-text-primary text-xl font-semibold outline-none">
+              Personal setup
+            </h2>
+            <p className="text-text-secondary text-xs mt-1 mb-4">
+              A minimum useful baseline — this writes into your canonical Settings, not a separate
+              onboarding copy. You can change all of it later in Settings.
+            </p>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <label className="text-text-secondary text-xs">
+                Name (optional)
+                <input
+                  value={personalSetup.name}
+                  onChange={(e) => setPersonalSetup({ name: e.target.value })}
+                  className="block mt-1 w-full bg-surface-inset border border-border-subtle rounded px-2 py-1.5 text-text-primary text-sm outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
+                />
+              </label>
+              <label className="text-text-secondary text-xs">
+                Protected sleep (hours)
+                <input
+                  type="number"
+                  min={4}
+                  max={12}
+                  value={personalSetup.sleepTargetHours}
+                  onChange={(e) =>
+                    setPersonalSetup({ sleepTargetHours: parseFloat(e.target.value) || 0 })
+                  }
+                  className="block mt-1 w-full bg-surface-inset border border-border-subtle rounded px-2 py-1.5 text-text-primary text-sm outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
+                />
+              </label>
+              <label className="text-text-secondary text-xs">
+                Weekday academic capacity (minutes)
+                <input
+                  type="number"
+                  min={0}
+                  max={600}
+                  value={personalSetup.weekdayCapacityMinutes}
+                  onChange={(e) =>
+                    setPersonalSetup({ weekdayCapacityMinutes: parseInt(e.target.value, 10) || 0 })
+                  }
+                  className="block mt-1 w-full bg-surface-inset border border-border-subtle rounded px-2 py-1.5 text-text-primary text-sm outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
+                />
+              </label>
+              <label className="text-text-secondary text-xs">
+                Starting operating mode
+                <select
+                  value={personalSetup.defaultMode}
+                  onChange={(e) =>
+                    setPersonalSetup({ defaultMode: e.target.value as OperatingMode })
+                  }
+                  className="block mt-1 w-full bg-surface-inset border border-border-subtle rounded px-2 py-1.5 text-text-primary text-sm outline-none focus-visible:ring-2 focus-visible:ring-border-focus capitalize"
+                >
+                  {MODES.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <fieldset className="mb-4">
+              <legend className="text-text-secondary text-xs mb-2">
+                Initial priorities (affects Planner prominence only — does not disable any domain)
+              </legend>
+              <div className="flex gap-2 flex-wrap">
+                {PRIORITY_OPTIONS.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    aria-pressed={personalSetup.priorities.includes(p)}
+                    onClick={() => togglePriority(p)}
+                    className={`px-3 py-1 rounded-md text-xs ${
+                      personalSetup.priorities.includes(p)
+                        ? "bg-action-primary text-text-inverse"
+                        : "bg-surface-inset text-text-secondary"
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <StepNav onBack={goToPrevStep} onNext={goToNextStep} />
+          </Card>
+        )}
+
+        {step === "connect-systems" && (
+          <Card>
+            <h2 ref={headingRef} tabIndex={-1} className="text-text-primary text-xl font-semibold outline-none">
+              Connect your systems
+            </h2>
+            <p className="text-text-secondary text-xs mt-1 mb-4">
+              This reads the real status of each domain — nothing here is a fake "connected" card.
+              Optional systems can be left for later; none of them block launch.
+            </p>
+            <ul className="space-y-2 mb-4">
+              {systemStatuses.map((s) => (
+                <li
+                  key={s.domain}
+                  className="flex items-center justify-between py-1.5 border-b border-border-subtle last:border-0 text-sm"
+                >
+                  <span className="text-text-primary">
+                    {s.domain}{" "}
+                    {s.isOptional && (
+                      <span className="text-text-secondary text-[10px]">(optional)</span>
+                    )}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Badge tone={STATE_TONE[s.state]}>{STATE_LABEL[s.state]}</Badge>
+                    {s.domain === "Obsidian" && s.state !== "configured" && (
+                      <>
+                        <button
+                          onClick={() => navigate("/knowledge/notes")}
+                          className="text-text-secondary text-[11px] underline hover:text-text-primary"
+                        >
+                          Connect
+                        </button>
+                        <button
+                          onClick={() => setSystemChoice("obsidian", "skipped")}
+                          aria-label="Skip Obsidian for now"
+                          className="text-text-secondary text-[11px] underline hover:text-text-secondary"
+                        >
+                          Skip
+                        </button>
+                      </>
+                    )}
+                    {s.domain === "AI Coach" && s.state !== "configured" && (
+                      <>
+                        <button
+                          onClick={() => navigate("/ai-coach/permissions")}
+                          className="text-text-secondary text-[11px] underline hover:text-text-primary"
+                        >
+                          Set up
+                        </button>
+                        <button
+                          onClick={() => setSystemChoice("ai", "skipped")}
+                          aria-label="Skip AI Coach for now"
+                          className="text-text-secondary text-[11px] underline hover:text-text-secondary"
+                        >
+                          Skip
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <StepNav onBack={goToPrevStep} onNext={goToNextStep} />
+          </Card>
+        )}
+
+        {step === "review-launch" && (
+          <Card>
+            <h2 ref={headingRef} tabIndex={-1} className="text-text-primary text-xl font-semibold outline-none">
+              Review &amp; launch
+            </h2>
+            <dl className="grid grid-cols-2 gap-y-2 gap-x-4 text-sm my-4">
+              <Row k="Name" v={personalSetup.name || "—"} />
+              <Row k="Starting mode" v={personalSetup.defaultMode} />
+              <Row k="Protected sleep" v={`${personalSetup.sleepTargetHours}h`} />
+              <Row k="Weekday capacity" v={`${personalSetup.weekdayCapacityMinutes} min`} />
+              <Row
+                k="Priorities"
+                v={personalSetup.priorities.join(", ") || "none selected"}
+              />
+              <Row
+                k="Obsidian"
+                v={
+                  systemStatuses.find((s) => s.domain === "Obsidian")?.state === "configured"
+                    ? "connected"
+                    : systemChoices.obsidian === "skipped"
+                      ? "skipped for now"
+                      : "not connected"
+                }
+              />
+              <Row
+                k="AI Coach"
+                v={
+                  systemStatuses.find((s) => s.domain === "AI Coach")?.state === "configured"
+                    ? "ready"
+                    : systemChoices.ai === "skipped"
+                      ? "skipped for now"
+                      : "not configured"
+                }
+              />
+            </dl>
+
+            <div className="bg-surface-inset border border-border-subtle rounded-md p-3 mb-4">
+              <div className="text-text-secondary text-xs mb-1">Launch readiness</div>
+              <Badge tone={launchCheck.canLaunch ? "success" : "danger"}>
+                {launchCheck.canLaunch ? "Ready to launch" : `Blocked: ${launchCheck.blockers.join(", ")}`}
+              </Badge>
+              <p className="text-text-secondary text-[11px] mt-2">
+                Optional systems being unconfigured is legitimate and does not block launch.
+              </p>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={goToPrevStep}
+                className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
+              >
+                Back
+              </button>
+              <button
+                onClick={launch}
+                disabled={!launchCheck.canLaunch}
+                className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium disabled:opacity-50"
+              >
+                Launch PBOS
+              </button>
+            </div>
+          </Card>
+        )}
+
+        <div className="text-center">
+          <button
+            onClick={simulateRelaunch}
+            className="text-text-secondary text-[11px] underline hover:text-text-secondary"
+          >
+            Simulate relaunch (replays the startup gate in place)
+          </button>
+        </div>
+      </div>
     </div>
+  );
+}
+
+function StepNav({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
+  return (
+    <div className="flex gap-2">
+      <button
+        onClick={onBack}
+        className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
+      >
+        Back
+      </button>
+      <button
+        onClick={onNext}
+        className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
+      >
+        Continue
+      </button>
+    </div>
+  );
+}
+
+function Row({ k, v }: { k: string; v: string }) {
+  return (
+    <>
+      <dt className="text-text-secondary">{k}</dt>
+      <dd className="text-text-primary capitalize">{v}</dd>
+    </>
   );
 }

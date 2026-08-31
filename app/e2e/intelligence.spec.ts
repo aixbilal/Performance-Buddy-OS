@@ -11,7 +11,7 @@ import AxeBuilder from "@axe-core/playwright";
  * deterministic FakeProvider (no network). No paid AI call happens anywhere.
  */
 
-const APP_READY = /Onboarding|Today's Plan|Resume step|Analytics|AI Coach|No courses yet|Knowledge/;
+const APP_READY = /Performance Buddy OS|Onboarding|Today's Plan|Resume step|Analytics|AI Coach|No courses yet|Knowledge/;
 
 async function boot(page: Page) {
   await page.goto("/");

@@ -8,7 +8,7 @@ import AxeBuilder from "@axe-core/playwright";
  * that Professor Coverage / Personal Study / official grade are never touched.
  */
 
-const APP_READY = /Onboarding|Today's Plan|Resume step|No courses yet|Academics/;
+const APP_READY = /Performance Buddy OS|Onboarding|Today's Plan|Resume step|No courses yet|Academics/;
 
 async function boot(page: Page) {
   await page.goto("/");

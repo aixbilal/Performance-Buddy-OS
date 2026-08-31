@@ -37,9 +37,9 @@ export default function App() {
                     <MoneyProvider>
                       <PlanningProvider>
                         <SettingsProvider>
-                          <OnboardingProvider>
-                            <AnalyticsProvider>
-                              <AICoachProvider>
+                          <AnalyticsProvider>
+                            <AICoachProvider>
+                              <OnboardingProvider>
                                 <SearchProvider>
                                   <CaptureProvider>
                                     <MasteryProvider>
@@ -49,9 +49,9 @@ export default function App() {
                                     </MasteryProvider>
                                   </CaptureProvider>
                                 </SearchProvider>
-                              </AICoachProvider>
-                            </AnalyticsProvider>
-                          </OnboardingProvider>
+                              </OnboardingProvider>
+                            </AICoachProvider>
+                          </AnalyticsProvider>
                         </SettingsProvider>
                       </PlanningProvider>
                     </MoneyProvider>

@@ -28,8 +28,25 @@ export type PersonalSetupData = {
   weekStart: "monday" | "sunday";
   sleepTargetHours: number;
   weekdayCapacityMinutes: number;
+  /** The operating mode PBOS starts in — written to the canonical Settings store. */
+  defaultMode: "normal" | "midterm" | "final" | "recovery";
   /** Priorities affect Planner/onboarding prominence only — they do NOT disable other domains (§26). */
   priorities: string[];
+};
+
+export type SystemChoice = "connected" | "skipped" | "not-set";
+export type SystemChoices = { obsidian: SystemChoice; ai: SystemChoice };
+
+/** The full persisted onboarding record (mirrors `onboarding_state`). */
+export type PersistedOnboarding = {
+  status: OnboardingStatus;
+  currentStep: OnboardingStep;
+  firstBootExperienceSeen: boolean;
+  flowVersion: number;
+  personalSetup: PersonalSetupData;
+  systemChoices: SystemChoices;
+  startedAt: string | null;
+  completedAt: string | null;
 };
 
 export type SystemConnectionState = "configured" | "partial" | "not-set-up" | "disabled-optional";
