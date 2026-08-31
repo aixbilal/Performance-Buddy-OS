@@ -1,4 +1,5 @@
 mod academic;
+mod capture;
 mod db;
 mod development;
 mod fitness;
@@ -6,6 +7,7 @@ mod knowledge;
 mod language;
 mod money;
 mod performance;
+mod planning;
 mod routine;
 
 use std::sync::Mutex;
@@ -147,6 +149,19 @@ pub fn run() {
             money::money_savings_goal_delete,
             money::money_import_graph,
             money::money_reset_for_test,
+            // Batch 3 — canonical relational Planning & Calendar domain
+            planning::plan_load,
+            planning::plan_block_upsert,
+            planning::plan_block_delete,
+            planning::plan_capacity_set,
+            planning::plan_import_graph,
+            planning::plan_reset_for_test,
+            // Batch 3 — durable Quick Capture inbox
+            capture::capture_load,
+            capture::capture_upsert,
+            capture::capture_delete,
+            capture::capture_import,
+            capture::capture_reset_for_test,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,19 +1,60 @@
-import type { CapacityConfig, ScheduleBlock } from "./types";
+import type { CapacityConfig, PlanningBlock } from "./types";
 
-const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-export { DAY_LABELS };
-
-/** Values approximate the approved Conflict & Capacity reference's own example. */
-export const SEED_BLOCKS: ScheduleBlock[] = [
-  { id: "blk-ds-lecture", title: "DS Lecture", domain: "Academics", day: 0, startMinute: 9 * 60, endMinute: 10 * 60, type: "fixed", locked: true, actionId: null },
-  { id: "blk-oop-lab", title: "OOP Lab", domain: "Academics", day: 0, startMinute: 11 * 60 + 30, endMinute: 13 * 60, type: "fixed", locked: true, actionId: null },
-  { id: "blk-ds-mastery", title: "DS Mastery", domain: "Academics", day: 5, startMinute: 14 * 60, endMinute: 15 * 60 + 30, type: "flexible", locked: false, actionId: "act-1" },
-  { id: "blk-pbos-dev", title: "PBOS Development", domain: "Development", day: 5, startMinute: 14 * 60 + 30, endMinute: 16 * 60, type: "flexible", locked: false, actionId: null },
-  { id: "blk-german", title: "German Review", domain: "Language", day: 2, startMinute: 19 * 60, endMinute: 19 * 60 + 30, type: "flexible", locked: false, actionId: null },
-  { id: "blk-reading", title: "Reading", domain: "Reading & Language", day: 2, startMinute: 20 * 60, endMinute: 20 * 60 + 30, type: "flexible", locked: false, actionId: null },
+/** Weekday labels for the Calendar grid — a UI constant, not seed data. */
+export const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+export const DAY_LABELS_LONG = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
 ];
 
-export const SEED_CAPACITY: CapacityConfig = {
-  dailyCapacityMinutes: 150, // 2h30 per day, matching the reference's daily load example
-  weeklyCapacityMinutes: 14 * 60, // 14h00 flexible weekly capacity, matching the reference exactly
+/** minutes-from-midnight -> "H:MM". */
+export function timeLabel(mins: number): string {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${h}:${m.toString().padStart(2, "0")}`;
+}
+
+/** "yyyy-mm-dd" -> "Mon 25 Aug" (civil, no timezone shift). */
+export function shortDate(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return `${DAY_LABELS[(dt.getDay() + 6) % 7]} ${d} ${MONTHS[m - 1]}`;
+}
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/**
+ * TEST FIXTURES ONLY — never imported by runtime code. A fresh profile has no
+ * scheduled blocks (see `store.tsx` / the Batch 3 seed-removal rule). These
+ * approximate the approved Conflict & Capacity reference's own example and are
+ * consumed only by `*.test.*`.
+ */
+const TS = "2026-01-01T00:00:00.000Z";
+const b = (o: Partial<PlanningBlock> & Pick<PlanningBlock, "id" | "title" | "day" | "startMinute" | "endMinute">): PlanningBlock => ({
+  domain: "Academics",
+  actionId: null,
+  date: null,
+  type: "flexible",
+  locked: false,
+  source: "manual",
+  status: "scheduled",
+  createdAt: TS,
+  updatedAt: TS,
+  ...o,
+});
+
+export const FIXTURE_BLOCKS: PlanningBlock[] = [
+  b({ id: "blk-ds-lecture", title: "DS Lecture", day: 0, startMinute: 9 * 60, endMinute: 10 * 60, type: "fixed", locked: true }),
+  b({ id: "blk-oop-lab", title: "OOP Lab", day: 0, startMinute: 11 * 60 + 30, endMinute: 13 * 60, type: "fixed", locked: true }),
+  b({ id: "blk-ds-mastery", title: "DS Mastery", day: 5, startMinute: 14 * 60, endMinute: 15 * 60 + 30, actionId: "act-1" }),
+  b({ id: "blk-pbos-dev", title: "PBOS Development", domain: "Development", day: 5, startMinute: 14 * 60 + 30, endMinute: 16 * 60 }),
+];
+
+export const FIXTURE_CAPACITY: CapacityConfig = {
+  dailyCapacityMinutes: 150,
+  weeklyCapacityMinutes: 14 * 60,
 };

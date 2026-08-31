@@ -6,6 +6,13 @@ import {
   rebuildUnlockedBlocks,
   computePlanFragility,
   rescheduleBlock,
+  blocksOnDate,
+  addDaysIso,
+  startOfWeekIso,
+  weekDates,
+  mondayIndexOf,
+  isoDateOf,
+  proposeSchedule,
 } from "./engine";
 import type { ScheduleBlock } from "./types";
 
@@ -116,5 +123,105 @@ describe("rescheduleBlock — moving time ≠ creating a new Action (Day 18 §59
     expect(result.actionId).toBe("act-1");
     expect(result.day).toBe(4);
     expect(result.startMinute).toBe(900);
+  });
+});
+
+describe("blocksOnDate — the boundary Today reads", () => {
+  const dated = (id: string, over: Partial<Parameters<typeof block>[0]> & { date: string | null }) => ({
+    ...block({ id, ...over }),
+    date: over.date,
+  });
+
+  it("a dated block matches only its exact calendar date", () => {
+    const blocks = [
+      dated("a", { date: "2026-08-25", day: 1, startMinute: 600, endMinute: 660 }),
+      dated("b", { date: "2026-08-26", day: 2, startMinute: 600, endMinute: 660 }),
+    ];
+    expect(blocksOnDate(blocks, "2026-08-25", 1).map((b) => b.id)).toEqual(["a"]);
+  });
+
+  it("an undated block recurs weekly on its weekday index", () => {
+    const blocks = [dated("recurring", { date: null, day: 1, startMinute: 600, endMinute: 660 })];
+    expect(blocksOnDate(blocks, "2026-08-25", 1)).toHaveLength(1);
+    expect(blocksOnDate(blocks, "2026-08-26", 2)).toHaveLength(0);
+  });
+
+  it("returns matches sorted by start time", () => {
+    const blocks = [
+      dated("late", { date: null, day: 3, startMinute: 900, endMinute: 960 }),
+      dated("early", { date: null, day: 3, startMinute: 500, endMinute: 560 }),
+    ];
+    expect(blocksOnDate(blocks, "2026-08-27", 3).map((b) => b.id)).toEqual(["early", "late"]);
+  });
+});
+
+describe("calendar date math — civil, no timezone drift", () => {
+  it("mondayIndexOf: 2026-08-31 is a Monday (index 0), 2026-09-06 is Sunday (index 6)", () => {
+    expect(mondayIndexOf("2026-08-31")).toBe(0);
+    expect(mondayIndexOf("2026-09-06")).toBe(6);
+  });
+
+  it("startOfWeekIso snaps any day to that week's Monday", () => {
+    expect(startOfWeekIso("2026-09-02")).toBe("2026-08-31"); // Wed -> Mon
+    expect(startOfWeekIso("2026-08-31")).toBe("2026-08-31"); // Mon -> itself
+    expect(startOfWeekIso("2026-09-06")).toBe("2026-08-31"); // Sun -> Mon
+  });
+
+  it("addDaysIso crosses month and year boundaries", () => {
+    expect(addDaysIso("2026-08-31", 1)).toBe("2026-09-01");
+    expect(addDaysIso("2026-01-01", -1)).toBe("2025-12-31");
+  });
+
+  it("weekDates returns 7 consecutive civil dates from the Monday", () => {
+    expect(weekDates("2026-08-31")).toEqual([
+      "2026-08-31",
+      "2026-09-01",
+      "2026-09-02",
+      "2026-09-03",
+      "2026-09-04",
+      "2026-09-05",
+      "2026-09-06",
+    ]);
+  });
+
+  it("isoDateOf round-trips a local Date", () => {
+    expect(isoDateOf(new Date(2026, 7, 5))).toBe("2026-08-05");
+  });
+});
+
+describe("proposeSchedule — deterministic, respects blocks, reports Could Not Fit", () => {
+  it("places an estimate-bearing Action into the first free slot", () => {
+    const p = proposeSchedule(
+      [{ actionId: "a1", title: "Revise Binary Trees", estMinutes: 60 }],
+      [],
+      8 * 60,
+      40 * 60,
+    );
+    expect(p.proposed).toHaveLength(1);
+    expect(p.proposed[0].actionId).toBe("a1");
+    expect(p.proposed[0].endMinute - p.proposed[0].startMinute).toBe(60);
+    expect(p.couldNotFit).toEqual([]);
+  });
+
+  it("never overlaps a respected block", () => {
+    const respected = block({ id: "fixed1", day: 0, startMinute: 9 * 60, endMinute: 21 * 60, locked: true });
+    const p = proposeSchedule(
+      [{ actionId: "a1", title: "x", estMinutes: 60 }],
+      [respected],
+      12 * 60,
+      40 * 60,
+    );
+    // Monday's window is fully blocked; it must land on another day, not overlap.
+    expect(p.proposed).toHaveLength(1);
+    expect(p.proposed[0].day).not.toBe(0);
+  });
+
+  it("reports Could Not Fit rather than silently dropping when nothing fits", () => {
+    // 1 hour daily capacity, one candidate needing 2 hours
+    const p = proposeSchedule([{ actionId: "a1", title: "Big task", estMinutes: 120 }], [], 60, 60);
+    expect(p.proposed).toEqual([]);
+    expect(p.couldNotFit).toHaveLength(1);
+    expect(p.couldNotFit[0].actionId).toBe("a1");
+    expect(p.couldNotFit[0].reason).toMatch(/capacity|slot/i);
   });
 });

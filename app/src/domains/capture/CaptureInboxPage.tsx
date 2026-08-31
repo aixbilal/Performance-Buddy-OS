@@ -1,33 +1,57 @@
+import { useState } from "react";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { EmptyState } from "../../components/EmptyState";
 import { useCapture } from "./store";
+import type { CaptureType } from "./types";
 
 const STATUS_TONE = { unprocessed: "warning", proposed: "neutral", resolved: "success" } as const;
+const RECLASSIFY_TYPES: CaptureType[] = ["action", "expense", "routine-checkin", "note"];
 
 /**
- * §20: owns unresolved raw captures ONLY — not a second Action database,
- * not a notes app. Once resolved, the real data lives in whichever domain
- * engine actually processed it (Action, Transaction, etc.), not here.
+ * Owns unresolved raw captures ONLY — not a second Action database, not a notes
+ * app. Confirming routes a capture into its real domain engine; the row is then
+ * marked resolved and the real data lives in that domain, not here.
  */
 export function CaptureInboxPage() {
-  const { inbox, confirmItem, dismissItem } = useCapture();
-  const unresolved = inbox.filter((i) => i.status !== "resolved");
+  const { loaded, backend, unresolved, confirmItem, reclassify, dismissItem, deleteItem } = useCapture();
+  const [message, setMessage] = useState<string | null>(null);
+
+  const onConfirm = async (id: string) => {
+    setMessage(null);
+    const res = await confirmItem(id);
+    setMessage(
+      res.ok
+        ? `Confirmed — sent to ${res.target}${res.entityId ? "" : " (no id returned)"}.`
+        : res.error,
+    );
+  };
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-text-primary text-xl font-semibold">Capture Inbox</h2>
-        <p className="text-text-muted text-sm">Unresolved raw captures only — resolved items move into their real domain and disappear from here.</p>
+        <p className="text-text-muted text-sm">
+          Unresolved raw captures only — confirmed items move into their real domain and leave this list.
+          Stored durably ({backend}); nothing is lost on reload.
+        </p>
       </div>
 
+      {message && (
+        <div className="bg-surface-inset border border-border-subtle rounded-md p-3 text-text-secondary text-sm">
+          {message}
+        </div>
+      )}
+
       <Card title={`Unresolved (${unresolved.length})`}>
-        {unresolved.length === 0 ? (
+        {!loaded ? (
+          <div className="text-text-muted text-xs">Loading…</div>
+        ) : unresolved.length === 0 ? (
           <EmptyState
             icon="✓"
             tone="positive"
             title="You're all caught up"
-            description="No captures are waiting to be processed. Great job staying on top of things."
+            description="No captures are waiting. Type anything into Quick Capture (Ctrl/⌘-K) and it lands here."
           />
         ) : (
           <div className="space-y-3">
@@ -39,15 +63,42 @@ export function CaptureInboxPage() {
                 </div>
                 {item.proposal && (
                   <p className="text-text-secondary text-xs mb-2">
-                    Proposed: <b className="capitalize">{item.proposal.type}</b> · {item.proposal.confidence} confidence
+                    Proposed: <b className="capitalize">{item.proposal.type.replace("-", " ")}</b> ·{" "}
+                    {item.proposal.confidence} confidence
                   </p>
                 )}
-                <div className="flex gap-2">
-                  <button onClick={() => confirmItem(item.id)} className="px-3 py-1 rounded-md bg-action-primary text-text-inverse text-xs">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => onConfirm(item.id)}
+                    className="px-3 py-1 rounded-md bg-action-primary text-text-inverse text-xs"
+                  >
                     Confirm
                   </button>
-                  <button onClick={() => dismissItem(item.id)} className="px-3 py-1 rounded-md text-text-muted text-xs hover:text-status-danger">
+                  <span className="text-text-disabled text-[10px]">reclassify:</span>
+                  {RECLASSIFY_TYPES.map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => reclassify(item.id, t)}
+                      className={`px-2 py-1 rounded-md text-[11px] ${
+                        item.proposal?.type === t
+                          ? "bg-surface-selected text-text-primary"
+                          : "text-text-muted hover:text-text-secondary"
+                      }`}
+                    >
+                      {t.replace("-", " ")}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => dismissItem(item.id)}
+                    className="px-3 py-1 rounded-md text-text-muted text-xs hover:text-status-danger"
+                  >
                     Dismiss
+                  </button>
+                  <button
+                    onClick={() => deleteItem(item.id)}
+                    className="px-3 py-1 rounded-md text-text-disabled text-xs hover:text-status-danger"
+                  >
+                    Delete
                   </button>
                 </div>
               </div>

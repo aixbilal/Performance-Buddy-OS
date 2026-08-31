@@ -1,31 +1,48 @@
 /**
- * Performance Buddy OS — Quick Capture domain model.
+ * Performance Buddy OS — Quick Capture domain model (Batch 3: made durable).
  *
- * Per Day 16 Handoff §18/§19: Raw Text → Interpretation → Structured
- * Proposal → Deterministic Validation → User Confirmation → Existing
- * Authoritative Domain Engine. Interpretation must never auto-commit.
+ * Pipeline (Global Quick Capture / Capture Inbox decision specs):
+ *   RAW TEXT -> INTERPRETATION -> STRUCTURED PROPOSAL -> DETERMINISTIC
+ *   VALIDATION -> USER CONFIRMATION -> EXISTING AUTHORITATIVE DOMAIN ENGINE
+ *   -> CANONICAL ENTITY.
  *
- * HONEST NOTE: no real AI provider is wired anywhere in this codebase
- * (flagged since Day 12). "Interpretation" here is a deterministic,
- * rule-based classifier standing in for where a real AI call would
- * eventually go — same honest boundary as Day 12's AI Coach recommendations.
+ * Quick Capture OWNS NOTHING downstream. It does not own Actions, Transactions,
+ * Knowledge topics or Routine logs — a confirmed capture is delegated to the
+ * existing canonical domain store, and the inbox row is marked resolved.
+ *
+ * It must work WITHOUT AI: an unclassifiable capture is still persisted to the
+ * durable Capture Inbox for later manual classification. No input loss, and no
+ * fake AI interpretation.
+ *
+ * HONEST NOTE: no real AI provider is wired anywhere (Batch 6). "Interpretation"
+ * is a deterministic, rule-based classifier standing in for where a real AI
+ * call will eventually go — the same honest boundary the AI Coach uses.
  */
 
-export type CaptureType = "action" | "expense" | "routine-checkin" | "unclassified";
+/** V1 capture types. `unclassified` = persisted raw, awaiting manual triage. */
+export type CaptureType = "action" | "expense" | "routine-checkin" | "note" | "unclassified";
 
 export type CaptureStatus = "unprocessed" | "proposed" | "resolved";
 
 export type CaptureProposal = {
   type: CaptureType;
-  confidence: "high" | "low"; // deterministic classifier — never a fabricated precise number
+  /** deterministic classifier — never a fabricated precise number */
+  confidence: "high" | "low";
   fields: Record<string, string | number>;
 };
 
-/** Owns unresolved raw capture only — never a second Action/task database (§20). */
+/** How a capture left the inbox — recorded on the row, not a second entity. */
+export type CaptureResolution =
+  | { kind: "confirmed"; target: CaptureType; entityId: string | null }
+  | { kind: "dismissed" };
+
+/** Owns unresolved raw capture only — never a second Action/task database. */
 export type CaptureInboxItem = {
   id: string;
   rawText: string;
   status: CaptureStatus;
   proposal: CaptureProposal | null;
+  resolution: CaptureResolution | null;
   createdAt: string;
+  updatedAt: string;
 };

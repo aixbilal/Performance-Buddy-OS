@@ -44,6 +44,8 @@ import { MoneyInsightsPage } from "../domains/money/MoneyInsightsPage";
 import { AnalyticsOverviewPage } from "../domains/analytics/AnalyticsOverviewPage";
 import { AICoachPage } from "../domains/intelligence/AICoachPage";
 import { PlannerPage } from "../domains/planning/PlannerPage";
+import { CalendarWeekPage } from "../domains/planning/CalendarWeekPage";
+import { CaptureInboxPage } from "../domains/capture/CaptureInboxPage";
 import { SettingsPage } from "../domains/settings/SettingsPage";
 import { OnboardingPage } from "../domains/onboarding/OnboardingPage";
 import { FocusPage } from "../domains/focus/FocusPage";
@@ -53,7 +55,7 @@ import { NAVIGATION } from "./navigation";
 // rather than maintaining a second, hand-written route list that can drift
 // from the sidebar (this is the "single source of truth" fix for the
 // App Shell / Today nav mismatch flagged in navigation.ts).
-const STRUCTURED_IDS = ["goals", "academics", "knowledge", "development", "fitness", "routine", "language", "money", "analytics", "ai-coach", "calendar", "settings", "focus"];
+const STRUCTURED_IDS = ["goals", "academics", "knowledge", "development", "fitness", "routine", "language", "money", "analytics", "ai-coach", "calendar", "planner", "capture-inbox", "settings", "focus"];
 const placeholderRoutes = NAVIGATION.flatMap((group) => group.items)
   .filter((item) => item.path !== "/" && !STRUCTURED_IDS.includes(item.id))
   .map((item) => ({
@@ -122,7 +124,9 @@ export const router = createHashRouter([
       { path: "/money/insights", element: <MoneyInsightsPage />, handle: { title: "Money Insights" } },
       { path: "/analytics", element: <AnalyticsOverviewPage />, handle: { title: "Analytics" } },
       { path: "/ai-coach", element: <AICoachPage />, handle: { title: "AI Coach" } },
-      { path: "/calendar", element: <PlannerPage />, handle: { title: "Conflict & Capacity" } },
+      { path: "/calendar", element: <CalendarWeekPage />, handle: { title: "Calendar" } },
+      { path: "/planner", element: <PlannerPage />, handle: { title: "Planner" } },
+      { path: "/capture-inbox", element: <CaptureInboxPage />, handle: { title: "Capture Inbox" } },
       { path: "/settings", element: <SettingsPage />, handle: { title: "Settings" } },
       { path: "/focus", element: <FocusPage />, handle: { title: "Focus" } },
       ...placeholderRoutes,

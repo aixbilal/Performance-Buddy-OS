@@ -2,21 +2,30 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSearch } from "../domains/search/store";
 import { useCapture } from "../domains/capture/store";
+import type { CaptureInboxItem, CaptureType } from "../domains/capture/types";
 
 /**
  * Day 16 §6: Ctrl+K opens, Esc closes and restores exact prior context (this
- * is a modal overlay, not a route change — closing it never navigates away
- * from wherever the user was). Arrow keys navigate, Enter opens the
+ * is a modal overlay, not a route change). Arrow keys navigate, Enter opens the
  * canonical route (§12 — never a duplicate search-specific detail screen).
+ *
+ * Quick Capture (§18/§20): type → see the proposed classification → Confirm
+ * (routes into the real domain engine) or Change type or Keep in Inbox. Nothing
+ * is ever lost — every capture is persisted the moment it is typed.
  */
 
 const QUICK_COMMANDS = [
   { id: "cmd.today", title: "Go to Today", route: "/" },
   { id: "cmd.goals", title: "Go to Goals", route: "/goals" },
-  { id: "cmd.planner", title: "Open Planner", route: "/calendar" },
+  { id: "cmd.planner", title: "Open Planner", route: "/planner" },
+  { id: "cmd.calendar", title: "Open Calendar", route: "/calendar" },
+  { id: "cmd.inbox", title: "Open Capture Inbox", route: "/capture-inbox" },
   { id: "cmd.aicoach", title: "Open AI Coach", route: "/ai-coach" },
   { id: "cmd.settings", title: "Open Settings", route: "/settings" },
 ];
+
+const CONFIRMABLE: CaptureType[] = ["action", "expense", "routine-checkin"];
+const TYPE_CHOICES: CaptureType[] = ["action", "expense", "routine-checkin", "note"];
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
@@ -24,9 +33,11 @@ export function CommandPalette() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [captureMode, setCaptureMode] = useState(false);
   const [captureText, setCaptureText] = useState("");
+  const [pending, setPending] = useState<CaptureInboxItem | null>(null);
+  const [result, setResult] = useState<string | null>(null);
   const navigate = useNavigate();
   const { search, recordRecent } = useSearch();
-  const { capture } = useCapture();
+  const { capture, confirmItem, reclassify, inbox } = useCapture();
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -34,21 +45,20 @@ export function CommandPalette() {
         e.preventDefault();
         setOpen((prev) => !prev);
       }
-      if (e.key === "Escape" && open) {
-        setOpen(false);
-        setCaptureMode(false);
-        setQuery("");
-      }
+      if (e.key === "Escape" && open) close();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // keep `pending` in sync with the store (status/proposal can change)
+  const livePending = pending ? inbox.find((i) => i.id === pending.id) ?? pending : null;
 
   const results = query ? search(query) : [];
   const commandMatches = query
     ? QUICK_COMMANDS.filter((c) => c.title.toLowerCase().includes(query.toLowerCase()))
     : QUICK_COMMANDS;
-
   const totalItems = results.length + commandMatches.length;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -63,32 +73,49 @@ export function CommandPalette() {
       if (selectedIndex < commandMatches.length) {
         navigate(commandMatches[selectedIndex].route);
       } else {
-        const result = results[selectedIndex - commandMatches.length];
-        if (result) {
-          recordRecent(result.result.id);
-          navigate(result.result.canonicalRoute); // §12 — canonical route, never a duplicate view
+        const r = results[selectedIndex - commandMatches.length];
+        if (r) {
+          recordRecent(r.result.id);
+          navigate(r.result.canonicalRoute);
         }
       }
       close();
     }
   };
 
-  const close = () => {
+  function close() {
     setOpen(false);
     setCaptureMode(false);
     setQuery("");
     setCaptureText("");
+    setPending(null);
+    setResult(null);
     setSelectedIndex(0);
+  }
+
+  const submitCapture = async () => {
+    if (!captureText.trim()) return;
+    // Persisted immediately — never lost, AI or not.
+    const item = await capture(captureText);
+    setPending(item);
+    setResult(null);
+    setCaptureText("");
   };
 
-  const submitCapture = () => {
-    if (!captureText.trim()) return;
-    capture(captureText); // §18 — raw text goes into the real classification pipeline, never lost
-    setCaptureText("");
-    close();
+  const doConfirm = async () => {
+    if (!livePending) return;
+    const res = await confirmItem(livePending.id);
+    if (res.ok) {
+      setResult(`Sent to ${res.target.replace("-", " ")}.`);
+    } else {
+      setResult(res.error);
+    }
   };
 
   if (!open) return null;
+
+  const proposal = livePending?.proposal ?? null;
+  const canConfirmInline = !!proposal && CONFIRMABLE.includes(proposal.type);
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-start justify-center pt-24 z-50" onClick={close}>
@@ -100,22 +127,96 @@ export function CommandPalette() {
         {captureMode ? (
           <div className="p-4">
             <div className="text-text-muted text-xs mb-2">Quick Capture — type anything, PBOS classifies it</div>
-            <input
-              autoFocus
-              value={captureText}
-              onChange={(e) => setCaptureText(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && submitCapture()}
-              placeholder="e.g. Spent Rs 450 on lunch"
-              className="w-full bg-surface-inset border border-border-subtle rounded-md px-3 py-2 text-text-primary text-sm"
-            />
-            <div className="flex gap-2 mt-3">
-              <button onClick={submitCapture} className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium">
-                Capture
-              </button>
-              <button onClick={() => setCaptureMode(false)} className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium">
-                Back to Search
-              </button>
-            </div>
+
+            {!livePending && (
+              <>
+                <label className="sr-only" htmlFor="qc-input">
+                  Capture text
+                </label>
+                <input
+                  id="qc-input"
+                  autoFocus
+                  value={captureText}
+                  onChange={(e) => setCaptureText(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && submitCapture()}
+                  placeholder="e.g. Spent Rs 450 on lunch"
+                  className="w-full bg-surface-inset border border-border-subtle rounded-md px-3 py-2 text-text-primary text-sm"
+                />
+                <div className="flex gap-2 mt-3">
+                  <button onClick={submitCapture} className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium">
+                    Capture
+                  </button>
+                  <button onClick={() => setCaptureMode(false)} className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium">
+                    Back to Search
+                  </button>
+                </div>
+              </>
+            )}
+
+            {livePending && (
+              <div className="space-y-3">
+                <div className="bg-surface-inset border border-border-subtle rounded-md p-3">
+                  <div className="text-text-primary text-sm">{livePending.rawText}</div>
+                  {proposal && (
+                    <div className="text-text-secondary text-xs mt-1">
+                      Proposed: <b className="capitalize">{proposal.type.replace("-", " ")}</b> ·{" "}
+                      {proposal.confidence} confidence
+                    </div>
+                  )}
+                  <div className="text-status-success text-[11px] mt-1">Saved — it is safe in your Capture Inbox.</div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-text-disabled text-[10px]">type:</span>
+                  {TYPE_CHOICES.map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => reclassify(livePending.id, t)}
+                      className={`px-2 py-1 rounded-md text-[11px] ${
+                        proposal?.type === t ? "bg-surface-selected text-text-primary" : "text-text-muted hover:text-text-secondary"
+                      }`}
+                    >
+                      {t.replace("-", " ")}
+                    </button>
+                  ))}
+                </div>
+
+                {result && <div className="text-text-secondary text-xs">{result}</div>}
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={doConfirm}
+                    disabled={!canConfirmInline}
+                    className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium disabled:opacity-40"
+                  >
+                    Confirm
+                  </button>
+                  <button
+                    onClick={() => {
+                      close();
+                      navigate("/capture-inbox");
+                    }}
+                    className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
+                  >
+                    Keep in Inbox
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPending(null);
+                      setResult(null);
+                    }}
+                    className="px-3 py-1.5 rounded-md text-text-muted text-xs"
+                  >
+                    New capture
+                  </button>
+                </div>
+                {!canConfirmInline && (
+                  <p className="text-text-disabled text-[10px]">
+                    Notes have no V1 destination — keep it in the Inbox.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <>

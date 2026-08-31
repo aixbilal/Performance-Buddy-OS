@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
 /// Bumped whenever a migration is added to `MIGRATIONS`.
-const CURRENT_SCHEMA_VERSION: i64 = 4;
+const CURRENT_SCHEMA_VERSION: i64 = 5;
 
 /// Ordered, forward-only migrations. `version` must be contiguous from 1.
 const MIGRATIONS: &[(i64, &str)] = &[
@@ -554,6 +554,83 @@ const MIGRATIONS: &[(i64, &str)] = &[
     CREATE INDEX IF NOT EXISTS idx_money_tx_goal          ON money_transactions(savings_goal_id);
     CREATE INDEX IF NOT EXISTS idx_money_planned_tx       ON money_planned_expenses(transaction_id);
     CREATE INDEX IF NOT EXISTS idx_money_budgets_cat      ON money_budgets(category, period);
+    "#,
+    ),
+    (
+        5,
+        // Batch 3 — the PLAN stage of the operating loop (Planner / Calendar)
+        // plus durable Quick Capture.
+        //
+        // Relationship truth (one source, no reverse-collection columns):
+        //   action -> planning block : `planning_blocks.action_id`
+        //       (FK -> actions.id; ON DELETE SET NULL). An Action has zero or
+        //       more scheduled blocks; deleting the Action keeps the planning
+        //       history (link nulled). The block's `title`/`domain` are its own
+        //       label — linked Action data is READ live, never a duplicated
+        //       authoritative copy of Action title/status/deadline.
+        //
+        // Product locks enforced by shape:
+        //   ACTION ≠ PLANNING BLOCK ≠ CALENDAR EVENT ≠ COMPLETION.
+        //     `planning_blocks.status` ('scheduled'|'done'|'skipped') is
+        //     block-local — it is NOT Action completion. Scheduling an Action
+        //     never sets the Action to done; there is one scheduled-block truth
+        //     (no separate PlannerBlock / CalendarBlock entities).
+        //   `locked` = a manual/locked decision that MUST survive plan
+        //     regeneration (§9.12). `source` ('manual'|'generated') is provenance.
+        //   deadline ≠ work session: a deadline is never modelled as a block.
+        //
+        // `day_of_week` (0=Mon..6=Sun) drives the weekly Calendar grid and the
+        // deterministic conflict/capacity engine. `date` is an OPTIONAL absolute
+        // yyyy-mm-dd pin — NULL means "recurs weekly on that weekday"; a value
+        // means "this specific date" (what Today matches on).
+        //
+        // `planning_capacity` is a single-row config ('default'); empty time is
+        // not the same as available capacity, so the limit is explicit.
+        //
+        // `capture_inbox` is DURABLE raw capture only — never a second Action /
+        // Transaction / Knowledge / Routine store. A confirmed capture is
+        // delegated to the existing canonical domain engine; the inbox row is
+        // marked resolved, it does not hold the resulting entity.
+        r#"
+    CREATE TABLE IF NOT EXISTS planning_blocks (
+        id           TEXT PRIMARY KEY NOT NULL,
+        title        TEXT NOT NULL,
+        domain       TEXT NOT NULL DEFAULT '',
+        action_id    TEXT REFERENCES actions(id) ON DELETE SET NULL,
+        day_of_week  INTEGER NOT NULL DEFAULT 0,
+        date         TEXT,
+        start_minute INTEGER NOT NULL DEFAULT 0,
+        end_minute   INTEGER NOT NULL DEFAULT 0,
+        block_type   TEXT NOT NULL DEFAULT 'flexible',
+        locked       INTEGER NOT NULL DEFAULT 0,
+        source       TEXT NOT NULL DEFAULT 'manual',
+        status       TEXT NOT NULL DEFAULT 'scheduled',
+        created_at   TEXT NOT NULL,
+        updated_at   TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS planning_capacity (
+        id             TEXT PRIMARY KEY NOT NULL DEFAULT 'default',
+        daily_minutes  INTEGER NOT NULL DEFAULT 150,
+        weekly_minutes INTEGER NOT NULL DEFAULT 840,
+        updated_at     TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS capture_inbox (
+        id             TEXT PRIMARY KEY NOT NULL,
+        raw_text       TEXT NOT NULL,
+        proposed_type  TEXT,
+        parsed_payload TEXT,
+        status         TEXT NOT NULL DEFAULT 'unprocessed',
+        resolution     TEXT,
+        created_at     TEXT NOT NULL,
+        updated_at     TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_planning_blocks_action ON planning_blocks(action_id);
+    CREATE INDEX IF NOT EXISTS idx_planning_blocks_day    ON planning_blocks(day_of_week);
+    CREATE INDEX IF NOT EXISTS idx_planning_blocks_date   ON planning_blocks(date);
+    CREATE INDEX IF NOT EXISTS idx_capture_inbox_status   ON capture_inbox(status);
     "#,
     ),
 ];

@@ -95,7 +95,7 @@ export function tryFitBlock(
  * This is proven by a test that checks reference equality of the locked
  * block's contents, not just "probably works."
  */
-export function rebuildUnlockedBlocks(existingBlocks: ScheduleBlock[], proposedUnlockedBlocks: ScheduleBlock[]): ScheduleBlock[] {
+export function rebuildUnlockedBlocks<T extends ScheduleBlock>(existingBlocks: T[], proposedUnlockedBlocks: T[]): T[] {
   const lockedBlocks = existingBlocks.filter((b) => b.locked).map((b) => ({ ...b }));
   return [...lockedBlocks, ...proposedUnlockedBlocks];
 }
@@ -116,11 +116,144 @@ export function computePlanFragility(scheduledMinutes: number, capacityMinutes: 
  * changes day/time — `id` and `actionId` carry through unchanged, and no
  * new block or Action is ever created.
  */
-export function rescheduleBlock(
-  block: ScheduleBlock,
+export function rescheduleBlock<T extends ScheduleBlock>(
+  block: T,
   newDay: number,
   newStartMinute: number,
   newEndMinute: number
-): ScheduleBlock {
+): T {
   return { ...block, day: newDay, startMinute: newStartMinute, endMinute: newEndMinute };
+}
+
+/**
+ * Deterministic filter for "what is scheduled on a given calendar day".
+ * A block with an absolute `date` matches that date exactly; a block with
+ * `date == null` recurs weekly and matches when its `day` equals the target
+ * weekday index (0 = Monday .. 6 = Sunday). This is the boundary Today uses.
+ */
+export function blocksOnDate<T extends ScheduleBlock & { date: string | null }>(
+  blocks: T[],
+  isoDate: string,
+  weekdayIndex: number
+): T[] {
+  return blocks
+    .filter((b) => (b.date != null ? b.date === isoDate : b.day === weekdayIndex))
+    .sort((a, b) => a.startMinute - b.startMinute);
+}
+
+// ---------------------------------------------------------------------------
+// Deterministic calendar-date math. All local-time, no timezone conversion —
+// a `yyyy-mm-dd` string is treated as a wall-clock civil date, so the Calendar
+// grid never drifts across a DST boundary.
+// ---------------------------------------------------------------------------
+
+/** JS `Date.getDay()` (0=Sun..6=Sat) -> PBOS weekday index (0=Mon..6=Sun). */
+export const JS_DAY_TO_MONDAY_INDEX = [6, 0, 1, 2, 3, 4, 5] as const;
+
+function civil(iso: string): { y: number; m: number; d: number } {
+  const [y, m, d] = iso.split("-").map(Number);
+  return { y, m, d };
+}
+function pad(n: number): string {
+  return n.toString().padStart(2, "0");
+}
+
+/** Local civil date -> `yyyy-mm-dd`. */
+export function isoDateOf(date: Date): string {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/** PBOS weekday index (0=Mon..6=Sun) for a civil date string. */
+export function mondayIndexOf(iso: string): number {
+  const { y, m, d } = civil(iso);
+  return JS_DAY_TO_MONDAY_INDEX[new Date(y, m - 1, d).getDay()];
+}
+
+/** `iso` shifted by `n` whole days (can be negative), as `yyyy-mm-dd`. */
+export function addDaysIso(iso: string, n: number): string {
+  const { y, m, d } = civil(iso);
+  return isoDateOf(new Date(y, m - 1, d + n));
+}
+
+/** Monday (PBOS start-of-week) of the week containing `iso`. */
+export function startOfWeekIso(iso: string): string {
+  return addDaysIso(iso, -mondayIndexOf(iso));
+}
+
+/** The 7 civil dates Mon..Sun for the week starting at `mondayIso`. */
+export function weekDates(mondayIso: string): string[] {
+  return Array.from({ length: 7 }, (_, i) => addDaysIso(mondayIso, i));
+}
+
+export type ScheduleProposalItem = {
+  actionId: string;
+  title: string;
+  day: number;
+  startMinute: number;
+  endMinute: number;
+};
+export type CouldNotFit = { actionId: string; title: string; reason: string };
+export type ScheduleProposal = {
+  proposed: ScheduleProposalItem[];
+  couldNotFit: CouldNotFit[];
+};
+
+/**
+ * DETERMINISTIC (NOT AI) proposal generator. For each candidate Action with an
+ * estimate, it scans days Mon..Sun and 30-minute-aligned start times inside the
+ * working window for the first slot that passes `tryFitBlock` against the
+ * blocks that must be respected (locked/existing + already-proposed). Anything
+ * that cannot be placed is reported as `couldNotFit` — never silently dropped,
+ * never overlapped. Callers turn `proposed` into `source: "generated"` blocks
+ * only on APPLY.
+ */
+export function proposeSchedule(
+  candidates: { actionId: string; title: string; estMinutes: number | null }[],
+  respectBlocks: ScheduleBlock[],
+  dailyCapacityMinutes: number,
+  weeklyCapacityMinutes: number,
+  opts: { windowStartMinute?: number; windowEndMinute?: number; defaultMinutes?: number; stepMinutes?: number } = {}
+): ScheduleProposal {
+  const windowStart = opts.windowStartMinute ?? 9 * 60;
+  const windowEnd = opts.windowEndMinute ?? 21 * 60;
+  const step = opts.stepMinutes ?? 30;
+  const fallback = opts.defaultMinutes ?? 30;
+
+  const working: ScheduleBlock[] = respectBlocks.map((b) => ({ ...b }));
+  const proposed: ScheduleProposalItem[] = [];
+  const couldNotFit: CouldNotFit[] = [];
+
+  for (const c of candidates) {
+    const duration = c.estMinutes && c.estMinutes > 0 ? c.estMinutes : fallback;
+    let placed = false;
+    let lastReason = "No free slot inside the working window this week.";
+
+    outer: for (let day = 0; day < 7 && !placed; day++) {
+      for (let start = windowStart; start + duration <= windowEnd; start += step) {
+        const candidate: ScheduleBlock = {
+          id: `proposal-${c.actionId}`,
+          title: c.title,
+          domain: "Planning",
+          day,
+          startMinute: start,
+          endMinute: start + duration,
+          type: "flexible",
+          locked: false,
+          actionId: c.actionId,
+        };
+        const fit = tryFitBlock(candidate, working, dailyCapacityMinutes, weeklyCapacityMinutes);
+        if (fit.fits) {
+          working.push(candidate);
+          proposed.push({ actionId: c.actionId, title: c.title, day, startMinute: start, endMinute: start + duration });
+          placed = true;
+          break outer;
+        }
+        lastReason = fit.reason ?? lastReason;
+      }
+    }
+
+    if (!placed) couldNotFit.push({ actionId: c.actionId, title: c.title, reason: lastReason });
+  }
+
+  return { proposed, couldNotFit };
 }
