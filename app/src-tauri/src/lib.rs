@@ -1,7 +1,12 @@
 mod academic;
 mod db;
+mod development;
+mod fitness;
 mod knowledge;
+mod language;
+mod money;
 mod performance;
+mod routine;
 
 use std::sync::Mutex;
 use tauri::Manager;
@@ -81,6 +86,67 @@ pub fn run() {
             academic::acad_topic_link_knowledge,
             academic::acad_import_graph,
             academic::acad_reset_for_test,
+            // Batch 2B — canonical relational Development domain
+            development::dev_load,
+            development::dev_project_upsert,
+            development::dev_project_delete,
+            development::dev_skill_upsert,
+            development::dev_skill_delete,
+            development::dev_milestone_upsert,
+            development::dev_milestone_delete,
+            development::dev_milestones_reorder,
+            development::dev_evidence_upsert,
+            development::dev_evidence_delete,
+            development::dev_link_set,
+            development::dev_import_graph,
+            development::dev_reset_for_test,
+            // Batch 2B — canonical relational Fitness & Recovery domain
+            fitness::fit_load,
+            fitness::fit_plan_upsert,
+            fitness::fit_plan_delete,
+            fitness::fit_planned_session_upsert,
+            fitness::fit_planned_session_delete,
+            fitness::fit_workout_upsert,
+            fitness::fit_workout_delete,
+            fitness::fit_checkin_upsert,
+            fitness::fit_checkin_delete,
+            fitness::fit_import_graph,
+            fitness::fit_reset_for_test,
+            // Batch 2B — canonical relational Routines & Daily Life domain
+            routine::rtn_load,
+            routine::rtn_routine_upsert,
+            routine::rtn_routine_delete,
+            routine::rtn_log_upsert,
+            routine::rtn_log_delete,
+            routine::rtn_import_graph,
+            routine::rtn_reset_for_test,
+            // Batch 2 — canonical relational Reading & Language Learning domain
+            language::lang_load,
+            language::lang_path_upsert,
+            language::lang_path_delete,
+            language::lang_unit_upsert,
+            language::lang_unit_delete,
+            language::lang_units_reorder,
+            language::lang_session_upsert,
+            language::lang_session_delete,
+            language::lang_book_upsert,
+            language::lang_book_delete,
+            language::lang_reading_session_upsert,
+            language::lang_reading_session_delete,
+            language::lang_import_graph,
+            language::lang_reset_for_test,
+            // Batch 2 — canonical relational Money OS domain
+            money::money_load,
+            money::money_transaction_upsert,
+            money::money_transaction_delete,
+            money::money_planned_upsert,
+            money::money_planned_delete,
+            money::money_budget_upsert,
+            money::money_budget_delete,
+            money::money_savings_goal_upsert,
+            money::money_savings_goal_delete,
+            money::money_import_graph,
+            money::money_reset_for_test,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

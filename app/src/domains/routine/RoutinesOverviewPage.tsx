@@ -1,79 +1,137 @@
+import { Link, useNavigate } from "react-router-dom";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
+import { EmptyState } from "../../components/EmptyState";
 import { SaveIndicator } from "../../components/SaveIndicator";
 import { useRoutine } from "./store";
+import { RoutineCheckIn } from "./RoutineCheckIn";
 import type { CompletionState, TimeWindow } from "./types";
 
 const WINDOWS: { key: TimeWindow; label: string }[] = [
   { key: "morning", label: "Morning" },
   { key: "day", label: "Day" },
   { key: "evening", label: "Evening" },
+  { key: "anytime", label: "Anytime" },
 ];
 
-const STATE_TONE = {
-  complete: "success",
-  partial: "warning",
-  pending: "neutral",
-  missed: "danger",
-  rest: "neutral",
-  skipped: "neutral",
-} as const;
-
-function nextState(current: CompletionState): CompletionState {
-  return current === "complete" ? "pending" : "complete";
-}
-
 export function RoutinesOverviewPage() {
-  const { getByWindow, getTodayLog, getConsistency, setTodayState, saveState, loadError } = useRoutine();
+  const navigate = useNavigate();
+  const rt = useRoutine();
+  const activeRoutines = rt.routines.filter((r) => !r.archived);
+  const dueToday = rt.getDueToday();
+  const doneToday = dueToday.filter((r) => {
+    const s = rt.getRoutineTodayState(r.id).state;
+    return s === "complete" || s === "partial";
+  });
 
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
           <h2 className="text-text-primary text-xl font-semibold">Routines</h2>
-          <p className="text-text-muted text-sm">What personal routines matter today, what's done, and what still needs attention.</p>
+          <p className="text-text-muted text-sm">
+            Repeated personal systems and what needs attention today — consistency, not streak pressure.
+          </p>
         </div>
-        <SaveIndicator state={saveState} />
+        <div className="flex items-center gap-3">
+          <SaveIndicator state={rt.saveState} />
+          {activeRoutines.length > 0 && (
+            <Link
+              to="/routine/check-in"
+              className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
+            >
+              Daily Check-In
+            </Link>
+          )}
+          <button
+            onClick={() => navigate("/routine/new")}
+            className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
+          >
+            New Routine
+          </button>
+        </div>
       </div>
 
-      {loadError && (
+      {rt.loadError && (
         <div className="bg-status-warning/10 border border-status-warning/30 rounded-md px-4 py-3 text-xs text-status-warning">
-          Your saved routine data couldn't be read ({loadError}) — showing defaults instead. Nothing was deleted;
-          the raw stored data is still on disk if you want to inspect it.
+          Your saved routine data couldn't be read ({rt.loadError}). Nothing was deleted.
         </div>
       )}
 
-      {WINDOWS.map(({ key, label }) => {
-        const routines = getByWindow(key);
-        if (routines.length === 0) return null;
-        return (
-          <Card key={key} title={label}>
-            <div className="space-y-1">
-              {routines.map((r) => {
-                const log = getTodayLog(r.id);
-                const state = log?.state ?? "pending";
-                const consistency = getConsistency(r.id);
-                return (
-                  <button
-                    key={r.id}
-                    onClick={() => setTodayState(r.id, nextState(state))}
-                    className="w-full flex items-center justify-between py-2.5 border-b border-border-subtle last:border-0 hover:bg-surface-inset -mx-2 px-2 rounded-md text-left"
-                  >
-                    <div>
-                      <div className="text-text-primary text-sm">{r.title}</div>
-                      <div className="text-text-muted text-xs">
-                        {r.category}
-                        {consistency.percent !== null && ` · ${consistency.percent}% (30d)`}
-                      </div>
-                    </div>
-                    <Badge tone={STATE_TONE[state]}>{state}</Badge>
-                  </button>
-                );
-              })}
-            </div>
+      {rt.loaded && activeRoutines.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon="🔁"
+            title="No routines yet"
+            description="Add a repeatable behavior — prayer, hydration, skincare, a morning routine. It can stand on its own without a Goal."
+            primaryAction={{ label: "Create your first routine", onClick: () => navigate("/routine/new") }}
+          />
+        </Card>
+      ) : (
+        <>
+          <Card title="Today">
+            {dueToday.length === 0 ? (
+              <div className="text-text-muted text-xs">Nothing scheduled for today.</div>
+            ) : (
+              <div className="text-text-secondary text-sm">
+                {doneToday.length} of {dueToday.length} due routines recorded ·{" "}
+                <Link to="/routine/check-in" className="underline hover:text-text-primary">
+                  open Daily Check-In
+                </Link>
+              </div>
+            )}
           </Card>
-        );
-      })}
+
+          {WINDOWS.map(({ key, label }) => {
+            const routines = activeRoutines.filter((r) => r.timeWindow === key);
+            if (routines.length === 0) return null;
+            return (
+              <Card key={key} title={label}>
+                <div className="space-y-3">
+                  {routines.map((r) => {
+                    const today = rt.getRoutineTodayState(r.id);
+                    const consistency = rt.getRoutineConsistency(r.id);
+                    const pick = (state: CompletionState) => rt.setTodayState(r.id, state);
+                    return (
+                      <div
+                        key={r.id}
+                        className="py-2 border-b border-border-subtle last:border-0 space-y-1.5"
+                      >
+                        <div className="flex items-center justify-between">
+                          <Link
+                            to={`/routine/${r.id}`}
+                            className="text-text-primary text-sm hover:text-text-secondary underline"
+                          >
+                            {r.title}
+                          </Link>
+                          <div className="flex items-center gap-2">
+                            {r.paused && <Badge>paused</Badge>}
+                            <span className="text-text-muted text-xs">
+                              {rt.scheduleLabel(r)}
+                              {consistency.percent !== null
+                                ? ` · ${consistency.percent}% (${consistency.windowDays}d)`
+                                : " · no history yet"}
+                            </span>
+                          </div>
+                        </div>
+                        {today.scheduledToday ? (
+                          <RoutineCheckIn
+                            routineTitle={r.title}
+                            current={today.state}
+                            onPick={pick}
+                          />
+                        ) : (
+                          <div className="text-text-disabled text-[11px]">Not scheduled today.</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            );
+          })}
+        </>
+      )}
     </div>
   );
 }

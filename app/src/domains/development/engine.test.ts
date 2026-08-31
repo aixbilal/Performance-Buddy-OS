@@ -1,6 +1,17 @@
 import { describe, it, expect } from "vitest";
 import { derivePercentToLevel, computeEvidenceScore } from "./engine";
-import type { SkillEvidence } from "./types";
+import type { Provenance, SkillEvidence } from "./types";
+
+const ev = (id: string, provenance: Provenance, projectId: string | null = null): SkillEvidence => ({
+  id,
+  skillId: "s1",
+  projectId,
+  title: `Evidence ${id}`,
+  provenance,
+  date: "2026-08-01",
+  createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
+});
 
 describe("derivePercentToLevel", () => {
   it("maps 0 to not-started", () => {
@@ -26,10 +37,7 @@ describe("computeEvidenceScore — provenance honesty (Master Handoff §14)", ()
   });
 
   it("counts independent evidence fully", () => {
-    const evidence: SkillEvidence[] = [
-      { id: "e1", skillId: "s1", projectId: null, title: "Built CRUD API alone", provenance: "independent", date: "2026-08-01" },
-      { id: "e2", skillId: "s1", projectId: null, title: "Debugged auth bug", provenance: "independent", date: "2026-08-05" },
-    ];
+    const evidence: SkillEvidence[] = [ev("e1", "independent"), ev("e2", "independent")];
     const result = computeEvidenceScore(evidence);
     expect(result.evidencePercent).toBe(100);
     expect(result.countedCount).toBe(2);
@@ -37,10 +45,7 @@ describe("computeEvidenceScore — provenance honesty (Master Handoff §14)", ()
   });
 
   it("excludes pure AI-assisted evidence from the score, but still reports it exists", () => {
-    const evidence: SkillEvidence[] = [
-      { id: "e1", skillId: "s1", projectId: "p1", title: "Independent CRUD implementation", provenance: "independent", date: "2026-08-01" },
-      { id: "e2", skillId: "s1", projectId: "p1", title: "AI wrote the auth flow, not reviewed", provenance: "ai-assisted", date: "2026-08-10" },
-    ];
+    const evidence: SkillEvidence[] = [ev("e1", "independent", "p1"), ev("e2", "ai-assisted", "p1")];
     const result = computeEvidenceScore(evidence);
     // Only 1 of 2 counts -> 50%, not 100%, even though 2 pieces of evidence exist
     expect(result.evidencePercent).toBe(50);
@@ -49,9 +54,7 @@ describe("computeEvidenceScore — provenance honesty (Master Handoff §14)", ()
   });
 
   it("treats ai-assisted-reviewed as counting, unlike raw ai-assisted", () => {
-    const evidence: SkillEvidence[] = [
-      { id: "e1", skillId: "s1", projectId: "p1", title: "AI-assisted but reviewed and explained", provenance: "ai-assisted-reviewed", date: "2026-08-01" },
-    ];
+    const evidence: SkillEvidence[] = [ev("e1", "ai-assisted-reviewed", "p1")];
     const result = computeEvidenceScore(evidence);
     expect(result.evidencePercent).toBe(100);
     expect(result.countedCount).toBe(1);
@@ -60,9 +63,9 @@ describe("computeEvidenceScore — provenance honesty (Master Handoff §14)", ()
 
   it("a project built entirely with unreviewed AI assistance shows near-zero independent evidence, not inflated", () => {
     const evidence: SkillEvidence[] = [
-      { id: "e1", skillId: "s1", projectId: "p1", title: "AI wrote feature A", provenance: "ai-assisted", date: "2026-08-01" },
-      { id: "e2", skillId: "s1", projectId: "p1", title: "AI wrote feature B", provenance: "ai-assisted", date: "2026-08-02" },
-      { id: "e3", skillId: "s1", projectId: "p1", title: "AI wrote feature C", provenance: "ai-assisted", date: "2026-08-03" },
+      ev("e1", "ai-assisted", "p1"),
+      ev("e2", "ai-assisted", "p1"),
+      ev("e3", "ai-assisted", "p1"),
     ];
     const result = computeEvidenceScore(evidence);
     expect(result.evidencePercent).toBe(0);

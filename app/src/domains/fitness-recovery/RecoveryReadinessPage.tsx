@@ -1,35 +1,37 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { SaveIndicator } from "../../components/SaveIndicator";
 import { useFitness } from "./store";
-import { useState } from "react";
-import type { Level3, SorenessLevel } from "./types";
+import { LEVEL3S, SORENESS_LEVELS, type Level3, type SorenessLevel } from "./types";
 
-const STATE_TONE = {
+const READINESS_TONE = {
   push: "success",
-  normal: "success",
+  normal: "neutral",
   "reduced-load": "warning",
   recovery: "danger",
   "insufficient-data": "neutral",
 } as const;
 
 export function RecoveryReadinessPage() {
-  const { readiness, checkIns, addCheckIn, checkInsSaveState } = useFitness();
-  const [sleepHours, setSleepHours] = useState(7.5);
-  const [soreness, setSoreness] = useState<SorenessLevel>("none");
-  const [energy, setEnergy] = useState<Level3>("normal");
+  const fit = useFitness();
+  const today = fit.getTodayCheckIn();
 
-  const submitCheckIn = () => {
-    addCheckIn({
-      date: new Date().toISOString().slice(0, 10),
-      sleepHours,
-      soreness,
-      energy,
-      motivation: "normal",
-      stressLevel: "normal",
-    });
-  };
+  const [form, setForm] = useState({
+    sleepHours: String(today?.sleepHours ?? "7.5"),
+    soreness: (today?.soreness ?? "none") as SorenessLevel,
+    energy: (today?.energy ?? "normal") as Level3,
+    motivation: (today?.motivation ?? "normal") as Level3,
+    stressLevel: (today?.stressLevel ?? "normal") as Level3,
+  });
+  const [err, setErr] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  const history = [...fit.checkIns].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+  );
+  const r = fit.readiness;
 
   return (
     <div className="space-y-6">
@@ -38,96 +40,168 @@ export function RecoveryReadinessPage() {
           <Link to="/fitness" className="text-text-muted text-xs hover:text-text-secondary">
             ← Fitness
           </Link>
-          <h2 className="text-text-primary text-xl font-semibold mt-1">Recovery & Readiness</h2>
-          <p className="text-text-muted text-sm">Understand your recovery and get the best recommendation for today.</p>
+          <h2 className="text-text-primary text-xl font-semibold mt-1">Recovery &amp; Readiness</h2>
+          <p className="text-text-muted text-sm">
+            Log how you actually feel. Readiness is derived from your check-ins — never a fabricated
+            number.
+          </p>
         </div>
-        <SaveIndicator state={checkInsSaveState} />
+        <SaveIndicator state={fit.saveState} />
       </div>
 
-      <Card>
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-text-muted text-xs mb-1">Today's Readiness</div>
-            <div className="flex items-center gap-2">
-              <Badge tone={STATE_TONE[readiness.state]}>{readiness.state.replace("-", " ")}</Badge>
-            </div>
-            <p className="text-text-secondary text-sm mt-2">{readiness.reason}</p>
-          </div>
-          {readiness.score !== null && (
-            <div className="text-text-primary text-3xl font-semibold">{readiness.score}</div>
+      <Card title="Readiness">
+        <div className="flex items-center gap-3 mb-1">
+          <Badge tone={READINESS_TONE[r.state]}>{r.state}</Badge>
+          {r.score !== null ? (
+            <span className="text-text-primary text-lg font-semibold">{r.score}</span>
+          ) : (
+            <span className="text-text-muted text-sm">no score</span>
           )}
         </div>
-        {readiness.state === "insufficient-data" && (
-          <div className="bg-surface-inset border border-border-subtle rounded-md px-3 py-2 mt-3 text-xs text-text-muted">
-            This is deliberate — PBOS will not guess a readiness percentage from too little data.
-            Log a few more check-ins below.
-          </div>
+        <p className="text-text-secondary text-xs">{r.reason}</p>
+        {r.state === "insufficient-data" && (
+          <p className="text-text-disabled text-[11px] mt-1">
+            This is an honest "not enough data" state — not 0 readiness.
+          </p>
         )}
       </Card>
 
-      <Card title="Log Today's Check-in">
-        <div className="grid grid-cols-3 gap-4">
-          <div>
-            <label className="text-text-muted text-xs block mb-1">Sleep (hours)</label>
+      <Card title={today ? "Update Today's Check-In" : "Add Today's Check-In"}>
+        <form
+          className="space-y-3"
+          noValidate
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const res = await fit.addCheckIn({
+              date: "",
+              sleepHours: form.sleepHours.trim() === "" ? NaN : Number(form.sleepHours),
+              soreness: form.soreness,
+              energy: form.energy,
+              motivation: form.motivation,
+              stressLevel: form.stressLevel,
+            });
+            if (res.ok) {
+              setErr(null);
+              setSaved(true);
+            } else {
+              setErr(res.errors._ ?? Object.values(res.errors)[0] ?? "Invalid check-in.");
+              setSaved(false);
+            }
+          }}
+        >
+          <label className="block text-text-secondary text-xs">
+            Sleep (hours)
             <input
               type="number"
               step="0.1"
-              value={sleepHours}
-              onChange={(e) => setSleepHours(parseFloat(e.target.value))}
-              className="w-full bg-surface-inset border border-border-subtle rounded-md px-2 py-1.5 text-text-primary text-sm"
+              value={form.sleepHours}
+              onChange={(e) => setForm((p) => ({ ...p, sleepHours: e.target.value }))}
+              aria-label="Sleep hours"
+              className="block mt-1 w-40 bg-surface-inset border border-border-subtle rounded px-2 py-1.5 text-text-primary text-sm outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
+            />
+          </label>
+          <div className="grid grid-cols-4 gap-3">
+            <Sel
+              label="Soreness"
+              value={form.soreness}
+              options={SORENESS_LEVELS}
+              onChange={(v) => setForm((p) => ({ ...p, soreness: v as SorenessLevel }))}
+            />
+            <Sel
+              label="Energy"
+              value={form.energy}
+              options={LEVEL3S}
+              onChange={(v) => setForm((p) => ({ ...p, energy: v as Level3 }))}
+            />
+            <Sel
+              label="Motivation"
+              value={form.motivation}
+              options={LEVEL3S}
+              onChange={(v) => setForm((p) => ({ ...p, motivation: v as Level3 }))}
+            />
+            <Sel
+              label="Stress"
+              value={form.stressLevel}
+              options={LEVEL3S}
+              onChange={(v) => setForm((p) => ({ ...p, stressLevel: v as Level3 }))}
             />
           </div>
-          <div>
-            <label className="text-text-muted text-xs block mb-1">Soreness</label>
-            <select
-              value={soreness}
-              onChange={(e) => setSoreness(e.target.value as SorenessLevel)}
-              className="w-full bg-surface-inset border border-border-subtle rounded-md px-2 py-1.5 text-text-primary text-sm"
-            >
-              <option value="none">None</option>
-              <option value="mild">Mild</option>
-              <option value="high">High</option>
-            </select>
-          </div>
-          <div>
-            <label className="text-text-muted text-xs block mb-1">Energy</label>
-            <select
-              value={energy}
-              onChange={(e) => setEnergy(e.target.value as Level3)}
-              className="w-full bg-surface-inset border border-border-subtle rounded-md px-2 py-1.5 text-text-primary text-sm"
-            >
-              <option value="low">Low</option>
-              <option value="normal">Normal</option>
-              <option value="high">High</option>
-            </select>
-          </div>
-        </div>
-        <button
-          onClick={submitCheckIn}
-          className="mt-3 px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-        >
-          Submit Check-in
-        </button>
+          {err && <p className="text-status-danger text-[11px]">{err}</p>}
+          {saved && !err && <p className="text-status-success text-[11px]">Check-in saved.</p>}
+          <button
+            type="submit"
+            className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
+          >
+            {today ? "Update Check-In" : "Save Check-In"}
+          </button>
+        </form>
       </Card>
 
-      <Card title={`Recent Check-ins (${checkIns.length})`}>
-        <div className="space-y-1">
-          {[...checkIns]
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-            .map((c) => (
-              <div key={c.id} className="flex items-center justify-between py-1.5 border-b border-border-subtle last:border-0">
-                <span className="text-text-primary text-sm">{c.date}</span>
-                <span className="text-text-secondary text-xs">
-                  {c.sleepHours}h sleep · {c.soreness} soreness · {c.energy} energy
-                </span>
-              </div>
-            ))}
-        </div>
+      <Card title={`Check-In History (${history.length})`}>
+        {history.length === 0 ? (
+          <div className="text-text-muted text-xs">No check-ins yet.</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-text-muted text-xs text-left">
+                <th className="font-normal pb-2">Date</th>
+                <th className="font-normal pb-2">Sleep</th>
+                <th className="font-normal pb-2">Soreness</th>
+                <th className="font-normal pb-2">Energy</th>
+                <th className="font-normal pb-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {history.map((c) => (
+                <tr key={c.id} className="border-t border-border-subtle">
+                  <td className="py-2 text-text-primary">{c.date}</td>
+                  <td className="py-2 text-text-secondary">{c.sleepHours}h</td>
+                  <td className="py-2 text-text-secondary capitalize">{c.soreness}</td>
+                  <td className="py-2 text-text-secondary capitalize">{c.energy}</td>
+                  <td className="py-2 text-right">
+                    <button
+                      onClick={() => fit.deleteCheckIn(c.id)}
+                      className="text-text-muted text-[11px] hover:text-status-danger underline"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </Card>
-
-      <p className="text-text-disabled text-[11px]">
-        Recommendations are based on available data and are not medical advice.
-      </p>
     </div>
+  );
+}
+
+function Sel({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: readonly string[];
+  onChange: (v: string) => void;
+}) {
+  return (
+    <label className="text-text-secondary text-xs">
+      {label}
+      <select
+        value={value}
+        aria-label={label}
+        onChange={(e) => onChange(e.target.value)}
+        className="block mt-1 w-full bg-surface-inset border border-border-subtle rounded px-2 py-1.5 text-text-primary text-sm capitalize outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
+      >
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

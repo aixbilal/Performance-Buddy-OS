@@ -1,64 +1,91 @@
-import type { PlannedSession, Prescription, RecoveryCheckIn, TrainingPlan } from "./types";
+/**
+ * TEST / DEMO FIXTURES ONLY — Batch 2B. NOT loaded as user data (store has no
+ * seed; relational SQLite is authoritative). Nothing in `src/` imports this
+ * outside `*.test.*`.
+ */
+import type {
+  PlannedSession,
+  RecoveryCheckIn,
+  TrainingPlan,
+  WorkoutSession,
+} from "./types";
 
-/** Values below match PBOS-Fitness-Training-Plan-Detail and PBOS-Fitness-Recovery-Readiness approved references. */
+const TS = "2026-01-01T00:00:00.000Z";
 
-export const SEED_PLAN: TrainingPlan = {
-  id: "plan-general-fitness",
-  title: "General Fitness + Calisthenics",
+export const FIXTURE_PLAN: TrainingPlan = {
+  id: "plan-1",
+  title: "Weekly Training",
   status: "active",
-  currentWeek: 4,
+  currentWeek: 1,
   totalWeeks: 8,
-  daysPerWeek: 5,
+  daysPerWeek: 3,
+  archived: false,
+  createdAt: TS,
+  updatedAt: TS,
 };
 
-export const SEED_SESSIONS: PlannedSession[] = [
+export const FIXTURE_PLANNED_SESSIONS: PlannedSession[] = [
   {
-    id: "sess-mon",
-    planId: "plan-general-fitness",
+    id: "psess-mon",
+    planId: "plan-1",
     dayOfWeek: 0,
     title: "Upper Body",
     exercises: [
-      { name: "Push-ups", sets: 4, reps: "15-20" },
-      { name: "Pull-ups", sets: 4, reps: "6-10" },
-      { name: "Dips", sets: 3, reps: "8-12" },
-      { name: "Core (Plank/Abs)", sets: 1, reps: "10 min" },
+      { name: "Push-ups", sets: 3, reps: "15" },
+      { name: "Pull-ups", sets: 3, reps: "6-10" },
     ],
-  },
-  {
-    id: "sess-tue",
-    planId: "plan-general-fitness",
-    dayOfWeek: 1,
-    title: "Easy Run",
-    exercises: [{ name: "Run", sets: 1, reps: "3.5 km" }],
-  },
-  {
-    id: "sess-wed",
-    planId: "plan-general-fitness",
-    dayOfWeek: 2,
-    title: "Lower Body + Core",
-    exercises: [
-      { name: "Squats", sets: 4, reps: "12-15" },
-      { name: "Lunges", sets: 3, reps: "10 each leg" },
-    ],
+    createdAt: TS,
+    updatedAt: TS,
   },
 ];
 
-// This is the concrete Base -> Prescription -> Actual example from the
-// product doc: "3.5 km -> Today's modified prescription 2.5 km easy".
-export const SEED_PRESCRIPTIONS: Prescription[] = [
+export const FIXTURE_WORKOUTS: WorkoutSession[] = [
   {
-    id: "presc-sess-tue-today",
-    plannedSessionId: "sess-tue",
-    date: "2026-08-27",
-    exercises: [{ name: "Run", sets: 1, reps: "2.5 km easy" }],
-    modified: true,
-    modificationReason: "Leg fatigue is mild and running load is above weekly average — reduced distance.",
+    id: "wsess-1",
+    planId: "plan-1",
+    plannedSessionId: "psess-mon",
+    date: "2026-08-25",
+    title: "Upper Body",
+    exercisesPerformed: [{ name: "Push-ups", setsCompleted: 3, repsCompleted: "15,14,11" }],
+    notes: "",
+    completed: true,
+    createdAt: TS,
+    updatedAt: TS,
   },
 ];
 
-export const SEED_RECOVERY_CHECKINS: RecoveryCheckIn[] = [
-  { id: "ci-1", date: "2026-08-21", sleepHours: 7.5, soreness: "none", energy: "high", motivation: "high", stressLevel: "normal" },
-  { id: "ci-2", date: "2026-08-23", sleepHours: 7.8, soreness: "mild", energy: "normal", motivation: "high", stressLevel: "normal" },
-  { id: "ci-3", date: "2026-08-25", sleepHours: 7.8, soreness: "mild", energy: "normal", motivation: "high", stressLevel: "normal" },
-  { id: "ci-4", date: "2026-08-26", sleepHours: 7.8, soreness: "mild", energy: "normal", motivation: "high", stressLevel: "normal" },
+export const FIXTURE_CHECKINS: RecoveryCheckIn[] = [
+  {
+    id: "ci-1",
+    date: "2026-08-24",
+    sleepHours: 7.8,
+    soreness: "mild",
+    energy: "normal",
+    motivation: "high",
+    stressLevel: "normal",
+    createdAt: TS,
+    updatedAt: TS,
+  },
+  {
+    id: "ci-2",
+    date: "2026-08-25",
+    sleepHours: 8,
+    soreness: "none",
+    energy: "high",
+    motivation: "high",
+    stressLevel: "low",
+    createdAt: TS,
+    updatedAt: TS,
+  },
+  {
+    id: "ci-3",
+    date: "2026-08-26",
+    sleepHours: 7.5,
+    soreness: "none",
+    energy: "high",
+    motivation: "high",
+    stressLevel: "normal",
+    createdAt: TS,
+    updatedAt: TS,
+  },
 ];

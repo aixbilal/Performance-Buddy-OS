@@ -17,11 +17,30 @@ import { NotesHubPage } from "../domains/knowledge/NotesHubPage";
 import { TopicDetailPage } from "../domains/knowledge/TopicDetailPage";
 import { DevelopmentOverviewPage } from "../domains/development/DevelopmentOverviewPage";
 import { SkillDetailPage } from "../domains/development/SkillDetailPage";
+import { ProjectDetailPage } from "../domains/development/ProjectDetailPage";
+import { LearningPathPage } from "../domains/development/LearningPathPage";
+import {
+  ProjectBuilderPage,
+  SkillBuilderPage,
+} from "../domains/development/DevelopmentBuilderPages";
 import { FitnessOverviewPage } from "../domains/fitness-recovery/FitnessOverviewPage";
 import { RecoveryReadinessPage } from "../domains/fitness-recovery/RecoveryReadinessPage";
+import { PlanBuilderPage } from "../domains/fitness-recovery/PlanBuilderPage";
+import { TrainingPlanDetailPage } from "../domains/fitness-recovery/TrainingPlanDetailPage";
+import { ActiveWorkoutPage } from "../domains/fitness-recovery/ActiveWorkoutPage";
 import { RoutinesOverviewPage } from "../domains/routine/RoutinesOverviewPage";
+import { RoutineBuilderPage } from "../domains/routine/RoutineBuilderPage";
+import { RoutineDetailPage } from "../domains/routine/RoutineDetailPage";
+import { DailyCheckInPage } from "../domains/routine/DailyCheckInPage";
 import { ReadingLanguageOverviewPage } from "../domains/language/ReadingLanguageOverviewPage";
+import { PathBuilderPage, BookBuilderPage } from "../domains/language/LanguageBuilderPages";
+import { LanguagePathDetailPage } from "../domains/language/LanguagePathDetailPage";
+import { LearningSessionPage } from "../domains/language/LearningSessionPage";
+import { BookDetailPage } from "../domains/language/BookDetailPage";
 import { MoneyOverviewPage } from "../domains/money/MoneyOverviewPage";
+import { TransactionsPage } from "../domains/money/TransactionsPage";
+import { BudgetSavingsPage } from "../domains/money/BudgetSavingsPage";
+import { MoneyInsightsPage } from "../domains/money/MoneyInsightsPage";
 import { AnalyticsOverviewPage } from "../domains/analytics/AnalyticsOverviewPage";
 import { AICoachPage } from "../domains/intelligence/AICoachPage";
 import { PlannerPage } from "../domains/planning/PlannerPage";
@@ -71,12 +90,36 @@ export const router = createHashRouter([
       { path: "/knowledge/:topicId", element: <TopicDetailPage />, handle: { title: "Topic" } },
       { path: "/knowledge/:topicId/edit", element: <KnowledgeTopicBuilderPage />, handle: { title: "Edit Topic" } },
       { path: "/development", element: <DevelopmentOverviewPage />, handle: { title: "Development" } },
+      { path: "/development/learning-path", element: <LearningPathPage />, handle: { title: "Learning Path" } },
+      { path: "/development/projects/new", element: <ProjectBuilderPage />, handle: { title: "Add Project" } },
+      { path: "/development/projects/:projectId", element: <ProjectDetailPage />, handle: { title: "Project" } },
+      { path: "/development/projects/:projectId/edit", element: <ProjectBuilderPage />, handle: { title: "Edit Project" } },
+      { path: "/development/skills/new", element: <SkillBuilderPage />, handle: { title: "Add Skill" } },
       { path: "/development/skills/:skillId", element: <SkillDetailPage />, handle: { title: "Skill" } },
+      { path: "/development/skills/:skillId/edit", element: <SkillBuilderPage />, handle: { title: "Edit Skill" } },
       { path: "/fitness", element: <FitnessOverviewPage />, handle: { title: "Fitness" } },
       { path: "/fitness/recovery", element: <RecoveryReadinessPage />, handle: { title: "Recovery" } },
+      { path: "/fitness/plans/new", element: <PlanBuilderPage />, handle: { title: "Create Plan" } },
+      { path: "/fitness/plans/:planId", element: <TrainingPlanDetailPage />, handle: { title: "Training Plan" } },
+      { path: "/fitness/plans/:planId/edit", element: <PlanBuilderPage />, handle: { title: "Edit Plan" } },
+      { path: "/fitness/workout/:workoutId", element: <ActiveWorkoutPage />, handle: { title: "Active Workout" } },
       { path: "/routine", element: <RoutinesOverviewPage />, handle: { title: "Routine" } },
-      { path: "/language", element: <ReadingLanguageOverviewPage />, handle: { title: "Language" } },
+      { path: "/routine/new", element: <RoutineBuilderPage />, handle: { title: "New Routine" } },
+      { path: "/routine/check-in", element: <DailyCheckInPage />, handle: { title: "Daily Check-In" } },
+      { path: "/routine/:routineId", element: <RoutineDetailPage />, handle: { title: "Routine" } },
+      { path: "/routine/:routineId/edit", element: <RoutineBuilderPage />, handle: { title: "Edit Routine" } },
+      { path: "/language", element: <ReadingLanguageOverviewPage />, handle: { title: "Reading & Language" } },
+      { path: "/language/paths/new", element: <PathBuilderPage />, handle: { title: "New Language Path" } },
+      { path: "/language/paths/:pathId", element: <LanguagePathDetailPage />, handle: { title: "Language Path" } },
+      { path: "/language/paths/:pathId/edit", element: <PathBuilderPage />, handle: { title: "Edit Path" } },
+      { path: "/language/paths/:pathId/session", element: <LearningSessionPage />, handle: { title: "Learning Session" } },
+      { path: "/language/books/new", element: <BookBuilderPage />, handle: { title: "Add Book" } },
+      { path: "/language/books/:bookId", element: <BookDetailPage />, handle: { title: "Book" } },
+      { path: "/language/books/:bookId/edit", element: <BookBuilderPage />, handle: { title: "Edit Book" } },
       { path: "/money", element: <MoneyOverviewPage />, handle: { title: "Money" } },
+      { path: "/money/transactions", element: <TransactionsPage />, handle: { title: "Transactions" } },
+      { path: "/money/budget", element: <BudgetSavingsPage />, handle: { title: "Budget & Savings" } },
+      { path: "/money/insights", element: <MoneyInsightsPage />, handle: { title: "Money Insights" } },
       { path: "/analytics", element: <AnalyticsOverviewPage />, handle: { title: "Analytics" } },
       { path: "/ai-coach", element: <AICoachPage />, handle: { title: "AI Coach" } },
       { path: "/calendar", element: <PlannerPage />, handle: { title: "Conflict & Capacity" } },

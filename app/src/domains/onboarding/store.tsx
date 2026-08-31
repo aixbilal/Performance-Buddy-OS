@@ -88,7 +88,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   // duplicate model. §32: Money is optional and does not need to be enabled.
   const systemStatuses: SystemConnectionStatus[] = [
     { domain: "Academics", state: courses.length > 0 ? "configured" : "not-set-up", isOptional: false },
-    { domain: "Fitness & Recovery", state: fitnessPlan.status === "active" ? "configured" : "not-set-up", isOptional: false },
+    { domain: "Fitness & Recovery", state: fitnessPlan?.status === "active" ? "configured" : "not-set-up", isOptional: false },
     { domain: "Money", state: transactions.length > 0 ? "configured" : "disabled-optional", isOptional: true },
     { domain: "Obsidian", state: "disabled-optional", isOptional: true }, // §31 — no real filesystem link exists yet
     { domain: "AI Coach", state: "disabled-optional", isOptional: true }, // §33 — no real provider wired yet

@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { deriveReadiness, buildPrescription } from "./engine";
-import type { PlannedSession, RecoveryCheckIn } from "./types";
+import type { Level3, PlannedSession, RecoveryCheckIn, SorenessLevel } from "./types";
+
+const TS = "2026-01-01T00:00:00.000Z";
+type CiSub = { sleepHours: number; soreness: SorenessLevel; energy: Level3; motivation: Level3; stressLevel: Level3 };
+const ci = (id: string, date: string, sub: CiSub): RecoveryCheckIn => ({ id, date, ...sub, createdAt: TS, updatedAt: TS });
 
 describe("deriveReadiness — honesty about thin data (Master Handoff §15)", () => {
   it("returns insufficient-data with 0 check-ins, never a fabricated score", () => {
@@ -10,22 +14,16 @@ describe("deriveReadiness — honesty about thin data (Master Handoff §15)", ()
   });
 
   it("returns insufficient-data with only 2 check-ins (below the minimum of 3)", () => {
-    const checkIns: RecoveryCheckIn[] = [
-      { id: "c1", date: "2026-08-25", sleepHours: 8, soreness: "none", energy: "high", motivation: "high", stressLevel: "low" },
-      { id: "c2", date: "2026-08-26", sleepHours: 8, soreness: "none", energy: "high", motivation: "high", stressLevel: "low" },
-    ];
+    const g: CiSub = { sleepHours: 8, soreness: "none", energy: "high", motivation: "high", stressLevel: "low" };
+    const checkIns = [ci("c1", "2026-08-25", g), ci("c2", "2026-08-26", g)];
     const result = deriveReadiness(checkIns);
     expect(result.state).toBe("insufficient-data");
     expect(result.score).toBeNull();
   });
 
   it("recommends push with strong recovery indicators across enough check-ins", () => {
-    const good = { sleepHours: 8, soreness: "none" as const, energy: "high" as const, motivation: "high" as const, stressLevel: "low" as const };
-    const checkIns: RecoveryCheckIn[] = [
-      { id: "c1", date: "2026-08-24", ...good },
-      { id: "c2", date: "2026-08-25", ...good },
-      { id: "c3", date: "2026-08-26", ...good },
-    ];
+    const good: CiSub = { sleepHours: 8, soreness: "none", energy: "high", motivation: "high", stressLevel: "low" };
+    const checkIns = [ci("c1", "2026-08-24", good), ci("c2", "2026-08-25", good), ci("c3", "2026-08-26", good)];
     const result = deriveReadiness(checkIns);
     expect(result.state).toBe("push");
     expect(result.score).not.toBeNull();
@@ -33,31 +31,18 @@ describe("deriveReadiness — honesty about thin data (Master Handoff §15)", ()
   });
 
   it("recommends recovery when soreness is high and sleep is poor across enough check-ins", () => {
-    const bad = { sleepHours: 5, soreness: "high" as const, energy: "low" as const, motivation: "low" as const, stressLevel: "high" as const };
-    const checkIns: RecoveryCheckIn[] = [
-      { id: "c1", date: "2026-08-24", ...bad },
-      { id: "c2", date: "2026-08-25", ...bad },
-      { id: "c3", date: "2026-08-26", ...bad },
-    ];
+    const bad: CiSub = { sleepHours: 5, soreness: "high", energy: "low", motivation: "low", stressLevel: "high" };
+    const checkIns = [ci("c1", "2026-08-24", bad), ci("c2", "2026-08-25", bad), ci("c3", "2026-08-26", bad)];
     const result = deriveReadiness(checkIns);
     expect(result.state).toBe("recovery");
     expect(result.score as number).toBeLessThan(30);
   });
 
   it("only considers the most recent 7 check-ins, not the full history", () => {
-    const bad = { sleepHours: 5, soreness: "high" as const, energy: "low" as const, motivation: "low" as const, stressLevel: "high" as const };
-    const good = { sleepHours: 8, soreness: "none" as const, energy: "high" as const, motivation: "high" as const, stressLevel: "low" as const };
-    // 10 old bad check-ins, then 7 recent good ones — result should reflect the recent good ones.
-    const oldBad: RecoveryCheckIn[] = Array.from({ length: 10 }, (_, i) => ({
-      id: `old-${i}`,
-      date: `2026-01-${String(i + 1).padStart(2, "0")}`,
-      ...bad,
-    }));
-    const recentGood: RecoveryCheckIn[] = Array.from({ length: 7 }, (_, i) => ({
-      id: `new-${i}`,
-      date: `2026-08-${String(i + 1).padStart(2, "0")}`,
-      ...good,
-    }));
+    const bad: CiSub = { sleepHours: 5, soreness: "high", energy: "low", motivation: "low", stressLevel: "high" };
+    const good: CiSub = { sleepHours: 8, soreness: "none", energy: "high", motivation: "high", stressLevel: "low" };
+    const oldBad = Array.from({ length: 10 }, (_, i) => ci(`old-${i}`, `2026-01-${String(i + 1).padStart(2, "0")}`, bad));
+    const recentGood = Array.from({ length: 7 }, (_, i) => ci(`new-${i}`, `2026-08-${String(i + 1).padStart(2, "0")}`, good));
     const result = deriveReadiness([...oldBad, ...recentGood]);
     expect(result.state).toBe("push");
   });
@@ -70,6 +55,8 @@ describe("buildPrescription — Base Plan is never mutated (Master Handoff §15)
     dayOfWeek: 2,
     title: "Easy Run",
     exercises: [{ name: "Run", sets: 1, reps: "3.5 km" }],
+    createdAt: TS,
+    updatedAt: TS,
   };
 
   it("returns the base exercises unmodified when no override is given", () => {

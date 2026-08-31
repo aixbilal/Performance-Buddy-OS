@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
 /// Bumped whenever a migration is added to `MIGRATIONS`.
-const CURRENT_SCHEMA_VERSION: i64 = 3;
+const CURRENT_SCHEMA_VERSION: i64 = 4;
 
 /// Ordered, forward-only migrations. `version` must be contiguous from 1.
 const MIGRATIONS: &[(i64, &str)] = &[
@@ -230,6 +230,330 @@ const MIGRATIONS: &[(i64, &str)] = &[
     CREATE INDEX IF NOT EXISTS idx_acad_attempt_course ON academic_attempts(course_id);
     CREATE INDEX IF NOT EXISTS idx_know_sources_topic  ON knowledge_sources(topic_id);
     CREATE INDEX IF NOT EXISTS idx_know_evidence_topic ON knowledge_evidence(topic_id);
+    "#,
+    ),
+    (
+        4,
+        // Batch 2B — user-owned configuration CRUD for DEVELOPMENT + FITNESS + ROUTINES.
+        //
+        // Relationship truth (one source each, no reverse-collection columns):
+        //   project -> milestone       : `development_milestones.project_id` (FK; CASCADE)
+        //   skill   -> evidence        : `development_skill_evidence.skill_id` (FK; CASCADE)
+        //   evidence -> project        : `development_skill_evidence.project_id` (FK; SET NULL)
+        //   project <-> skill          : `development_project_skill_links` (many-to-many)
+        //   plan    -> planned session : `fitness_planned_sessions.plan_id` (FK; CASCADE)
+        //   plan    -> workout session : `fitness_workout_sessions.plan_id` (FK; SET NULL)
+        //       — the ACTUAL session is an independent record; editing the Base Plan
+        //         never rewrites it and vice-versa (Master Handoff §15).
+        //   routine -> log             : `routine_logs.routine_id` (FK; CASCADE)
+        //   routine -> system          : `routines.related_system_id` (FK -> systems.id; SET NULL)
+        //
+        // NOT stored (derived in the TS engine): skill `evidencePercent` (from
+        // provenance-weighted evidence), readiness score (from check-ins),
+        // routine consistency/streak (from logs). No fabricated numbers.
+        r#"
+    CREATE TABLE IF NOT EXISTS development_projects (
+        id          TEXT PRIMARY KEY NOT NULL,
+        title       TEXT NOT NULL,
+        status      TEXT NOT NULL DEFAULT 'active',
+        description TEXT NOT NULL DEFAULT '',
+        archived    INTEGER NOT NULL DEFAULT 0,
+        created_at  TEXT NOT NULL,
+        updated_at  TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS development_skills (
+        id                  TEXT PRIMARY KEY NOT NULL,
+        title               TEXT NOT NULL,
+        category            TEXT NOT NULL DEFAULT '',
+        knowledge_percent   REAL NOT NULL DEFAULT 0,
+        practice_percent    REAL NOT NULL DEFAULT 0,
+        -- Learning Path / Skill Roadmap: NULL position = not on the path.
+        roadmap_position     INTEGER,
+        roadmap_target_level TEXT,
+        archived            INTEGER NOT NULL DEFAULT 0,
+        created_at          TEXT NOT NULL,
+        updated_at          TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS development_milestones (
+        id         TEXT PRIMARY KEY NOT NULL,
+        project_id TEXT NOT NULL REFERENCES development_projects(id) ON DELETE CASCADE,
+        title      TEXT NOT NULL,
+        completed  INTEGER NOT NULL DEFAULT 0,
+        position   INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS development_skill_evidence (
+        id         TEXT PRIMARY KEY NOT NULL,
+        skill_id   TEXT NOT NULL REFERENCES development_skills(id) ON DELETE CASCADE,
+        project_id TEXT REFERENCES development_projects(id) ON DELETE SET NULL,
+        title      TEXT NOT NULL,
+        provenance TEXT NOT NULL DEFAULT 'independent',
+        date       TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS development_project_skill_links (
+        project_id TEXT NOT NULL REFERENCES development_projects(id) ON DELETE CASCADE,
+        skill_id   TEXT NOT NULL REFERENCES development_skills(id)   ON DELETE CASCADE,
+        PRIMARY KEY (project_id, skill_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS fitness_plans (
+        id            TEXT PRIMARY KEY NOT NULL,
+        title         TEXT NOT NULL,
+        status        TEXT NOT NULL DEFAULT 'active',
+        current_week  INTEGER NOT NULL DEFAULT 1,
+        total_weeks   INTEGER NOT NULL DEFAULT 1,
+        days_per_week INTEGER NOT NULL DEFAULT 3,
+        archived      INTEGER NOT NULL DEFAULT 0,
+        created_at    TEXT NOT NULL,
+        updated_at    TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS fitness_planned_sessions (
+        id          TEXT PRIMARY KEY NOT NULL,
+        plan_id     TEXT NOT NULL REFERENCES fitness_plans(id) ON DELETE CASCADE,
+        day_of_week INTEGER NOT NULL DEFAULT 0,
+        title       TEXT NOT NULL,
+        exercises   TEXT NOT NULL DEFAULT '[]',
+        created_at  TEXT NOT NULL,
+        updated_at  TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS fitness_workout_sessions (
+        id                 TEXT PRIMARY KEY NOT NULL,
+        plan_id            TEXT REFERENCES fitness_plans(id) ON DELETE SET NULL,
+        planned_session_id TEXT REFERENCES fitness_planned_sessions(id) ON DELETE SET NULL,
+        date               TEXT NOT NULL DEFAULT '',
+        title              TEXT NOT NULL,
+        exercises_performed TEXT NOT NULL DEFAULT '[]',
+        notes              TEXT NOT NULL DEFAULT '',
+        completed          INTEGER NOT NULL DEFAULT 0,
+        created_at         TEXT NOT NULL,
+        updated_at         TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS fitness_recovery_checkins (
+        id           TEXT PRIMARY KEY NOT NULL,
+        date         TEXT NOT NULL DEFAULT '',
+        sleep_hours  REAL NOT NULL DEFAULT 0,
+        soreness     TEXT NOT NULL DEFAULT 'none',
+        energy       TEXT NOT NULL DEFAULT 'normal',
+        motivation   TEXT NOT NULL DEFAULT 'normal',
+        stress_level TEXT NOT NULL DEFAULT 'normal',
+        created_at   TEXT NOT NULL,
+        updated_at   TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS routines (
+        id                       TEXT PRIMARY KEY NOT NULL,
+        title                    TEXT NOT NULL,
+        category                 TEXT NOT NULL DEFAULT '',
+        time_window              TEXT NOT NULL DEFAULT 'anytime',
+        -- Cadence (V1 Routine Builder spec): 'daily' | 'weekly-days' | 'times-per-week'.
+        -- schedule_days is a JSON int array (0=Mon..6=Sun) used by 'weekly-days';
+        -- schedule_target is the per-ISO-week count used by 'times-per-week'.
+        -- This is the semantic cadence; `time_window` is only the day-part and a
+        -- reminder layer is intentionally NOT modelled here (spec: keep separate).
+        schedule_type            TEXT NOT NULL DEFAULT 'daily',
+        schedule_days            TEXT NOT NULL DEFAULT '[]',
+        schedule_target          INTEGER,
+        completion_type          TEXT NOT NULL DEFAULT 'boolean',
+        target_quantity          REAL,
+        target_unit              TEXT,
+        target_duration_minutes  INTEGER,
+        priority                 TEXT NOT NULL DEFAULT 'important',
+        related_system_id        TEXT REFERENCES systems(id) ON DELETE SET NULL,
+        paused                   INTEGER NOT NULL DEFAULT 0,
+        archived                 INTEGER NOT NULL DEFAULT 0,
+        created_at               TEXT NOT NULL,
+        updated_at               TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS routine_logs (
+        id                        TEXT PRIMARY KEY NOT NULL,
+        routine_id                TEXT NOT NULL REFERENCES routines(id) ON DELETE CASCADE,
+        date                      TEXT NOT NULL,
+        state                     TEXT NOT NULL DEFAULT 'pending',
+        quantity_completed        REAL,
+        duration_completed_minutes INTEGER,
+        completed_at              TEXT,
+        created_at                TEXT NOT NULL,
+        updated_at                TEXT NOT NULL
+    );
+
+    -- Reading & Language Learning (V1 Day 09). Boundaries locked:
+    --   Reading & Language = WHAT was read/learned + curriculum/path progress.
+    --   Knowledge          = evidence of understanding/retention (its own tables).
+    --   Routine            = WHEN/how often practice happens (its own tables).
+    -- Path/reading progress is deterministic arithmetic here and is NEVER
+    -- mastery. Cross-domain links are references only (SET NULL on delete):
+    --   language_paths.related_routine_id  -> routines(id)
+    --   language_units.knowledge_topic_id  -> knowledge_topics(id)
+    --   books.knowledge_topic_id           -> knowledge_topics(id)
+    -- `books.note_ref` is a free-text pointer only — no Obsidian integration.
+    CREATE TABLE IF NOT EXISTS language_paths (
+        id                 TEXT PRIMARY KEY NOT NULL,
+        language           TEXT NOT NULL,
+        title              TEXT NOT NULL,
+        target_level       TEXT NOT NULL DEFAULT '',
+        status             TEXT NOT NULL DEFAULT 'active',
+        related_routine_id TEXT REFERENCES routines(id) ON DELETE SET NULL,
+        archived           INTEGER NOT NULL DEFAULT 0,
+        created_at         TEXT NOT NULL,
+        updated_at         TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS language_units (
+        id                 TEXT PRIMARY KEY NOT NULL,
+        path_id            TEXT NOT NULL REFERENCES language_paths(id) ON DELETE CASCADE,
+        title              TEXT NOT NULL,
+        kind               TEXT NOT NULL DEFAULT 'lesson',
+        position           INTEGER NOT NULL DEFAULT 0,
+        completed          INTEGER NOT NULL DEFAULT 0,
+        knowledge_topic_id TEXT REFERENCES knowledge_topics(id) ON DELETE SET NULL,
+        created_at         TEXT NOT NULL,
+        updated_at         TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS language_sessions (
+        id               TEXT PRIMARY KEY NOT NULL,
+        path_id          TEXT NOT NULL REFERENCES language_paths(id) ON DELETE CASCADE,
+        unit_id          TEXT REFERENCES language_units(id) ON DELETE SET NULL,
+        date             TEXT NOT NULL DEFAULT '',
+        duration_minutes INTEGER NOT NULL DEFAULT 0,
+        activity         TEXT NOT NULL DEFAULT 'lesson',
+        notes            TEXT NOT NULL DEFAULT '',
+        -- only set when a genuine recall/test check happened; minutes alone are
+        -- never mastery. Consumed by the caller to add Knowledge evidence.
+        recall_score     REAL,
+        recall_max       REAL NOT NULL DEFAULT 10,
+        completed        INTEGER NOT NULL DEFAULT 0,
+        created_at       TEXT NOT NULL,
+        updated_at       TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS books (
+        id                 TEXT PRIMARY KEY NOT NULL,
+        title              TEXT NOT NULL,
+        author             TEXT NOT NULL DEFAULT '',
+        status             TEXT NOT NULL DEFAULT 'to-read',
+        current_page       INTEGER NOT NULL DEFAULT 0,
+        -- NULL total_pages = unknown; NOT 0% (the engine returns a null percent).
+        total_pages        INTEGER,
+        current_chapter    INTEGER NOT NULL DEFAULT 0,
+        started_date       TEXT,
+        finished_date      TEXT,
+        knowledge_topic_id TEXT REFERENCES knowledge_topics(id) ON DELETE SET NULL,
+        note_ref           TEXT NOT NULL DEFAULT '',
+        archived           INTEGER NOT NULL DEFAULT 0,
+        created_at         TEXT NOT NULL,
+        updated_at         TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS reading_sessions (
+        id               TEXT PRIMARY KEY NOT NULL,
+        book_id          TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+        date             TEXT NOT NULL DEFAULT '',
+        from_page        INTEGER NOT NULL DEFAULT 0,
+        to_page          INTEGER NOT NULL DEFAULT 0,
+        duration_minutes INTEGER NOT NULL DEFAULT 0,
+        notes            TEXT NOT NULL DEFAULT '',
+        created_at       TEXT NOT NULL,
+        updated_at       TEXT NOT NULL
+    );
+
+    -- Money OS (V1 Day 10) — lightweight MANUAL personal-finance awareness.
+    -- Product locks enforced by shape here:
+    --   ACTUAL TRANSACTION (`money_transactions`) ≠ PLANNED EXPENSE (`money_planned_expenses`).
+    --     A planned expense is a future intention; it MAY link to the actual
+    --     transaction that realised it (`transaction_id`, SET NULL) but the two
+    --     stay distinct rows — planned amounts never enter a spending total.
+    --   SAVINGS TRANSFER ≠ EXPENSE — a distinct `type` value; the TS engine
+    --     excludes it from every spending / budget total.
+    --   PBOS BALANCE ≠ VERIFIED BANK BALANCE — the balance is derived
+    --     (income − expenses − transfers, + a user-entered opening amount on
+    --     savings goals only); nothing here asserts bank verification.
+    --   Savings-goal progress has ONE truth: `opening_amount` (user-entered)
+    --     + the sum of linked `savings-transfer` transactions — there is no
+    --     stored `current_amount` competing with the ledger.
+    --   Money is NEVER part of any performance score (no such column exists).
+    CREATE TABLE IF NOT EXISTS money_savings_goals (
+        id             TEXT PRIMARY KEY NOT NULL,
+        title          TEXT NOT NULL,
+        target_amount  REAL NOT NULL DEFAULT 0,
+        target_date    TEXT,
+        monthly_target REAL NOT NULL DEFAULT 0,
+        -- money the user already had toward this goal before tracking started
+        -- (user-entered, not fabricated). current = opening + linked transfers.
+        opening_amount REAL NOT NULL DEFAULT 0,
+        status         TEXT NOT NULL DEFAULT 'active',
+        archived       INTEGER NOT NULL DEFAULT 0,
+        created_at     TEXT NOT NULL,
+        updated_at     TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS money_transactions (
+        id              TEXT PRIMARY KEY NOT NULL,
+        date            TEXT NOT NULL DEFAULT '',
+        type            TEXT NOT NULL DEFAULT 'expense',
+        amount          REAL NOT NULL DEFAULT 0,
+        category        TEXT NOT NULL DEFAULT '',
+        description     TEXT NOT NULL DEFAULT '',
+        -- only meaningful for a 'savings-transfer'; SET NULL if the goal is deleted
+        savings_goal_id TEXT REFERENCES money_savings_goals(id) ON DELETE SET NULL,
+        created_at      TEXT NOT NULL,
+        updated_at      TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS money_planned_expenses (
+        id             TEXT PRIMARY KEY NOT NULL,
+        title          TEXT NOT NULL,
+        amount         REAL NOT NULL DEFAULT 0,
+        category       TEXT NOT NULL DEFAULT '',
+        due_date       TEXT NOT NULL DEFAULT '',
+        status         TEXT NOT NULL DEFAULT 'upcoming',
+        -- the ACTUAL transaction that realised this plan, if any (SET NULL on delete).
+        -- The planned row is never mutated into an expense.
+        transaction_id TEXT REFERENCES money_transactions(id) ON DELETE SET NULL,
+        created_at     TEXT NOT NULL,
+        updated_at     TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS money_budgets (
+        id           TEXT PRIMARY KEY NOT NULL,
+        category     TEXT NOT NULL,
+        period       TEXT NOT NULL DEFAULT '',
+        limit_amount REAL NOT NULL DEFAULT 0,
+        created_at   TEXT NOT NULL,
+        updated_at   TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_dev_milestones_project ON development_milestones(project_id);
+    CREATE INDEX IF NOT EXISTS idx_dev_evidence_skill     ON development_skill_evidence(skill_id);
+    CREATE INDEX IF NOT EXISTS idx_dev_evidence_project   ON development_skill_evidence(project_id);
+    CREATE INDEX IF NOT EXISTS idx_dev_links_skill        ON development_project_skill_links(skill_id);
+    CREATE INDEX IF NOT EXISTS idx_fit_planned_plan       ON fitness_planned_sessions(plan_id);
+    CREATE INDEX IF NOT EXISTS idx_fit_workout_plan       ON fitness_workout_sessions(plan_id);
+    CREATE INDEX IF NOT EXISTS idx_rtn_logs_routine       ON routine_logs(routine_id);
+    CREATE INDEX IF NOT EXISTS idx_rtn_logs_date          ON routine_logs(date);
+    CREATE INDEX IF NOT EXISTS idx_rtn_system             ON routines(related_system_id);
+    CREATE INDEX IF NOT EXISTS idx_lang_units_path        ON language_units(path_id);
+    CREATE INDEX IF NOT EXISTS idx_lang_units_topic       ON language_units(knowledge_topic_id);
+    CREATE INDEX IF NOT EXISTS idx_lang_sessions_path     ON language_sessions(path_id);
+    CREATE INDEX IF NOT EXISTS idx_lang_sessions_unit     ON language_sessions(unit_id);
+    CREATE INDEX IF NOT EXISTS idx_lang_paths_routine     ON language_paths(related_routine_id);
+    CREATE INDEX IF NOT EXISTS idx_books_topic            ON books(knowledge_topic_id);
+    CREATE INDEX IF NOT EXISTS idx_reading_sessions_book  ON reading_sessions(book_id);
+    CREATE INDEX IF NOT EXISTS idx_money_tx_date          ON money_transactions(date);
+    CREATE INDEX IF NOT EXISTS idx_money_tx_goal          ON money_transactions(savings_goal_id);
+    CREATE INDEX IF NOT EXISTS idx_money_planned_tx       ON money_planned_expenses(transaction_id);
+    CREATE INDEX IF NOT EXISTS idx_money_budgets_cat      ON money_budgets(category, period);
     "#,
     ),
 ];

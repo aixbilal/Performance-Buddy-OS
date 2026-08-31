@@ -110,7 +110,7 @@ describe("PBOS native desktop shell — renderer E2E", () => {
 
   it("persists through the real Tauri → Rust → SQLite path", async () => {
     const status = await invokeCmd<{ schema_version: number; localstorage_migrated: boolean }>("db_status");
-    expect(status.schema_version).toBe(3); // Batch 2A migration v3 (Academic + Knowledge)
+    expect(status.schema_version).toBe(4); // Batch 2B migration v4 (Development + Fitness + Routines)
     expect(status.localstorage_migrated).toBe(true);
 
     await invokeCmd("kv_set", { key: "pbos:__e2e_probe__", value: JSON.stringify({ ok: true, n: 3 }) });
@@ -327,3 +327,369 @@ async function knowledgeTopicIdByTitle(title: string): Promise<string> {
   if (!t) throw new Error(`knowledge topic "${title}" not found`);
   return t.id;
 }
+
+describe("PBOS Batch 2B — real-user Development scenario", () => {
+  it("creates a project, skill, milestone + provenance-tagged evidence through the UI, verified from SQLite", async () => {
+    await invokeCmd("dev_reset_for_test");
+
+    // 1. Create a Skill via the UI.
+    await nav("#/development/skills/new");
+    await waitForText("Add Skill");
+    expect(await setByLabel("skill name", "React")).toBe(true);
+    expect(await clickButton("^add skill$")).toBe(true);
+    await waitForText("capability is unknown until it is");
+
+    // 2. Create a Project via the UI.
+    await nav("#/development/projects/new");
+    await waitForText("Add Project");
+    expect(await setByLabel("project name", "Performance Buddy OS")).toBe(true);
+    expect(await clickButton("^add project$")).toBe(true);
+    await waitForText("Project progress");
+
+    // 3. Add a milestone and complete it → milestone-derived progress.
+    expect(await setByLabel("new milestone title", "Build dashboard")).toBe(true);
+    await browser.pause(120);
+    expect(await clickButton("^add milestone$")).toBe(true);
+    await waitForText("Build dashboard");
+    await browser.tauri.execute(() => {
+      const cb = [...document.querySelectorAll('input[type="checkbox"]')].find((c) =>
+        /Build dashboard/i.test((c as HTMLInputElement).getAttribute("aria-label") || ""),
+      ) as HTMLInputElement | undefined;
+      cb?.click();
+    });
+    await waitForText("100%");
+
+    // 4. Link the skill to the project through the UI.
+    expect(await setField('select[id="link-skill"]', await devSkillIdByTitle("React"))).toBe(true);
+    expect(await clickButton("^link$")).toBe(true);
+    await waitForText("Unlink");
+
+    // 5. Record an independent evidence record, then an unreviewed AI-assisted one.
+    await browser.tauri.execute(() => {
+      const link = [...document.querySelectorAll("a")].find((a) => /^React$/.test((a.textContent || "").trim()));
+      (link as HTMLAnchorElement)?.click();
+    });
+    await waitForText("record");
+    expect(await clickButton("add evidence")).toBe(true);
+    await waitForText("What did you do");
+    expect(await setField('input[aria-label="Evidence description"]', "Built the layout myself")).toBe(true);
+    await browser.pause(120);
+    expect(await clickButton("^add evidence$")).toBe(true);
+    await waitForText("100%");
+
+    expect(await clickButton("add evidence")).toBe(true);
+    await waitForText("What did you do");
+    expect(await setField('input[aria-label="Evidence description"]', "AI wrote the hook, unreviewed")).toBe(true);
+    expect(await setField('select[aria-label="Evidence provenance"]', "ai-assisted")).toBe(true);
+    await browser.pause(120);
+    expect(await clickButton("^add evidence$")).toBe(true);
+    await waitForText("excluded from the Evidence score");
+    await browser.pause(1000);
+
+    // 6. Verify canonical rows + relationships straight out of SQLite.
+    const g = await invokeCmd<{
+      projects: { id: string; title: string }[];
+      skills: { id: string; title: string }[];
+      milestones: { id: string; title: string; projectId: string; completed: boolean }[];
+      evidence: { id: string; skillId: string; provenance: string }[];
+      links: { projectId: string; skillId: string }[];
+    }>("dev_load");
+
+    const project = g.projects.find((p) => p.title === "Performance Buddy OS");
+    const skill = g.skills.find((s) => s.title === "React");
+    expect(project).toBeTruthy();
+    expect(skill).toBeTruthy();
+    // no evidence/capability number on the skill row — three separate axes only
+    expect("evidencePercent" in skill!).toBe(false);
+
+    expect(g.milestones.filter((m) => m.projectId === project!.id && m.completed)).toHaveLength(1);
+    expect(g.links).toEqual([{ projectId: project!.id, skillId: skill!.id }]);
+    const ev = g.evidence.filter((e) => e.skillId === skill!.id);
+    expect(ev).toHaveLength(2);
+    expect(ev.filter((e) => e.provenance === "independent")).toHaveLength(1);
+    expect(ev.filter((e) => e.provenance === "ai-assisted")).toHaveLength(1);
+
+    await invokeCmd("dev_reset_for_test");
+  });
+});
+
+async function devSkillIdByTitle(title: string): Promise<string> {
+  const g = await invokeCmd<{ skills: { id: string; title: string }[] }>("dev_load");
+  const s = g.skills.find((x) => x.title === title);
+  if (!s) throw new Error(`dev skill "${title}" not found`);
+  return s.id;
+}
+
+describe("PBOS Batch 2B — real-user Fitness scenario", () => {
+  it("creates a plan + session, logs an ACTUAL workout that differs, verifies the BASE PLAN is untouched in SQLite", async () => {
+    await invokeCmd("fit_reset_for_test");
+
+    // 1. create the BASE PLAN via the UI
+    await nav("#/fitness/plans/new");
+    await waitForText("Create Training Plan");
+    expect(await setByLabel("plan name", "Weekly Training")).toBe(true);
+    await browser.pause(120);
+    expect(await clickButton("^create plan$")).toBe(true);
+    await waitForText("this is the BASE PLAN");
+
+    // 2. add a planned session (prescription: Push-ups 3 x 15)
+    expect(await clickButton("^add session$")).toBe(true);
+    await waitForText("Session title");
+    expect(await setField('input[aria-label="Session title"]', "Upper Body")).toBe(true);
+    expect(await setField('input[aria-label="Exercise 1 name"]', "Push-ups")).toBe(true);
+    expect(await setField('input[aria-label="Exercise 1 sets"]', "3")).toBe(true);
+    expect(await setField('input[aria-label="Exercise 1 target"]', "15")).toBe(true);
+    await browser.pause(120);
+    expect(await clickButton("^add session$")).toBe(true);
+    await waitForText("Push-ups — 3 × 15");
+
+    // 3. start a workout and record ACTUALS that differ from the prescription
+    expect(await clickButton("^start workout$")).toBe(true);
+    await waitForText("recording the ACTUAL session");
+    expect(await setField('input[aria-label="Push-ups sets completed"]', "3")).toBe(true);
+    expect(await setField('input[aria-label="Push-ups reps completed"]', "15,14,11")).toBe(true);
+    await browser.pause(120);
+    expect(await clickButton("complete workout")).toBe(true);
+    await waitForText("completed");
+    await browser.pause(1000);
+
+    // 4. verify straight out of SQLite
+    const g = await invokeCmd<{
+      plans: { id: string; title: string; totalWeeks: number }[];
+      plannedSessions: { id: string; title: string; exercises: { name: string; sets: number; reps: string }[] }[];
+      workoutSessions: {
+        id: string;
+        planId: string | null;
+        plannedSessionId: string | null;
+        completed: boolean;
+        exercisesPerformed: { name: string; setsCompleted: number; repsCompleted: string }[];
+      }[];
+    }>("fit_load");
+
+    const plan = g.plans.find((p) => p.title === "Weekly Training");
+    expect(plan).toBeTruthy();
+    expect(g.plannedSessions).toHaveLength(1);
+    const planned = g.plannedSessions[0];
+    // BASE PLAN prescription is byte-for-byte what the user set — the actual workout did NOT rewrite it
+    expect(planned.exercises).toEqual([{ name: "Push-ups", sets: 3, reps: "15" }]);
+
+    expect(g.workoutSessions).toHaveLength(1);
+    const w = g.workoutSessions[0];
+    expect(w.completed).toBe(true);
+    expect(w.planId).toBe(plan!.id);
+    expect(w.plannedSessionId).toBe(planned.id);
+    // the ACTUAL results differ from the prescription and are their own record
+    expect(w.exercisesPerformed[0].repsCompleted).toBe("15,14,11");
+
+    await invokeCmd("fit_reset_for_test");
+  });
+});
+
+describe("PBOS Batch 2B — real-user Routine scenario", () => {
+  it("creates a routine + check-in through the UI, updates today's log, verifies from SQLite", async () => {
+    await invokeCmd("rtn_reset_for_test");
+
+    // 1. Create a routine via the builder (defaults: daily, boolean).
+    await nav("#/routine/new");
+    await waitForText("New Routine");
+    expect(await setByLabel("routine name", "Morning Mobility")).toBe(true);
+    expect(await setByLabel("category", "Personal Care")).toBe(true);
+    await browser.pause(120);
+    expect(await clickButton("^create routine$")).toBe(true);
+    await waitForText("Morning Mobility");
+    await waitForText("no history yet"); // honest empty consistency — not 0%
+
+    // 2. Today's check-in from Routine Detail: Partial, then correct it to Done
+    //    (the check-in buttons render their state label as text).
+    expect(await clickButton("^Partial$")).toBe(true);
+    await waitForText("History (1)");
+    expect(await clickButton("^Done$")).toBe(true);
+    await waitForText("History (1)");
+    await browser.pause(1000);
+
+    // 3. Verify canonical rows straight out of SQLite.
+    const g = await invokeCmd<{
+      routines: {
+        id: string;
+        title: string;
+        scheduleType: string;
+        relatedSystemId: string | null;
+        paused: boolean;
+      }[];
+      logs: { id: string; routineId: string; date: string; state: string }[];
+    }>("rtn_load");
+
+    expect(g.routines).toHaveLength(1);
+    const routine = g.routines[0];
+    expect(routine.title).toBe("Morning Mobility");
+    expect(routine.scheduleType).toBe("daily");
+    expect(routine.relatedSystemId).toBeNull();
+    // consistency / streak is derived — never a stored column on the routine row
+    expect("consistency" in routine).toBe(false);
+    expect("streak" in routine).toBe(false);
+
+    // exactly ONE canonical log for today, holding the corrected state
+    expect(g.logs).toHaveLength(1);
+    const today = new Date().toISOString().slice(0, 10);
+    expect(g.logs[0].routineId).toBe(routine.id);
+    expect(g.logs[0].date).toBe(today);
+    expect(g.logs[0].state).toBe("complete");
+
+    await invokeCmd("rtn_reset_for_test");
+  });
+});
+
+describe("PBOS Batch 2 — real-user Reading & Language scenario", () => {
+  it("creates a path + unit + session and a book, then verifies canonical rows from SQLite", async () => {
+    await invokeCmd("lang_reset_for_test");
+
+    // 1. Create a Language Path via the builder.
+    await nav("#/language/paths/new");
+    await waitForText("New Language Path");
+    expect(await setByLabel("^language$", "German")).toBe(true);
+    expect(await setByLabel("path title", "A1 Foundations")).toBe(true);
+    await browser.pause(120);
+    expect(await clickButton("^create path$")).toBe(true);
+    await waitForText("A1 Foundations");
+    await waitForText("No units yet — not 0%"); // honest empty progress — not 0%
+
+    // 2. Add a unit, then log a learning session against it (no recall score).
+    expect(await setField('input[aria-label="Unit title"]', "Basic Introductions")).toBe(true);
+    await browser.pause(120);
+    expect(await clickButton("^add unit$")).toBe(true);
+    await waitForText("Basic Introductions");
+    expect(await clickButton("start learning session")).toBe(true);
+    await waitForText("Learning Session");
+    expect(await setByLabel("minutes practised", "30")).toBe(true);
+    expect(await clickButton("^log session$")).toBe(true);
+    await waitForText("Session logged");
+    await browser.pause(1000);
+
+    // 3. Add a Book with a known total.
+    await nav("#/language/books/new");
+    await waitForText("Add Book");
+    expect(await setByLabel("^title$", "Deep Work")).toBe(true);
+    expect(await setByLabel("total pages", "300")).toBe(true);
+    await browser.pause(120);
+    expect(await clickButton("^add book$")).toBe(true);
+    await waitForText("Deep Work");
+    // advance the page position
+    expect(await setField('input[aria-label="Set current page"]', "60")).toBe(true);
+    expect(await clickButton("^update$")).toBe(true);
+    await waitForText("20%");
+    await browser.pause(1000);
+
+    // 4. Verify canonical rows straight out of SQLite.
+    const g = await invokeCmd<{
+      paths: { id: string; language: string; title: string; relatedRoutineId: string | null }[];
+      units: { id: string; pathId: string; completed: boolean; knowledgeTopicId: string | null }[];
+      sessions: {
+        id: string;
+        pathId: string;
+        unitId: string | null;
+        durationMinutes: number;
+        recallScore: number | null;
+      }[];
+      books: { id: string; title: string; currentPage: number; totalPages: number | null }[];
+    }>("lang_load");
+
+    expect(g.paths).toHaveLength(1);
+    const path = g.paths[0];
+    expect(path.language).toBe("German");
+    expect(path.relatedRoutineId).toBeNull();
+    // progress/mastery is derived — never a stored column on the path row
+    expect("progressPercent" in path).toBe(false);
+    expect("mastery" in path).toBe(false);
+
+    expect(g.units).toHaveLength(1);
+    // the completed session marked its linked unit done — mechanical only
+    expect(g.units[0].completed).toBe(true);
+
+    expect(g.sessions).toHaveLength(1);
+    expect(g.sessions[0].pathId).toBe(path.id);
+    expect(g.sessions[0].unitId).toBe(g.units[0].id);
+    expect(g.sessions[0].durationMinutes).toBe(30);
+    // minutes alone are not mastery — no recall check happened
+    expect(g.sessions[0].recallScore).toBeNull();
+
+    expect(g.books).toHaveLength(1);
+    expect(g.books[0].title).toBe("Deep Work");
+    expect(g.books[0].currentPage).toBe(60);
+    expect(g.books[0].totalPages).toBe(300);
+
+    await invokeCmd("lang_reset_for_test");
+  });
+});
+
+describe("PBOS Batch 2 — real-user Money scenario", () => {
+  it("records income + expense + savings transfer + planned + budget + goal, verified from SQLite", async () => {
+    await invokeCmd("money_reset_for_test");
+
+    // 1-3. three actual transactions via the Transactions screen
+    await nav("#/money/transactions");
+    await waitForText("No transactions yet");
+    for (const [type, amount, category] of [
+      ["income", "50000", "Freelance"],
+      ["expense", "10000", "Food & Dining"],
+      ["savings-transfer", "15000", ""],
+    ] as const) {
+      expect(await clickButton("add transaction")).toBe(true);
+      await waitForText("Amount");
+      expect(await setField('select[id^=":r"], form select', type)).toBe(true);
+      expect(await setByLabel("^amount$", amount)).toBe(true);
+      if (category) expect(await setByLabel("^category", category)).toBe(true);
+      await browser.pause(120);
+      expect(await clickButton("^add transaction$")).toBe(true);
+      await browser.pause(200);
+    }
+    await waitForText("All transactions (3)");
+
+    // 4. a planned expense + a budget + a savings goal on Budget & Savings
+    await nav("#/money/budget");
+    await waitForText("Category Budgets");
+    expect(await setByLabel("planned expense title", "Internet")).toBe(true);
+    expect(await setByLabel("planned expense amount", "5000")).toBe(true);
+    expect(await setByLabel("planned expense category", "Utilities")).toBe(true);
+    await browser.pause(120);
+    expect(await clickButton("^add planned$")).toBe(true);
+    await waitForText("Internet");
+
+    expect(await setByLabel("budget category", "Food & Dining")).toBe(true);
+    expect(await setByLabel("budget limit", "20000")).toBe(true);
+    await browser.pause(120);
+    expect(await clickButton("^add budget$")).toBe(true);
+
+    expect(await setByLabel("savings goal title", "New Laptop")).toBe(true);
+    expect(await setByLabel("savings goal target amount", "100000")).toBe(true);
+    expect(await setByLabel("savings goal opening amount", "20000")).toBe(true);
+    await browser.pause(120);
+    expect(await clickButton("^add goal$")).toBe(true);
+    await browser.pause(1000);
+
+    // 5. verify canonical rows straight out of SQLite
+    const g = await invokeCmd<{
+      transactions: { id: string; type: string; amount: number; savingsGoalId: string | null }[];
+      plannedExpenses: { id: string; amount: number; transactionId: string | null }[];
+      budgets: { id: string; category: string; limitAmount: number }[];
+      savingsGoals: { id: string; openingAmount: number; targetAmount: number }[];
+    }>("money_load");
+
+    // exactly 3 ACTUAL transactions; the transfer keeps its own type
+    expect(g.transactions).toHaveLength(3);
+    expect(g.transactions.filter((t) => t.type === "expense")).toHaveLength(1);
+    expect(g.transactions.filter((t) => t.type === "savings-transfer")).toHaveLength(1);
+    expect(g.transactions.filter((t) => t.type === "income")).toHaveLength(1);
+    // the planned expense is its own row — NOT one of the actual transactions
+    expect(g.plannedExpenses).toHaveLength(1);
+    expect(g.plannedExpenses[0].transactionId).toBeNull();
+    expect(g.budgets).toHaveLength(1);
+    expect(g.savingsGoals).toHaveLength(1);
+    expect(g.savingsGoals[0].openingAmount).toBe(20000);
+    // no bank-verification / performance-score authority anywhere in the row shape
+    expect("bankVerified" in g.transactions[0]).toBe(false);
+    expect("performanceScore" in (g.savingsGoals[0] as object)).toBe(false);
+    expect("currentAmount" in (g.savingsGoals[0] as object)).toBe(false);
+
+    await invokeCmd("money_reset_for_test");
+  });
+});
