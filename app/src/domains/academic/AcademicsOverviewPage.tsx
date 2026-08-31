@@ -29,6 +29,12 @@ export function AcademicsOverviewPage() {
         <div className="flex items-center gap-3">
           <SaveIndicator state={saveState} />
           <button
+            onClick={() => navigate("/academics/study")}
+            className="px-3 py-1.5 rounded-md border border-border-subtle text-text-secondary text-xs font-medium hover:bg-surface-inset"
+          >
+            Normal Study
+          </button>
+          <button
             onClick={() => navigate("/academics/new")}
             className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
           >

@@ -6,8 +6,13 @@ function session(overrides: Partial<FocusSession>): FocusSession {
   return {
     id: "f1",
     title: "Binary Trees Review",
+    method: "",
     linkedActionId: null,
     linkedTopicId: null,
+    linkedCourseId: null,
+    linkedAcademicTopicId: null,
+    linkedBlockId: null,
+    returnTo: null,
     status: "idle",
     targetMinutes: 20,
     elapsedSeconds: 0,

@@ -9,6 +9,7 @@ mod money;
 mod performance;
 mod planning;
 mod routine;
+mod study;
 
 use std::sync::Mutex;
 use tauri::Manager;
@@ -162,6 +163,15 @@ pub fn run() {
             capture::capture_delete,
             capture::capture_import,
             capture::capture_reset_for_test,
+            // Batch 4 — Academic execution: Focus session history + Mastery checks
+            study::study_load,
+            study::study_focus_session_upsert,
+            study::study_focus_session_delete,
+            study::study_mastery_check_upsert,
+            study::study_mastery_check_delete,
+            study::study_mastery_link_evidence,
+            study::study_import_graph,
+            study::study_reset_for_test,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

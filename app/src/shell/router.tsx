@@ -11,6 +11,8 @@ import { AcademicsOverviewPage } from "../domains/academic/AcademicsOverviewPage
 import { CourseDetailPage } from "../domains/academic/CourseDetailPage";
 import { CourseBuilderPage } from "../domains/academic/CourseBuilderPage";
 import { SgpaCgpaPage } from "../domains/academic/SgpaCgpaPage";
+import { NormalStudyPage } from "../domains/academic/NormalStudyPage";
+import { MasteryCheckPage, MasteryIndexPage } from "../domains/academic/MasteryCheckPage";
 import { KnowledgeOverviewPage } from "../domains/knowledge/KnowledgeOverviewPage";
 import { KnowledgeTopicBuilderPage } from "../domains/knowledge/KnowledgeTopicBuilderPage";
 import { NotesHubPage } from "../domains/knowledge/NotesHubPage";
@@ -84,6 +86,9 @@ export const router = createHashRouter([
       { path: "/academics", element: <AcademicsOverviewPage />, handle: { title: "Academics" } },
       { path: "/academics/new", element: <CourseBuilderPage />, handle: { title: "Add Course" } },
       { path: "/academics/sgpa-cgpa", element: <SgpaCgpaPage />, handle: { title: "SGPA / CGPA" } },
+      { path: "/academics/study", element: <NormalStudyPage />, handle: { title: "Normal Study" } },
+      { path: "/academics/mastery", element: <MasteryIndexPage />, handle: { title: "Mastery Checks" } },
+      { path: "/academics/mastery/:checkId", element: <MasteryCheckPage />, handle: { title: "Mastery Check" } },
       { path: "/academics/:courseId", element: <CourseDetailPage />, handle: { title: "Course" } },
       { path: "/academics/:courseId/edit", element: <CourseBuilderPage />, handle: { title: "Edit Course" } },
       { path: "/knowledge", element: <KnowledgeOverviewPage />, handle: { title: "Knowledge" } },

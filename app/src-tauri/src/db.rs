@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
 /// Bumped whenever a migration is added to `MIGRATIONS`.
-const CURRENT_SCHEMA_VERSION: i64 = 5;
+const CURRENT_SCHEMA_VERSION: i64 = 6;
 
 /// Ordered, forward-only migrations. `version` must be contiguous from 1.
 const MIGRATIONS: &[(i64, &str)] = &[
@@ -631,6 +631,83 @@ const MIGRATIONS: &[(i64, &str)] = &[
     CREATE INDEX IF NOT EXISTS idx_planning_blocks_day    ON planning_blocks(day_of_week);
     CREATE INDEX IF NOT EXISTS idx_planning_blocks_date   ON planning_blocks(date);
     CREATE INDEX IF NOT EXISTS idx_capture_inbox_status   ON capture_inbox(status);
+    "#,
+    ),
+    (
+        6,
+        // Batch 4 — the ACADEMIC EXECUTION loop: STUDY -> FOCUS -> MASTERY CHECK
+        // -> EVIDENCE -> KNOWLEDGE MASTERY.
+        //
+        // Product locks enforced by shape:
+        //   FOCUS TIME ≠ MASTERY. `focus_sessions` records ACTIVITY evidence
+        //     (duration + method) and a self-reported `recall_score` only when a
+        //     genuine recall check was done — a completed timer never marks a
+        //     topic mastered (docs 14.09 / 09.07). It carries OPTIONAL context
+        //     links (course / academic topic / knowledge topic / action /
+        //     planning block), all SET NULL on delete — the session is its own
+        //     execution record, not a copy of any of them.
+        //   ACADEMIC ASSESSMENT / MARK ≠ MASTERY CHECK. `mastery_checks` is a
+        //     PERSONAL learning check (self-check / recall), never an official
+        //     course assessment and never a grade. It has a `score` / `max_score`
+        //     but NO academic mastery column — the Academic Topic still has no
+        //     mastery of its own.
+        //   KNOWLEDGE EVIDENCE owns mastery truth. A mastery check may create
+        //     exactly ONE Knowledge Evidence row, and only on an explicit user
+        //     action: `mastery_checks.evidence_id` is the idempotency guard —
+        //     once set it is never overwritten (see study.rs mastery_link_evidence).
+        //     Deleting that evidence (or its topic) SET NULLs the link; it does
+        //     not delete the check.
+        r#"
+    CREATE TABLE IF NOT EXISTS focus_sessions (
+        id                 TEXT PRIMARY KEY NOT NULL,
+        title              TEXT NOT NULL,
+        status             TEXT NOT NULL DEFAULT 'completed',
+        method             TEXT NOT NULL DEFAULT '',
+        course_id          TEXT REFERENCES academic_courses(id) ON DELETE SET NULL,
+        academic_topic_id  TEXT REFERENCES academic_topics(id) ON DELETE SET NULL,
+        knowledge_topic_id TEXT REFERENCES knowledge_topics(id) ON DELETE SET NULL,
+        action_id          TEXT REFERENCES actions(id) ON DELETE SET NULL,
+        planning_block_id  TEXT REFERENCES planning_blocks(id) ON DELETE SET NULL,
+        target_minutes     INTEGER NOT NULL DEFAULT 0,
+        duration_minutes   INTEGER NOT NULL DEFAULT 0,
+        -- only set when a genuine recall/test check happened; minutes alone are
+        -- never mastery. Consumed by the caller to add Knowledge evidence.
+        recall_score       REAL,
+        recall_max         REAL NOT NULL DEFAULT 10,
+        notes              TEXT NOT NULL DEFAULT '',
+        started_at         TEXT,
+        completed_at       TEXT,
+        created_at         TEXT NOT NULL,
+        updated_at         TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS mastery_checks (
+        id                 TEXT PRIMARY KEY NOT NULL,
+        academic_topic_id  TEXT REFERENCES academic_topics(id) ON DELETE SET NULL,
+        knowledge_topic_id TEXT REFERENCES knowledge_topics(id) ON DELETE SET NULL,
+        course_id          TEXT REFERENCES academic_courses(id) ON DELETE SET NULL,
+        topic_title        TEXT NOT NULL DEFAULT '',
+        kind               TEXT NOT NULL DEFAULT 'self-check',
+        -- JSON: [{ id, prompt, response, rating }] — the raw check, kept so the
+        -- Result screen survives reload. Not a queryable question bank.
+        items              TEXT NOT NULL DEFAULT '[]',
+        score              REAL NOT NULL DEFAULT 0,
+        max_score          REAL NOT NULL DEFAULT 0,
+        status             TEXT NOT NULL DEFAULT 'in-progress',
+        -- the ONE Knowledge Evidence row this check produced, if any. Idempotency
+        -- guard: set once, never overwritten. SET NULL if that evidence is deleted.
+        evidence_id        TEXT REFERENCES knowledge_evidence(id) ON DELETE SET NULL,
+        created_at         TEXT NOT NULL,
+        updated_at         TEXT NOT NULL,
+        completed_at       TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_focus_sessions_ktopic  ON focus_sessions(knowledge_topic_id);
+    CREATE INDEX IF NOT EXISTS idx_focus_sessions_atopic  ON focus_sessions(academic_topic_id);
+    CREATE INDEX IF NOT EXISTS idx_focus_sessions_course  ON focus_sessions(course_id);
+    CREATE INDEX IF NOT EXISTS idx_mastery_checks_atopic  ON mastery_checks(academic_topic_id);
+    CREATE INDEX IF NOT EXISTS idx_mastery_checks_ktopic  ON mastery_checks(knowledge_topic_id);
+    CREATE INDEX IF NOT EXISTS idx_mastery_checks_evid    ON mastery_checks(evidence_id);
     "#,
     ),
 ];

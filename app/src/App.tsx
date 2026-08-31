@@ -14,6 +14,7 @@ import { SettingsProvider } from "./domains/settings/store";
 import { OnboardingProvider } from "./domains/onboarding/store";
 import { SearchProvider } from "./domains/search/store";
 import { CaptureProvider } from "./domains/capture/store";
+import { MasteryProvider } from "./domains/academic/masteryStore";
 import { FocusProvider } from "./domains/focus/store";
 
 export default function App() {
@@ -33,9 +34,11 @@ export default function App() {
                             <OnboardingProvider>
                               <SearchProvider>
                                 <CaptureProvider>
-                                  <FocusProvider>
-                                    <AppGate />
-                                  </FocusProvider>
+                                  <MasteryProvider>
+                                    <FocusProvider>
+                                      <AppGate />
+                                    </FocusProvider>
+                                  </MasteryProvider>
                                 </CaptureProvider>
                               </SearchProvider>
                             </OnboardingProvider>
