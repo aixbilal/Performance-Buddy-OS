@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
 /// Bumped whenever a migration is added to `MIGRATIONS`.
-const CURRENT_SCHEMA_VERSION: i64 = 7;
+const CURRENT_SCHEMA_VERSION: i64 = 8;
 
 /// Ordered, forward-only migrations. `version` must be contiguous from 1.
 const MIGRATIONS: &[(i64, &str)] = &[
@@ -778,6 +778,89 @@ const MIGRATIONS: &[(i64, &str)] = &[
         ADD COLUMN knowledge_topic_id TEXT REFERENCES knowledge_topics(id) ON DELETE SET NULL;
     ALTER TABLE development_skill_evidence
         ADD COLUMN knowledge_evidence_id TEXT REFERENCES knowledge_evidence(id) ON DELETE SET NULL;
+    "#,
+    ),
+    (
+        8,
+        // Batch 6 — the INTELLIGENCE / DECISION loop: Analytics facts -> AI
+        // proposal -> user decision -> deterministic validation -> safe
+        // allowlisted canonical Apply -> optional re-plan.
+        //
+        // Architecture locks enforced by shape (docs 23 / 24.12 / 26 / 30):
+        //   AI HAS NO DIRECT WRITE CREDENTIAL. `ai_recommendations` holds
+        //     PROPOSALS only; a proposal's `proposed_params` is opaque JSON that
+        //     a TS Apply ADAPTER (allowlisted by `kind`) validates and then
+        //     hands to a canonical domain store — nothing here executes SQL or a
+        //     Tauri command chosen by a model.
+        //   DECISION HISTORY IS APPEND-ONLY. `ai_decision_events` has no update
+        //     path (the module exposes append + read only). A recommendation's
+        //     status column is the current state; the events are the trail.
+        //   SECRETS NEVER LAND HERE. `ai_config` stores provider id / model /
+        //     base URL / enabled — never an API key (the key is read from the
+        //     PBOS_AI_API_KEY environment variable by the caller, never persisted
+        //     and never returned to the renderer).
+        //   PER-DOMAIN PERMISSIONS ARE DURABLE. `ai_permissions` is one row per
+        //     domain label; "no-access" is the default for anything absent.
+        //   REVIEWS ARE IMMUTABLE SNAPSHOTS (docs 22.04 / 22.05). An
+        //     `analytics_reviews` row is written once and never updated.
+        r#"
+    CREATE TABLE IF NOT EXISTS ai_config (
+        id          INTEGER PRIMARY KEY CHECK (id = 1),
+        provider_id TEXT NOT NULL DEFAULT 'fake',
+        model       TEXT NOT NULL DEFAULT '',
+        base_url    TEXT NOT NULL DEFAULT '',
+        enabled     INTEGER NOT NULL DEFAULT 1,
+        created_at  TEXT NOT NULL,
+        updated_at  TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS ai_permissions (
+        domain     TEXT PRIMARY KEY NOT NULL,
+        level      TEXT NOT NULL DEFAULT 'no-access', -- no-access | read | read-recommend
+        updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS ai_recommendations (
+        id             TEXT PRIMARY KEY NOT NULL,
+        kind           TEXT NOT NULL,                 -- allowlisted Apply-adapter key
+        domain         TEXT NOT NULL,
+        title          TEXT NOT NULL,
+        rationale      TEXT NOT NULL DEFAULT '',
+        evidence       TEXT NOT NULL DEFAULT '[]',    -- JSON string[]
+        confidence     TEXT NOT NULL DEFAULT 'limited',
+        source         TEXT NOT NULL DEFAULT 'workspace',
+        generated_from TEXT NOT NULL DEFAULT '',
+        proposed_params TEXT NOT NULL DEFAULT '{}',   -- opaque JSON, adapter-validated
+        current_params  TEXT NOT NULL DEFAULT '{}',   -- before-values for the preview
+        status         TEXT NOT NULL DEFAULT 'proposed',
+        validation     TEXT,                          -- JSON { ok, reasonCodes[], message }
+        applied_result TEXT,                          -- JSON
+        created_at     TEXT NOT NULL,
+        decided_at     TEXT,
+        applied_at     TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS ai_decision_events (
+        id                TEXT PRIMARY KEY NOT NULL,
+        recommendation_id TEXT NOT NULL REFERENCES ai_recommendations(id) ON DELETE CASCADE,
+        event             TEXT NOT NULL,   -- proposed|accepted|modified|rejected|applied|apply-failed
+        detail            TEXT NOT NULL DEFAULT '{}',
+        created_at        TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS analytics_reviews (
+        id           TEXT PRIMARY KEY NOT NULL,
+        kind         TEXT NOT NULL,        -- weekly | monthly
+        period_start TEXT NOT NULL,
+        period_end   TEXT NOT NULL,
+        snapshot     TEXT NOT NULL DEFAULT '{}',  -- immutable JSON of the deterministic facts
+        notes        TEXT NOT NULL DEFAULT '',
+        created_at   TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_ai_recs_status  ON ai_recommendations(status);
+    CREATE INDEX IF NOT EXISTS idx_ai_events_rec   ON ai_decision_events(recommendation_id);
+    CREATE INDEX IF NOT EXISTS idx_ana_reviews_kind ON analytics_reviews(kind, period_start);
     "#,
     ),
 ];

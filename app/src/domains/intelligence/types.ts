@@ -1,40 +1,100 @@
 /**
- * Performance Buddy OS — AI Coach & Intelligence domain model.
+ * Performance Buddy OS — AI Coach / Intelligence domain model (Batch 6).
  *
- * Per Day 12 Handoff §8.1, the full pipeline this domain implements:
- *   PBOS structured state → deterministic rules/evidence → context selection
- *   → permission check → AI interpretation → recommendation/proposal →
- *   USER DECISION → deterministic validation → PBOS mutation.
+ * The full pipeline (docs 23 / 24 / 26 / 30):
+ *   Analytics facts → permitted context → AI PROPOSAL → user decision →
+ *   deterministic Phase-23-style validation → allowlisted canonical Apply →
+ *   optional re-plan. Every stage is a separate recorded event.
  *
- * This build implements every deterministic stage of that pipeline — context
- * selection, permission enforcement, recommendation/decision lifecycle,
- * combined-impact validation. It does NOT wire a real external AI provider
- * call (no API key handling exists yet) — recommendations here are example
- * candidates, standing in for what a real AI call would eventually produce.
- * The `ProposalCard` component (built Day 2) is the reusable UI piece that
- * would render either source identically — nothing here duplicates it.
+ *   AI has NO direct write credential. A `Recommendation` is a proposal; it
+ *   only changes canonical data through an allowlisted Apply adapter that
+ *   validates first and then calls a domain store. Decision history is
+ *   append-only and durable.
  */
 
-export type PermissionLevel = "no-access" | "read" | "read-recommend";
+import type { DomainPermissions, PermissionLevel } from "../ai/context";
+import type { ProposalConfidence } from "../ai/types";
 
-/** Domain names match the labels used across the app — not a new enum tied to internals. */
-export type DomainPermissions = Record<string, PermissionLevel>;
+export type { DomainPermissions, PermissionLevel };
 
-export type ImpactLevel = "high" | "medium" | "low";
-export type RecommendationStatus = "pending" | "accepted" | "modified" | "rejected";
+/** The allowlist. Anything a provider proposes outside this set is rejected. */
+export type RecommendationKind =
+  | "create-action"
+  | "schedule-block"
+  | "set-knowledge-review"
+  | "adjust-routine-cadence";
 
+export const RECOMMENDATION_KINDS: readonly RecommendationKind[] = [
+  "create-action",
+  "schedule-block",
+  "set-knowledge-review",
+  "adjust-routine-cadence",
+];
+
+export function isRecommendationKind(v: unknown): v is RecommendationKind {
+  return typeof v === "string" && (RECOMMENDATION_KINDS as readonly string[]).includes(v);
+}
+
+export type RecommendationStatus =
+  | "proposed"
+  | "accepted"
+  | "modified"
+  | "rejected"
+  | "applied"
+  | "apply-failed";
+
+export type RecommendationSource =
+  | "weekly-review"
+  | "monthly-review"
+  | "analytics"
+  | "workspace"
+  | "manual";
+
+export type ValidationResult = {
+  ok: boolean;
+  reasonCodes: string[];
+  message: string;
+};
+
+/** One canonical model — NOT one table per domain. */
 export type Recommendation = {
   id: string;
-  title: string;
+  kind: RecommendationKind;
   domain: string;
-  impact: ImpactLevel;
-  status: RecommendationStatus;
-  confidence: "high" | "moderate" | "limited";
+  title: string;
+  rationale: string;
   evidence: string[];
-  generatedFrom: string; // e.g. "Weekly Review (Aug 27)" — traceable source, never unexplained
-  /** Signed minutes this change would add (+) or remove (-) from weekly load, for combined-impact validation. */
-  impactMinutes: number;
+  confidence: ProposalConfidence;
+  source: RecommendationSource;
+  /** Human-readable provenance, e.g. "Weekly Review · 2026-01-05". */
+  generatedFrom: string;
+  /** The change to apply — validated by the adapter, never executed raw. */
+  proposedParams: Record<string, unknown>;
+  /** Before-values for the impact preview. */
+  currentParams: Record<string, unknown>;
+  status: RecommendationStatus;
+  validation: ValidationResult | null;
+  appliedResult: Record<string, unknown> | null;
+  createdAt: string;
   decidedAt: string | null;
+  appliedAt: string | null;
+};
+
+export type DecisionEventType =
+  | "proposed"
+  | "accepted"
+  | "modified"
+  | "rejected"
+  | "applied"
+  | "apply-failed";
+
+/** Append-only trail. The recommendation's `status` is the current state; these are the history. */
+export type DecisionEvent = {
+  id: string;
+  recommendationId: string;
+  event: DecisionEventType;
+  detail: Record<string, unknown>;
+  createdAt: string;
 };
 
 export type CombinedImpactResult = {
@@ -42,4 +102,18 @@ export type CombinedImpactResult = {
   withAcceptedChangesMinutes: number;
   weeklyCapacityMinutes: number;
   exceedsCapacity: boolean;
+};
+
+/** DEFAULT: everything read+recommend EXCEPT Money (sensitive — docs 30.05). */
+export const DEFAULT_PERMISSIONS: DomainPermissions = {
+  Today: "read-recommend",
+  Academics: "read-recommend",
+  "Goals & Systems": "read-recommend",
+  Knowledge: "read-recommend",
+  Development: "read-recommend",
+  "Fitness & Recovery": "read-recommend",
+  Routines: "read-recommend",
+  "Reading & Language": "read-recommend",
+  Planning: "read-recommend",
+  Money: "no-access",
 };

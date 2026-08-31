@@ -46,4 +46,32 @@ export type Pattern = {
   direction: CorrelationDirection;
   confidence: ConfidenceLevel;
   sampleSize: number;
+  /** true when there is not enough data — the honest INSUFFICIENT EVIDENCE state (docs 22.14). */
+  insufficient: boolean;
 };
+
+/** A this-period vs prior-period comparison — "insufficient" when the prior window is missing. */
+export type PeriodComparison = {
+  metric: string;
+  unit: string;
+  current: number | null;
+  prior: number | null;
+  delta: number | null;
+  status: "improved" | "declined" | "flat" | "insufficient";
+};
+
+/**
+ * Per docs 22.05: "Historical monthly reviews are immutable snapshots."
+ * buildMonthlyReview deep-copies its inputs, same as buildWeeklyReview.
+ */
+export type MonthlyReview = {
+  id: string;
+  monthStart: string; // yyyy-mm-01
+  monthEnd: string;
+  domainSnapshots: DomainSnapshot[];
+  comparisons: PeriodComparison[];
+  observations: string[];
+  createdAt: string;
+};
+
+export type DataSufficiency = "sufficient" | "thin" | "insufficient";

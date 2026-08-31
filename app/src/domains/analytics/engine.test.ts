@@ -83,3 +83,93 @@ describe("buildWeeklyReview — historical integrity (Master Handoff §11)", () 
     expect(review.friction).toEqual(["Missed one focus session"]);
   });
 });
+
+// --- Batch 6 additions -----------------------------------------------------
+import {
+  comparePeriods,
+  completionRate,
+  derivePatterns,
+  deriveDataSufficiency,
+  isoInWindow,
+  monthBounds,
+  startOfWeekIso,
+} from "./engine";
+
+describe("date windows", () => {
+  it("isoInWindow is inclusive on both ends", () => {
+    expect(isoInWindow("2026-03-10", "2026-03-01", "2026-03-31")).toBe(true);
+    expect(isoInWindow("2026-03-01", "2026-03-01", "2026-03-31")).toBe(true);
+    expect(isoInWindow("2026-04-01", "2026-03-01", "2026-03-31")).toBe(false);
+  });
+  it("startOfWeekIso returns the Monday", () => {
+    // 2026-03-11 is a Wednesday
+    expect(startOfWeekIso("2026-03-11")).toBe("2026-03-09");
+  });
+  it("monthBounds gives first + last calendar day", () => {
+    expect(monthBounds("2026-02-15")).toEqual({ start: "2026-02-01", end: "2026-02-28" });
+  });
+});
+
+describe("completionRate", () => {
+  it("is null with no logs (unknown ≠ zero)", () => {
+    expect(completionRate([]).rate).toBeNull();
+  });
+  it("counts completed/done states", () => {
+    const r = completionRate([{ state: "completed" }, { state: "done" }, { state: "skipped" }, { state: "missed" }]);
+    expect(r).toEqual({ rate: 50, completed: 2, total: 4 });
+  });
+});
+
+describe("comparePeriods — insufficient when the prior window is missing", () => {
+  it("returns insufficient (not 0%) when prior is null", () => {
+    const c = comparePeriods("Routine completion", "%", 60, null);
+    expect(c.status).toBe("insufficient");
+    expect(c.delta).toBeNull();
+  });
+  it("classifies improved / declined / flat by threshold", () => {
+    expect(comparePeriods("m", "%", 80, 60).status).toBe("improved");
+    expect(comparePeriods("m", "%", 40, 60).status).toBe("declined");
+    expect(comparePeriods("m", "%", 62, 60).status).toBe("flat");
+  });
+});
+
+describe("deriveDataSufficiency", () => {
+  it("insufficient / thin / sufficient bands", () => {
+    expect(deriveDataSufficiency(1)).toBe("insufficient");
+    expect(deriveDataSufficiency(5)).toBe("thin");
+    expect(deriveDataSufficiency(12)).toBe("sufficient");
+  });
+});
+
+describe("derivePatterns — honest INSUFFICIENT EVIDENCE (docs 22.14)", () => {
+  it("with fewer than two usable series, returns one insufficient pattern", () => {
+    const out = derivePatterns([{ label: "A", days: [{ date: "2026-03-01", completed: true }] }]);
+    expect(out).toHaveLength(1);
+    expect(out[0].insufficient).toBe(true);
+  });
+  it("with two series but few overlapping days, the pair pattern is insufficient (no fake coefficient)", () => {
+    const days = (n: number, every: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        date: `2026-03-${String(i + 1).padStart(2, "0")}`,
+        completed: i % every === 0,
+      }));
+    const out = derivePatterns([
+      { label: "Hydration", days: days(4, 2) },
+      { label: "Reading", days: days(4, 2) },
+    ]);
+    expect(out[0].insufficient).toBe(true);
+  });
+  it("with enough overlapping days, describes a correlation as association, not cause", () => {
+    const days = Array.from({ length: 10 }, (_, i) => ({
+      date: `2026-03-${String(i + 1).padStart(2, "0")}`,
+      completed: i % 2 === 0,
+    }));
+    const out = derivePatterns([
+      { label: "Hydration", days },
+      { label: "Reading", days: days.map((d) => ({ ...d })) },
+    ]);
+    expect(out[0].insufficient).toBe(false);
+    expect(out[0].direction).toBe("positive");
+    expect(out[0].title.toLowerCase()).toContain("association, not cause");
+  });
+});

@@ -18,41 +18,47 @@ import { MasteryProvider } from "./domains/academic/masteryStore";
 import { FocusProvider } from "./domains/focus/store";
 import { ObsidianProvider } from "./domains/obsidian/store";
 
+/**
+ * Provider order matters: a store may only consume another store that wraps it.
+ * Analytics reads Academic/Fitness/Money/Routine; the AI Coach reads
+ * Analytics + Performance + Planning + Knowledge + Routine and drives the
+ * allowlisted Apply adapters, so it sits below all of them.
+ */
 export default function App() {
   return (
     <PerformanceProvider>
       <AcademicProvider>
         <KnowledgeProvider>
           <ObsidianProvider>
-          <DevelopmentProvider>
-            <FitnessProvider>
-              <RoutineProvider>
-                <LanguageProvider>
-                  <MoneyProvider>
-                    <AnalyticsProvider>
-                      <AICoachProvider>
-                        <PlanningProvider>
-                          <SettingsProvider>
-                            <OnboardingProvider>
-                              <SearchProvider>
-                                <CaptureProvider>
-                                  <MasteryProvider>
-                                    <FocusProvider>
-                                      <AppGate />
-                                    </FocusProvider>
-                                  </MasteryProvider>
-                                </CaptureProvider>
-                              </SearchProvider>
-                            </OnboardingProvider>
-                          </SettingsProvider>
-                        </PlanningProvider>
-                      </AICoachProvider>
-                    </AnalyticsProvider>
-                  </MoneyProvider>
-                </LanguageProvider>
-              </RoutineProvider>
-            </FitnessProvider>
-          </DevelopmentProvider>
+            <DevelopmentProvider>
+              <FitnessProvider>
+                <RoutineProvider>
+                  <LanguageProvider>
+                    <MoneyProvider>
+                      <PlanningProvider>
+                        <SettingsProvider>
+                          <OnboardingProvider>
+                            <AnalyticsProvider>
+                              <AICoachProvider>
+                                <SearchProvider>
+                                  <CaptureProvider>
+                                    <MasteryProvider>
+                                      <FocusProvider>
+                                        <AppGate />
+                                      </FocusProvider>
+                                    </MasteryProvider>
+                                  </CaptureProvider>
+                                </SearchProvider>
+                              </AICoachProvider>
+                            </AnalyticsProvider>
+                          </OnboardingProvider>
+                        </SettingsProvider>
+                      </PlanningProvider>
+                    </MoneyProvider>
+                  </LanguageProvider>
+                </RoutineProvider>
+              </FitnessProvider>
+            </DevelopmentProvider>
           </ObsidianProvider>
         </KnowledgeProvider>
       </AcademicProvider>

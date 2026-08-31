@@ -5,6 +5,12 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { PerformanceProvider, usePerformance } from "./store";
 import { PlanningProvider, usePlanning } from "../planning/store";
+import { AcademicProvider } from "../academic/store";
+import { KnowledgeProvider } from "../knowledge/store";
+import { FitnessProvider } from "../fitness-recovery/store";
+import { RoutineProvider } from "../routine/store";
+import { MoneyProvider } from "../money/store";
+import { AnalyticsProvider } from "../analytics/store";
 import { AICoachProvider } from "../intelligence/store";
 import { TodayPage } from "./TodayPage";
 
@@ -22,14 +28,26 @@ function Probe() {
 function App() {
   return (
     <PerformanceProvider>
-      <PlanningProvider>
-        <AICoachProvider>
-          <MemoryRouter>
-            <Probe />
-            <TodayPage />
-          </MemoryRouter>
-        </AICoachProvider>
-      </PlanningProvider>
+      <AcademicProvider>
+        <KnowledgeProvider>
+          <FitnessProvider>
+            <RoutineProvider>
+              <MoneyProvider>
+                <PlanningProvider>
+                  <AnalyticsProvider>
+                    <AICoachProvider>
+                      <MemoryRouter>
+                        <Probe />
+                        <TodayPage />
+                      </MemoryRouter>
+                    </AICoachProvider>
+                  </AnalyticsProvider>
+                </PlanningProvider>
+              </MoneyProvider>
+            </RoutineProvider>
+          </FitnessProvider>
+        </KnowledgeProvider>
+      </AcademicProvider>
     </PerformanceProvider>
   );
 }

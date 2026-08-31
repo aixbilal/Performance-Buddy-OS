@@ -1,4 +1,5 @@
 mod academic;
+mod ai;
 mod capture;
 mod db;
 mod development;
@@ -187,6 +188,16 @@ pub fn run() {
             // Batch 5 — Development ↔ Knowledge reference + evidence handoff
             development::dev_skill_link_knowledge,
             development::dev_skill_evidence_link_knowledge,
+            // Batch 6 — Analytics reviews + AI recommendation / decision loop
+            ai::ai_load,
+            ai::ai_status,
+            ai::ai_config_set,
+            ai::ai_permission_set,
+            ai::ai_recommendation_upsert,
+            ai::ai_decision_event_append,
+            ai::analytics_review_append,
+            ai::ai_import_graph,
+            ai::ai_reset_for_test,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

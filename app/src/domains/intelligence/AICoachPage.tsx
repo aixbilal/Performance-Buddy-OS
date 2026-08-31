@@ -1,11 +1,24 @@
+import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
+import { RecommendationCard } from "../../components/RecommendationCard";
 import { useAICoach } from "./store";
-import type { PermissionLevel } from "./types";
+import { useAnalytics } from "../analytics/store";
 
-const IMPACT_TONE = { high: "danger", medium: "warning", low: "neutral" } as const;
-const CONFIDENCE_TONE = { high: "success", moderate: "warning", limited: "neutral" } as const;
-const STATUS_TONE = { accepted: "success", modified: "warning", rejected: "danger", pending: "neutral" } as const;
+const AVAIL_TONE = {
+  ready: "success",
+  disabled: "neutral",
+  "not-configured": "warning",
+  unavailable: "danger",
+} as const;
+
+const AVAIL_COPY: Record<string, string> = {
+  ready: "A provider is configured and reachable.",
+  disabled: "AI is switched off. Analytics, Reviews and deterministic insights all still work.",
+  "not-configured": "No AI provider is configured yet. PBOS works fully without it — set one up in the workspace.",
+  unavailable: "The last request to the provider failed. Deterministic features are unaffected.",
+};
 
 function minutesLabel(mins: number) {
   const h = Math.floor(Math.abs(mins) / 60);
@@ -14,145 +27,186 @@ function minutesLabel(mins: number) {
 }
 
 export function AICoachPage() {
-  const { permissions, setPermission, visibleRecommendations, filteredOutCount, decideRecommendation, combinedImpact, decisionHistory, aiAvailability, userEnabled, setUserEnabled } =
-    useAICoach();
+  const coach = useAICoach();
+  const analytics = useAnalytics();
+  const [busy, setBusy] = useState(false);
+
+  const run = async (fn: () => Promise<unknown>) => {
+    setBusy(true);
+    try {
+      await fn();
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-text-primary text-xl font-semibold">AI Coach</h2>
-        <p className="text-text-muted text-sm">AI proposes. You decide. PBOS validates. Systems change.</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-text-primary text-xl font-semibold">AI Coach</h2>
+          <p className="text-text-muted text-sm">
+            AI proposes. You decide. PBOS validates deterministically. Only then do systems change.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Link
+            to="/ai-coach/workspace"
+            className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
+          >
+            Open Workspace
+          </Link>
+          <Link
+            to="/ai-coach/permissions"
+            className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
+          >
+            Permissions
+          </Link>
+        </div>
       </div>
 
       <Card>
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-text-muted text-xs mb-1">AI Availability</div>
-            <Badge tone={aiAvailability === "ready" ? "success" : aiAvailability === "disabled" ? "neutral" : "warning"}>
-              {aiAvailability === "not-configured" ? "Not Configured" : aiAvailability}
+            <div className="text-text-secondary text-xs mb-1">AI Availability</div>
+            <Badge tone={AVAIL_TONE[coach.aiAvailability]}>
+              {coach.aiAvailability === "not-configured" ? "Not configured" : coach.aiAvailability}
             </Badge>
-            {aiAvailability === "not-configured" && (
-              <p className="text-text-disabled text-[11px] mt-1">
-                No AI provider is wired in this build yet — this is the honest state, not an error. PBOS works
-                fully without it.
-              </p>
-            )}
+            <p className="text-text-secondary text-[11px] mt-1 max-w-lg">
+              {AVAIL_COPY[coach.aiAvailability]}
+              {coach.providerFailure && coach.aiAvailability === "unavailable" && (
+                <> Reason: {coach.providerFailure}.</>
+              )}
+            </p>
           </div>
           <button
-            onClick={() => setUserEnabled(!userEnabled)}
+            onClick={() => coach.setEnabled(!coach.config.enabled)}
             className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
           >
-            {userEnabled ? "Disable AI" : "Enable AI"}
+            {coach.config.enabled ? "Disable AI" : "Enable AI"}
           </button>
         </div>
       </Card>
 
-      <Card title="Domain Access">
-        <p className="text-text-disabled text-[11px] mb-3">
-          Money defaults to No Access — sensitive by default, matching the locked product rule. AI can only
-          use data from domains you enable, and can only recommend where Read + Recommend is set.
-        </p>
-        <div className="space-y-1">
-          {Object.entries(permissions).map(([domain, level]) => (
-            <div key={domain} className="flex items-center justify-between py-1.5 border-b border-border-subtle last:border-0">
-              <span className="text-text-primary text-sm">{domain}</span>
-              <select
-                value={level}
-                onChange={(e) => setPermission(domain, e.target.value as PermissionLevel)}
-                className="bg-surface-inset border border-border-subtle rounded-md px-2 py-1 text-text-secondary text-xs"
-              >
-                <option value="no-access">No Access</option>
-                <option value="read">Read</option>
-                <option value="read-recommend">Read + Recommend</option>
-              </select>
-            </div>
+      <Card title="Deterministic insights (no AI needed)">
+        <ul className="space-y-1.5">
+          {analytics.domainSnapshots.map((s) => (
+            <li
+              key={s.domain}
+              className="flex items-center justify-between py-1 border-b border-border-subtle last:border-0 text-sm"
+            >
+              <span className="text-text-primary">{s.domain}</span>
+              <span className="text-text-secondary text-xs">{s.headline}</span>
+            </li>
           ))}
+        </ul>
+        <div className="flex gap-3 mt-2 text-xs">
+          <Link to="/analytics" className="text-text-secondary underline hover:text-text-primary">
+            Analytics
+          </Link>
+          <Link to="/analytics/weekly" className="text-text-secondary underline hover:text-text-primary">
+            Weekly Review
+          </Link>
+          <Link to="/analytics/patterns" className="text-text-secondary underline hover:text-text-primary">
+            Patterns
+          </Link>
         </div>
       </Card>
 
-      {filteredOutCount > 0 && (
-        <div className="bg-surface-inset border border-border-subtle rounded-md px-4 py-3 text-xs text-text-muted">
-          {filteredOutCount} candidate recommendation(s) exist for domains without Read + Recommend access —
-          they are not shown, and never will be until you enable that domain. This is correct behavior, not a bug.
+      {coach.filteredOutCount > 0 && (
+        <div
+          role="note"
+          className="bg-surface-inset border border-border-subtle rounded-md px-4 py-3 text-xs text-text-secondary"
+        >
+          {coach.filteredOutCount} recommendation(s) exist for domains you haven't set to Read +
+          Recommend — hidden until you enable that domain. This is correct, not a bug.
         </div>
       )}
 
-      <Card title={`Recommendations (${visibleRecommendations.length} pending)`}>
-        {visibleRecommendations.length === 0 ? (
+      <Card title={`Recommendations (${coach.visibleRecommendations.length} awaiting your decision)`}>
+        {coach.visibleRecommendations.length === 0 ? (
           <p className="text-text-muted text-xs">
-            No changes recommended right now — a real "nothing to suggest" state, not an empty-by-accident one.
+            Nothing awaiting a decision. Generate proposals from the Workspace or a Review.
           </p>
         ) : (
           <div className="space-y-3">
-            {visibleRecommendations.map((r) => (
-              <div key={r.id} className="bg-surface-inset border border-border-subtle rounded-md p-3">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-text-primary text-sm font-medium">{r.title}</span>
-                  <div className="flex items-center gap-1.5">
-                    <Badge tone={IMPACT_TONE[r.impact]}>{r.impact} impact</Badge>
-                    <Badge tone={CONFIDENCE_TONE[r.confidence]}>{r.confidence}</Badge>
-                  </div>
-                </div>
-                <p className="text-text-muted text-xs mb-1">{r.domain} · Generated from {r.generatedFrom}</p>
-                <ul className="text-text-secondary text-xs mb-2 list-disc list-inside">
-                  {r.evidence.map((e, i) => (
-                    <li key={i}>{e}</li>
-                  ))}
-                </ul>
-                <div className="flex gap-2">
-                  <button onClick={() => decideRecommendation(r.id, "accepted")} className="px-3 py-1 rounded-md bg-action-primary text-text-inverse text-xs">
-                    Accept
-                  </button>
-                  <button onClick={() => decideRecommendation(r.id, "modified")} className="px-3 py-1 rounded-md bg-action-secondary text-text-primary text-xs">
-                    Modify
-                  </button>
-                  <button onClick={() => decideRecommendation(r.id, "rejected")} className="px-3 py-1 rounded-md text-text-muted text-xs hover:text-status-danger">
-                    Reject
-                  </button>
-                </div>
-              </div>
+            {coach.visibleRecommendations.map((r) => (
+              <RecommendationCard
+                key={r.id}
+                rec={r}
+                applyCtx={coach.applyCtx}
+                busy={busy}
+                onDecide={(id, d, p) => run(() => coach.decide(id, d, p))}
+                onApply={(id) => run(() => coach.apply(id))}
+              />
             ))}
           </div>
         )}
       </Card>
 
-      <Card title="Combined Capacity Impact">
+      <Card title="Combined capacity impact">
         <div className="grid grid-cols-3 gap-4 text-sm">
-          <div>
-            <div className="text-text-muted text-xs">Current Load</div>
-            <div className="text-text-primary">{minutesLabel(combinedImpact.currentLoadMinutes)}</div>
-          </div>
-          <div>
-            <div className="text-text-muted text-xs">With Accepted Changes</div>
-            <div className="text-text-primary">{minutesLabel(combinedImpact.withAcceptedChangesMinutes)}</div>
-          </div>
-          <div>
-            <div className="text-text-muted text-xs">Weekly Capacity</div>
-            <div className="text-text-primary">{minutesLabel(combinedImpact.weeklyCapacityMinutes)}</div>
-          </div>
+          <Metric label="Current load" value={minutesLabel(coach.combinedImpact.currentLoadMinutes)} />
+          <Metric
+            label="With accepted changes"
+            value={minutesLabel(coach.combinedImpact.withAcceptedChangesMinutes)}
+          />
+          <Metric label="Weekly capacity" value={minutesLabel(coach.combinedImpact.weeklyCapacityMinutes)} />
         </div>
-        {combinedImpact.exceedsCapacity && (
-          <div className="bg-status-warning/10 border border-status-warning/30 rounded-md px-3 py-2 mt-3 text-xs text-status-warning">
-            Accepting all currently-accepted changes together exceeds your configured weekly capacity —
-            validated as a combined set, not just individually.
+        {coach.combinedImpact.exceedsCapacity && (
+          <div
+            role="alert"
+            className="bg-status-warning/10 border border-status-warning/30 rounded-md px-3 py-2 mt-3 text-xs text-status-warning"
+          >
+            Accepting everything currently accepted would exceed your weekly capacity — validated as a
+            combined set, not one at a time.
           </div>
         )}
       </Card>
 
-      <Card title={`Decision History (${decisionHistory.length})`}>
-        {decisionHistory.length === 0 ? (
-          <p className="text-text-muted text-xs">No decisions made yet.</p>
+      <Card title={`Decision history (${coach.decisionHistory.length})`}>
+        {coach.decisionHistory.length === 0 ? (
+          <p className="text-text-muted text-xs">No decisions yet. Rejected proposals stay here too.</p>
         ) : (
-          <div className="space-y-1">
-            {decisionHistory.map((r) => (
-              <div key={r.id} className="flex items-center justify-between py-1.5 border-b border-border-subtle last:border-0 text-sm">
-                <span className="text-text-primary">{r.title}</span>
-                <Badge tone={STATUS_TONE[r.status]}>{r.status}</Badge>
+          <div className="space-y-2">
+            {coach.decisionHistory.map((r) => (
+              <div
+                key={r.id}
+                className="py-1.5 border-b border-border-subtle last:border-0"
+                data-testid={`history-${r.id}`}
+              >
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-text-primary">{r.title}</span>
+                  <Badge
+                    tone={
+                      r.status === "applied"
+                        ? "success"
+                        : r.status === "rejected" || r.status === "apply-failed"
+                          ? "danger"
+                          : "warning"
+                    }
+                  >
+                    {r.status.replace("-", " ")}
+                  </Badge>
+                </div>
+                <div className="text-text-muted text-[11px]">
+                  {coach.eventsFor(r.id).map((e) => e.event).join(" → ")}
+                  {r.status === "apply-failed" && r.validation && ` — ${r.validation.message}`}
+                </div>
               </div>
             ))}
           </div>
         )}
       </Card>
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-text-secondary text-xs">{label}</div>
+      <div className="text-text-primary">{value}</div>
     </div>
   );
 }

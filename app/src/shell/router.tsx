@@ -44,7 +44,12 @@ import { TransactionsPage } from "../domains/money/TransactionsPage";
 import { BudgetSavingsPage } from "../domains/money/BudgetSavingsPage";
 import { MoneyInsightsPage } from "../domains/money/MoneyInsightsPage";
 import { AnalyticsOverviewPage } from "../domains/analytics/AnalyticsOverviewPage";
+import { WeeklyReviewPage } from "../domains/analytics/WeeklyReviewPage";
+import { MonthlyReviewPage } from "../domains/analytics/MonthlyReviewPage";
+import { PatternsPage } from "../domains/analytics/PatternsPage";
 import { AICoachPage } from "../domains/intelligence/AICoachPage";
+import { AICoachWorkspacePage } from "../domains/intelligence/AICoachWorkspacePage";
+import { AICoachPermissionsPage } from "../domains/intelligence/AICoachPermissionsPage";
 import { PlannerPage } from "../domains/planning/PlannerPage";
 import { CalendarWeekPage } from "../domains/planning/CalendarWeekPage";
 import { CaptureInboxPage } from "../domains/capture/CaptureInboxPage";
@@ -128,7 +133,12 @@ export const router = createHashRouter([
       { path: "/money/budget", element: <BudgetSavingsPage />, handle: { title: "Budget & Savings" } },
       { path: "/money/insights", element: <MoneyInsightsPage />, handle: { title: "Money Insights" } },
       { path: "/analytics", element: <AnalyticsOverviewPage />, handle: { title: "Analytics" } },
+      { path: "/analytics/weekly", element: <WeeklyReviewPage />, handle: { title: "Weekly Review" } },
+      { path: "/analytics/monthly", element: <MonthlyReviewPage />, handle: { title: "Monthly Review" } },
+      { path: "/analytics/patterns", element: <PatternsPage />, handle: { title: "Patterns & Insights" } },
       { path: "/ai-coach", element: <AICoachPage />, handle: { title: "AI Coach" } },
+      { path: "/ai-coach/workspace", element: <AICoachWorkspacePage />, handle: { title: "AI Coach Workspace" } },
+      { path: "/ai-coach/permissions", element: <AICoachPermissionsPage />, handle: { title: "AI Coach Permissions" } },
       { path: "/calendar", element: <CalendarWeekPage />, handle: { title: "Calendar" } },
       { path: "/planner", element: <PlannerPage />, handle: { title: "Planner" } },
       { path: "/capture-inbox", element: <CaptureInboxPage />, handle: { title: "Capture Inbox" } },
