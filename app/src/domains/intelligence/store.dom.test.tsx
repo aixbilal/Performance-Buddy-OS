@@ -8,6 +8,7 @@ import { KnowledgeProvider, useKnowledge } from "../knowledge/store";
 import { FitnessProvider } from "../fitness-recovery/store";
 import { RoutineProvider } from "../routine/store";
 import { MoneyProvider, useMoney } from "../money/store";
+import { LanguageProvider } from "../language/store";
 import { PlanningProvider, usePlanning } from "../planning/store";
 import { AnalyticsProvider } from "../analytics/store";
 import { RevisionProvider, useRevision } from "../revision/store";
@@ -45,6 +46,7 @@ function Harness() {
         <KnowledgeProvider>
           <FitnessProvider>
             <RoutineProvider>
+              <LanguageProvider>
               <MoneyProvider>
                 <PlanningProvider>
                   <AnalyticsProvider>
@@ -54,6 +56,7 @@ function Harness() {
                   </AnalyticsProvider>
                 </PlanningProvider>
               </MoneyProvider>
+              </LanguageProvider>
             </RoutineProvider>
           </FitnessProvider>
         </KnowledgeProvider>

@@ -48,7 +48,15 @@ export type RecommendationSource =
   | "monthly-review"
   | "analytics"
   | "workspace"
-  | "manual";
+  | "manual"
+  // V2 — contextual / deep-reasoning sources (existing values stay valid).
+  | "contextual"
+  | "capture"
+  | "adaptive-today"
+  | "academic"
+  | "knowledge"
+  | "routine"
+  | "planning";
 
 export type ValidationResult = {
   ok: boolean;

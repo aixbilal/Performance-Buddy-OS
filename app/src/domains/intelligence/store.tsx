@@ -30,6 +30,8 @@ import { useRoutine } from "../routine/store";
 import { useAnalytics } from "../analytics/store";
 import { computeCombinedImpact, parseProposals } from "./engine";
 import { getAdapter, type ApplyContext } from "./applyAdapters";
+import { getMutation } from "../mutations/registry";
+import { useMutationContext } from "../mutations/useMutationContext";
 import { recordRevision } from "../revision/recorder";
 import type { RevisionDomain } from "../revision/types";
 import { makeAIRepo, type AIRepo } from "./repo";
@@ -115,6 +117,8 @@ export function AICoachProvider({ children }: { children: ReactNode }) {
   const knowledge = useKnowledge();
   const routine = useRoutine();
   const analytics = useAnalytics();
+  /** The full shared mutation context — every registry kind can apply. */
+  const mutationCtx = useMutationContext();
 
   const [loaded, setLoaded] = useState(false);
   const [config, setConfigState] = useState<AIProviderConfig>(DEFAULT_AI_CONFIG);
@@ -366,19 +370,22 @@ export function AICoachProvider({ children }: { children: ReactNode }) {
         triggersReplan: false,
       };
     }
-    const adapter = getAdapter(rec.kind);
+    // Phase I: apply through the shared mutation registry so ANY canonical
+    // kind (not just the four AI-proposed ones) is validated + applied by the
+    // one engine. `getAdapter` stays as the parse-time allowlist elsewhere.
+    const adapter = getMutation(rec.kind) ?? getAdapter(rec.kind);
     if (!adapter) {
       const failedRec: Recommendation = {
         ...rec,
         status: "apply-failed",
-        validation: { ok: false, reasonCodes: ["UNKNOWN_KIND"], message: `No Apply adapter for "${rec.kind}".` },
+        validation: { ok: false, reasonCodes: ["UNKNOWN_KIND"], message: `No mutation for "${rec.kind}".` },
       };
       await persistRec(failedRec);
       await appendEvent(id, "apply-failed", { reasonCodes: ["UNKNOWN_KIND"] });
       return { ok: false, status: "apply-failed", message: failedRec.validation!.message, triggersReplan: false };
     }
 
-    const validation = adapter.validate(rec.proposedParams, applyCtx);
+    const validation = adapter.validate(rec.proposedParams, mutationCtx);
     if (!validation.ok) {
       const failedRec: Recommendation = { ...rec, status: "apply-failed", validation };
       await persistRec(failedRec);
@@ -386,7 +393,7 @@ export function AICoachProvider({ children }: { children: ReactNode }) {
       return { ok: false, status: "apply-failed", message: validation.message, triggersReplan: false };
     }
 
-    const outcome = await adapter.apply(rec.proposedParams, applyCtx);
+    const outcome = await adapter.apply(rec.proposedParams, mutationCtx);
     if (!outcome.ok) {
       const failedRec: Recommendation = {
         ...rec,
@@ -417,7 +424,10 @@ export function AICoachProvider({ children }: { children: ReactNode }) {
       "adjust-routine-cadence": "routine",
     };
     recordRevision({
-      domain: APPLIED_DOMAIN[rec.kind] ?? "performance",
+      domain:
+        (getMutation(rec.kind)?.revisionDomain as RevisionDomain | undefined) ??
+        APPLIED_DOMAIN[rec.kind] ??
+        "performance",
       entityType: rec.kind,
       entityId: String((outcome.result as Record<string, unknown> | null)?.id ?? id),
       operation: "apply",

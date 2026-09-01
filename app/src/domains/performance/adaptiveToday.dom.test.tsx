@@ -10,6 +10,7 @@ import { KnowledgeProvider } from "../knowledge/store";
 import { FitnessProvider } from "../fitness-recovery/store";
 import { RoutineProvider } from "../routine/store";
 import { MoneyProvider } from "../money/store";
+import { LanguageProvider } from "../language/store";
 import { AnalyticsProvider } from "../analytics/store";
 import { AICoachProvider } from "../intelligence/store";
 import { FocusProvider } from "../focus/store";
@@ -32,7 +33,8 @@ function App() {
           <KnowledgeProvider>
             <FitnessProvider>
               <RoutineProvider>
-                <MoneyProvider>
+                <LanguageProvider>
+                  <MoneyProvider>
                   <PlanningProvider>
                     <AnalyticsProvider>
                       <AICoachProvider>
@@ -45,7 +47,8 @@ function App() {
                       </AICoachProvider>
                     </AnalyticsProvider>
                   </PlanningProvider>
-                </MoneyProvider>
+                  </MoneyProvider>
+                </LanguageProvider>
               </RoutineProvider>
             </FitnessProvider>
           </KnowledgeProvider>

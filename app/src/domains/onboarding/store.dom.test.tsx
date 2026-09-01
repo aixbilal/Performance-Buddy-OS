@@ -9,6 +9,7 @@ import { ObsidianProvider } from "../obsidian/store";
 import { FitnessProvider } from "../fitness-recovery/store";
 import { RoutineProvider } from "../routine/store";
 import { MoneyProvider } from "../money/store";
+import { LanguageProvider } from "../language/store";
 import { PlanningProvider } from "../planning/store";
 import { SettingsProvider, useSettings } from "../settings/store";
 import { AnalyticsProvider } from "../analytics/store";
@@ -36,7 +37,8 @@ function Harness() {
           <ObsidianProvider>
             <FitnessProvider>
               <RoutineProvider>
-                <MoneyProvider>
+                <LanguageProvider>
+                  <MoneyProvider>
                   <PlanningProvider>
                     <SettingsProvider>
                       <AnalyticsProvider>
@@ -48,7 +50,8 @@ function Harness() {
                       </AnalyticsProvider>
                     </SettingsProvider>
                   </PlanningProvider>
-                </MoneyProvider>
+                  </MoneyProvider>
+                </LanguageProvider>
               </RoutineProvider>
             </FitnessProvider>
           </ObsidianProvider>
