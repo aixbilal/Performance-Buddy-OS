@@ -7,6 +7,7 @@ import { useAcademic } from "./store";
 import { useKnowledge } from "../knowledge/store";
 import { analyzeAssessmentWeighting } from "./engine";
 import { AssessmentForm, EMPTY_ASSESSMENT_FORM, type AssessmentFormValues } from "./AssessmentForm";
+import { AssessmentScopeEditor } from "./AssessmentScopeEditor";
 import { EMPTY_TOPIC_FORM, TopicForm, type TopicFormValues } from "./TopicForm";
 import { COVERAGE_STATUSES, GRADE_LETTERS, type CoverageStatus, type Topic } from "./types";
 import { Button } from "../../components/Button";
@@ -271,45 +272,48 @@ export function CourseDetailPage() {
             ) : (
               <div
                 key={a.id}
-                className="flex items-center justify-between py-2 border-b border-border-subtle last:border-0"
+                className="py-2 border-b border-border-subtle last:border-0"
               >
-                <div>
-                  <div className="text-text-primary text-sm">{a.title}</div>
-                  <div className="text-text-muted text-xs capitalize">
-                    {a.category} · {a.weightPercent}% weight
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-text-primary text-sm">{a.title}</div>
+                    <div className="text-text-muted text-xs capitalize">
+                      {a.category} · {a.weightPercent}% weight
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <label className="text-text-muted text-[11px]">
+                      <span className="sr-only">Obtained marks for {a.title}</span>
+                      <input
+                        type="number"
+                        defaultValue={a.obtainedMarks ?? ""}
+                        aria-label={`Obtained marks for ${a.title}`}
+                        className="w-16 bg-surface-inset border border-border-subtle rounded px-1.5 py-1 text-text-primary text-xs outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
+                        onBlur={(e) => {
+                          const raw = e.target.value.trim();
+                          academic.setAssessmentMarks(a.id, raw === "" ? null : Number(raw));
+                        }}
+                      />
+                      <span className="ml-1">/ {a.totalMarks}</span>
+                    </label>
+                    <button
+                      onClick={() => {
+                        setEditingAssessmentId(a.id);
+                        setAddingAssessment(false);
+                      }}
+                      className="text-text-muted text-[11px] hover:text-text-secondary underline"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => academic.deleteAssessment(a.id)}
+                      className="text-text-muted text-[11px] hover:text-status-danger underline"
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <label className="text-text-muted text-[11px]">
-                    <span className="sr-only">Obtained marks for {a.title}</span>
-                    <input
-                      type="number"
-                      defaultValue={a.obtainedMarks ?? ""}
-                      aria-label={`Obtained marks for ${a.title}`}
-                      className="w-16 bg-surface-inset border border-border-subtle rounded px-1.5 py-1 text-text-primary text-xs outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
-                      onBlur={(e) => {
-                        const raw = e.target.value.trim();
-                        academic.setAssessmentMarks(a.id, raw === "" ? null : Number(raw));
-                      }}
-                    />
-                    <span className="ml-1">/ {a.totalMarks}</span>
-                  </label>
-                  <button
-                    onClick={() => {
-                      setEditingAssessmentId(a.id);
-                      setAddingAssessment(false);
-                    }}
-                    className="text-text-muted text-[11px] hover:text-text-secondary underline"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => academic.deleteAssessment(a.id)}
-                    className="text-text-muted text-[11px] hover:text-status-danger underline"
-                  >
-                    Delete
-                  </button>
-                </div>
+                <AssessmentScopeEditor courseId={course.id} assessmentId={a.id} />
               </div>
             ),
           )}

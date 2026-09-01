@@ -15,9 +15,8 @@ import { useRoutine } from "../routine/store";
 import { useMoney } from "../money/store";
 import { useAcademic } from "../academic/store";
 import { useLanguage } from "../language/store";
-import { makeAssessmentScopeRepo } from "../adaptive/repo";
 import { makeTodayStateRepo } from "../adaptive/repo";
-import type { AssessmentTopicLink, TodayCapacityLevel, TodayOperatingState } from "../adaptive/types";
+import type { TodayCapacityLevel, TodayOperatingState } from "../adaptive/types";
 import type { MutationContext } from "./types";
 
 export function useMutationContext(): MutationContext {
@@ -29,22 +28,17 @@ export function useMutationContext(): MutationContext {
   const academic = useAcademic();
   const language = useLanguage();
 
-  const scopeRepo = useRef(makeAssessmentScopeRepo());
   const todayRepo = useRef(makeTodayStateRepo());
-  const [scopeLinks, setScopeLinks] = useState<AssessmentTopicLink[]>([]);
   const [todayStates, setTodayStates] = useState<TodayOperatingState[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const [links, states] = await Promise.all([scopeRepo.current.load(), todayRepo.current.load()]);
-        if (!cancelled) {
-          setScopeLinks(links);
-          setTodayStates(states);
-        }
+        const states = await todayRepo.current.load();
+        if (!cancelled) setTodayStates(states);
       } catch {
-        /* deterministic core still works with empty caches */
+        /* deterministic core still works with an empty cache */
       }
     })();
     return () => {
@@ -52,24 +46,18 @@ export function useMutationContext(): MutationContext {
     };
   }, []);
 
+  // Assessment scope is owned by the academic store (one cache, same-course
+  // guard). The mutation `update-assessment-scope` calls straight through it.
   const scopeTopicIds = useCallback(
-    (assessmentId: string) => scopeLinks.filter((l) => l.assessmentId === assessmentId).map((l) => l.topicId),
-    [scopeLinks],
+    (assessmentId: string) => academic.getAssessmentScopeTopicIds(assessmentId),
+    [academic],
   );
   const setAssessmentScope = useCallback(
-    async (assessmentId: string, topicIds: string[], source: string, now: string) => {
-      await scopeRepo.current.set(assessmentId, topicIds, source, now);
-      setScopeLinks((prev) => [
-        ...prev.filter((l) => l.assessmentId !== assessmentId),
-        ...topicIds.map((topicId) => ({
-          assessmentId,
-          topicId,
-          source: source as AssessmentTopicLink["source"],
-          createdAt: now,
-        })),
-      ]);
+    async (assessmentId: string, topicIds: string[], source: string, _now: string) => {
+      void _now;
+      await academic.setAssessmentScope(assessmentId, topicIds, source);
     },
-    [],
+    [academic],
   );
 
   const getCapacity = useCallback(

@@ -41,6 +41,8 @@ import {
 import { newId } from "./ids";
 import { resolveLegacyAcademic, type AcademicLegacyReport } from "./legacyImport";
 import { makeAcademicRepo, type AcademicRepo } from "./repo";
+import { makeAssessmentScopeRepo, type AssessmentScopeRepo } from "../adaptive/repo";
+import type { AssessmentTopicLink } from "../adaptive/types";
 import type {
   AcademicGraph,
   Assessment,
@@ -108,6 +110,13 @@ type AcademicContextValue = {
   deleteAssessment: (id: string) => Promise<void>;
   setAssessmentMarks: (assessmentId: string, obtainedMarks: number | null) => Promise<MutResult>;
 
+  // assessment ↔ topic SCOPE (schema v11). Explicit only; same-course enforced.
+  getAssessmentScopeTopicIds: (assessmentId: string) => string[];
+  getAssessmentScopeTopics: (assessmentId: string) => Topic[];
+  addAssessmentScopeTopic: (assessmentId: string, topicId: string) => Promise<MutResult>;
+  removeAssessmentScopeTopic: (assessmentId: string, topicId: string) => Promise<void>;
+  setAssessmentScope: (assessmentId: string, topicIds: string[], source?: string) => Promise<MutResult>;
+
   // attempts
   upsertAttempt: (courseId: string, input: AttemptInput, id?: string) => Promise<MutResult>;
   deleteAttempt: (id: string) => Promise<void>;
@@ -129,7 +138,17 @@ const EMPTY: AcademicGraph = {
 
 export function AcademicProvider({ children }: { children: ReactNode }) {
   const repoRef = useRef<AcademicRepo>(makeAcademicRepo());
+  const scopeRepoRef = useRef<AssessmentScopeRepo>(makeAssessmentScopeRepo());
   const [graph, setGraph] = useState<AcademicGraph>(EMPTY);
+  const [scopeLinks, setScopeLinks] = useState<AssessmentTopicLink[]>([]);
+  const scopeLinksRef = useRef<AssessmentTopicLink[]>([]);
+  scopeLinksRef.current = scopeLinks;
+  const applyScopeLinks = (next: AssessmentTopicLink[]) => {
+    scopeLinksRef.current = next;
+    setScopeLinks(next);
+  };
+  const pruneScopeLinks = (keep: (l: AssessmentTopicLink) => boolean) =>
+    applyScopeLinks(scopeLinksRef.current.filter(keep));
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("idle");
@@ -150,9 +169,14 @@ export function AcademicProvider({ children }: { children: ReactNode }) {
         const report = await repo.importGraph(legacy.graph);
         if (report.ran) setLegacyImport(legacy.report);
 
-        const g = await repo.load();
+        const [g, links] = await Promise.all([
+          repo.load(),
+          scopeRepoRef.current.load().catch(() => [] as AssessmentTopicLink[]),
+        ]);
         if (!cancelled) {
           setGraph(g);
+          scopeLinksRef.current = links;
+          setScopeLinks(links);
           setLoaded(true);
         }
       } catch (e) {
@@ -269,6 +293,10 @@ export function AcademicProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteCourse = async (id: string) => {
+    const goneAssessments = new Set(
+      graph.assessments.filter((a) => a.courseId === id).map((a) => a.id),
+    );
+    const goneTopics = new Set(graph.topics.filter((t) => t.courseId === id).map((t) => t.id));
     setGraph((g) => ({
       ...g,
       courses: g.courses.filter((c) => c.id !== id),
@@ -276,6 +304,7 @@ export function AcademicProvider({ children }: { children: ReactNode }) {
       assessments: g.assessments.filter((a) => a.courseId !== id),
       attempts: g.attempts.filter((a) => a.courseId !== id),
     }));
+    pruneScopeLinks((l) => !goneAssessments.has(l.assessmentId) && !goneTopics.has(l.topicId));
     await persist(() => repoRef.current.courseDelete(id));
   };
 
@@ -313,6 +342,7 @@ export function AcademicProvider({ children }: { children: ReactNode }) {
 
   const deleteTopic = async (id: string) => {
     setGraph((g) => ({ ...g, topics: g.topics.filter((t) => t.id !== id) }));
+    pruneScopeLinks((l) => l.topicId !== id);
     await persist(() => repoRef.current.topicDelete(id));
   };
 
@@ -411,6 +441,7 @@ export function AcademicProvider({ children }: { children: ReactNode }) {
 
   const deleteAssessment = async (id: string) => {
     setGraph((g) => ({ ...g, assessments: g.assessments.filter((a) => a.id !== id) }));
+    pruneScopeLinks((l) => l.assessmentId !== id);
     await persist(() => repoRef.current.assessmentDelete(id));
   };
 
@@ -435,6 +466,75 @@ export function AcademicProvider({ children }: { children: ReactNode }) {
     }));
     await persist(() => repoRef.current.assessmentUpsert(assessment));
     return { ok: true, id: assessmentId };
+  };
+
+  // --- assessment ↔ topic SCOPE (schema v11) -----------------------
+  // Explicit only. A topic is never "in scope" because it sits in the course.
+  // Same-course is enforced here for the localStorage path and again in Rust.
+  const getAssessmentScopeTopicIds = (assessmentId: string) =>
+    scopeLinksRef.current.filter((l) => l.assessmentId === assessmentId).map((l) => l.topicId);
+
+  const getAssessmentScopeTopics = (assessmentId: string) => {
+    const ids = new Set(getAssessmentScopeTopicIds(assessmentId));
+    return graph.topics.filter((t) => ids.has(t.id));
+  };
+
+  const sameCourseGuard = (assessmentId: string, topicIds: string[]): string | null => {
+    const assessment = graph.assessments.find((a) => a.id === assessmentId);
+    if (!assessment) return "Assessment not found.";
+    const inCourse = new Set(
+      graph.topics.filter((t) => t.courseId === assessment.courseId).map((t) => t.id),
+    );
+    const foreign = topicIds.filter((id) => !inCourse.has(id));
+    return foreign.length
+      ? `Scope can only include topics from this course (offending: ${foreign.join(", ")}).`
+      : null;
+  };
+
+  const setAssessmentScope = async (
+    assessmentId: string,
+    topicIds: string[],
+    source = "user",
+  ): Promise<MutResult> => {
+    const err = sameCourseGuard(assessmentId, topicIds);
+    if (err) return { ok: false, errors: { _: err } };
+    const now = nowIso();
+    await persist(() => scopeRepoRef.current.set(assessmentId, topicIds, source, now));
+    applyScopeLinks([
+      ...scopeLinksRef.current.filter((l) => l.assessmentId !== assessmentId),
+      ...topicIds.map((topicId) => ({
+        assessmentId,
+        topicId,
+        source: source as AssessmentTopicLink["source"],
+        createdAt: now,
+      })),
+    ]);
+    return { ok: true, id: assessmentId };
+  };
+
+  const addAssessmentScopeTopic = async (
+    assessmentId: string,
+    topicId: string,
+  ): Promise<MutResult> => {
+    if (getAssessmentScopeTopicIds(assessmentId).includes(topicId)) {
+      return { ok: true, id: assessmentId };
+    }
+    const err = sameCourseGuard(assessmentId, [topicId]);
+    if (err) return { ok: false, errors: { _: err } };
+    const now = nowIso();
+    const link: AssessmentTopicLink = { assessmentId, topicId, source: "user", createdAt: now };
+    await persist(() => scopeRepoRef.current.add(link));
+    applyScopeLinks([...scopeLinksRef.current, link]);
+    return { ok: true, id: assessmentId };
+  };
+
+  const removeAssessmentScopeTopic = async (assessmentId: string, topicId: string) => {
+    await persist(() => scopeRepoRef.current.remove(assessmentId, topicId));
+    applyScopeLinks(
+      scopeLinksRef.current.filter(
+        (l) => !(l.assessmentId === assessmentId && l.topicId === topicId),
+      ),
+    );
   };
 
   // --- attempts -------------------------------------------------
@@ -538,12 +638,17 @@ export function AcademicProvider({ children }: { children: ReactNode }) {
       updateAssessment,
       deleteAssessment,
       setAssessmentMarks,
+      getAssessmentScopeTopicIds,
+      getAssessmentScopeTopics,
+      addAssessmentScopeTopic,
+      removeAssessmentScopeTopic,
+      setAssessmentScope,
       upsertAttempt,
       deleteAttempt,
       createSemester,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [graph, loaded, loadError, saveState, saveError, legacyImport],
+    [graph, scopeLinks, loaded, loadError, saveState, saveError, legacyImport],
   );
 
   return <AcademicContext.Provider value={value}>{children}</AcademicContext.Provider>;
