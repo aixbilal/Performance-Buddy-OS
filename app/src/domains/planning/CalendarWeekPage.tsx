@@ -29,6 +29,8 @@ export function CalendarWeekPage() {
     blocks,
     loaded,
     loadError,
+    resolveOccurrence,
+    occurrenceStateFor,
   } = usePlanning();
   const { actions } = usePerformance();
   const navigate = useNavigate();
@@ -204,6 +206,22 @@ export function CalendarWeekPage() {
           }}
           onMove={(day, start, end) => moveBlock(selected.id, { day, startMinute: start, endMinute: end, date: null })}
           onOpenAction={() => selectedAction && navigate("/systems")}
+          occurrenceDate={
+            selected.date == null
+              ? weekDays.find((d) => d.weekdayIndex === selected.day)?.iso ?? null
+              : null
+          }
+          occurrenceState={
+            selected.date == null
+              ? occurrenceStateFor(
+                  selected.id,
+                  weekDays.find((d) => d.weekdayIndex === selected.day)?.iso ?? "",
+                )
+              : null
+          }
+          onResolveOccurrence={(iso, kind, toDate) =>
+            resolveOccurrence(selected.id, iso, kind, toDate)
+          }
         />
       )}
     </div>
@@ -220,6 +238,9 @@ function BlockDetailPanel({
   onDelete,
   onMove,
   onOpenAction,
+  occurrenceDate,
+  occurrenceState,
+  onResolveOccurrence,
 }: {
   block: PlanningBlock;
   actionTitle: string | null;
@@ -230,11 +251,19 @@ function BlockDetailPanel({
   onDelete: () => void;
   onMove: (day: number, start: number, end: number) => void;
   onOpenAction: () => void;
+  occurrenceDate: string | null;
+  occurrenceState: "skipped" | "done" | "deferred" | null;
+  onResolveOccurrence: (
+    iso: string,
+    kind: "skipped" | "done" | "deferred",
+    toDate?: string,
+  ) => Promise<unknown>;
 }) {
   const [day, setDay] = useState(block.day);
   const [start, setStart] = useState(timeLabel(block.startMinute));
   const [end, setEnd] = useState(timeLabel(block.endMinute));
   const [err, setErr] = useState<string | null>(null);
+  const [deferTo, setDeferTo] = useState("");
 
   const parse = (v: string): number | null => {
     const m = /^(\d{1,2}):(\d{2})$/.exec(v.trim());
@@ -266,6 +295,49 @@ function BlockDetailPanel({
           )
         ) : (
           <div className="text-text-muted text-xs">No linked Action.</div>
+        )}
+
+        {block.date == null && occurrenceDate && (
+          <div className="rounded-md border border-border-subtle bg-surface-inset p-2 mt-1">
+            <div className="text-text-secondary text-[11px] mb-1">
+              This week's occurrence ({occurrenceDate})
+              {occurrenceState && (
+                <span className="text-text-primary"> · currently {occurrenceState}</span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                onClick={() => void onResolveOccurrence(occurrenceDate, "skipped")}
+                className="px-2 py-1 rounded text-[11px] border border-border-subtle text-text-secondary hover:text-text-primary"
+              >
+                Skip this one
+              </button>
+              <button
+                onClick={() => void onResolveOccurrence(occurrenceDate, "done")}
+                className="px-2 py-1 rounded text-[11px] border border-border-subtle text-text-secondary hover:text-text-primary"
+              >
+                Mark done
+              </button>
+              <input
+                type="date"
+                value={deferTo}
+                onChange={(e) => setDeferTo(e.target.value)}
+                aria-label="Move this occurrence to date"
+                className="bg-surface-raised border border-border-subtle rounded px-1.5 py-1 text-[11px] text-text-primary"
+              />
+              <button
+                disabled={!deferTo}
+                onClick={() => void onResolveOccurrence(occurrenceDate, "deferred", deferTo)}
+                className="px-2 py-1 rounded text-[11px] border border-border-subtle text-text-secondary hover:text-text-primary disabled:opacity-50"
+              >
+                Move this occurrence
+              </button>
+            </div>
+            <p className="text-text-muted text-[10px] mt-1">
+              Only this date changes — the weekly block stays. Editing every week uses “Move to
+              day” below.
+            </p>
+          </div>
         )}
 
         <div className="grid grid-cols-3 gap-2 pt-2">

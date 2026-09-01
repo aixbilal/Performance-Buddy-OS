@@ -2,7 +2,7 @@
  * Collision-resistant ids for the Planning domain.
  * `crypto.randomUUID()` — NOT `Date.now()`.
  */
-export type PlanningIdPrefix = "blk";
+export type PlanningIdPrefix = "blk" | "occ" | "cs";
 
 export function newId(prefix: PlanningIdPrefix): string {
   const uuid =

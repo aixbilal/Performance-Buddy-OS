@@ -45,6 +45,15 @@ import { newId } from "./ids";
 import { recordRevision } from "../revision/recorder";
 import { resolveLegacyPlanning, type PlanningLegacyReport } from "./legacyImport";
 import { makePlanningRepo, type PlanningRepo } from "./repo";
+import { makeAdaptivePlanningRepo, type AdaptivePlanningRepo } from "../adaptive/repo";
+import type {
+  OccurrenceState,
+  PlanningChangeSet,
+  PlanningChangeSetScope,
+  PlanningDiffChange,
+  PlanningOccurrenceException,
+} from "../adaptive/types";
+import type { PlanningDiff } from "./adaptiveEngine";
 import {
   DEFAULT_CAPACITY,
   type CapacityConfig,
@@ -126,13 +135,73 @@ type PlanningContextValue = {
     candidates: { actionId: string; title: string; estMinutes: number | null }[],
   ) => ScheduleProposal;
   applyProposal: (proposal: ScheduleProposal) => Promise<void>;
+
+  // --- V2 Adaptive Planning (schema v11) ---------------------------
+  occurrenceExceptions: PlanningOccurrenceException[];
+  /** The persisted state of ONE date of a recurring block, or null. */
+  occurrenceStateFor: (blockId: string, occurrenceDate: string) => OccurrenceState | null;
+  /**
+   * Resolve one occurrence of a recurring block WITHOUT touching the template.
+   * "defer" also creates a concrete date-pinned replacement block and links it.
+   */
+  resolveOccurrence: (
+    blockId: string,
+    occurrenceDate: string,
+    kind: OccurrenceState,
+    toDate?: string,
+  ) => Promise<MutResult>;
+  changeSets: PlanningChangeSet[];
+  /** Apply a reviewed Planning Diff as one unit; persists it + its inverse. */
+  applyPlanningDiff: (
+    diff: PlanningDiff,
+    opts: { scope: PlanningChangeSetScope; targetStartDate?: string; targetEndDate?: string; rationale?: string },
+  ) => Promise<{ ok: boolean; changeSetId: string | null; message: string }>;
+  /** Practical Undo — replays the stored inverse changes. */
+  undoPlanningChangeSet: (changeSetId: string) => Promise<{ ok: boolean; message: string }>;
 };
 
 const PlanningContext = createContext<PlanningContextValue | null>(null);
 
+/** Build a durable Planning Diff row (schema v11) from a reviewed diff. */
+function makeChangeSet(
+  diff: PlanningDiff,
+  opts: {
+    scope: PlanningChangeSetScope;
+    targetStartDate?: string;
+    targetEndDate?: string;
+    rationale?: string;
+  },
+  status: PlanningChangeSet["status"],
+): PlanningChangeSet {
+  const now = new Date().toISOString();
+  return {
+    id: newId("cs"),
+    scope: opts.scope,
+    status,
+    targetStartDate: opts.targetStartDate ?? null,
+    targetEndDate: opts.targetEndDate ?? null,
+    rationale: opts.rationale ?? "",
+    reasonCodesJson: JSON.stringify(diff.reasonCodes),
+    changesJson: JSON.stringify(diff.changes),
+    inverseChangesJson: JSON.stringify(diff.inverseChanges),
+    source: "adaptive-planning",
+    createdAt: now,
+    decidedAt: now,
+    appliedAt: null,
+    undoneAt: null,
+  };
+}
+
 export function PlanningProvider({ children }: { children: ReactNode }) {
   const repoRef = useRef<PlanningRepo>(makePlanningRepo());
+  const adaptiveRepoRef = useRef<AdaptivePlanningRepo>(makeAdaptivePlanningRepo());
   const [graph, setGraph] = useState<PlanningGraph>(EMPTY);
+  const [occurrences, setOccurrences] = useState<PlanningOccurrenceException[]>([]);
+  const occurrencesRef = useRef<PlanningOccurrenceException[]>([]);
+  occurrencesRef.current = occurrences;
+  const [changeSets, setChangeSets] = useState<PlanningChangeSet[]>([]);
+  const changeSetsRef = useRef<PlanningChangeSet[]>([]);
+  changeSetsRef.current = changeSets;
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("idle");
@@ -153,9 +222,17 @@ export function PlanningProvider({ children }: { children: ReactNode }) {
         });
         const report = await repo.importGraph(legacy.graph);
         if (report.ran) setLegacyImport(legacy.report);
-        const g = await repo.load();
+        const [g, occ, cs] = await Promise.all([
+          repo.load(),
+          adaptiveRepoRef.current.loadOccurrences().catch(() => [] as PlanningOccurrenceException[]),
+          adaptiveRepoRef.current.loadChangeSets().catch(() => [] as PlanningChangeSet[]),
+        ]);
         if (!cancelled) {
           setGraph(g);
+          occurrencesRef.current = occ;
+          setOccurrences(occ);
+          changeSetsRef.current = cs;
+          setChangeSets(cs);
           setLoaded(true);
         }
       } catch (e) {
@@ -328,6 +405,235 @@ export function PlanningProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  // --- V2 Adaptive Planning -------------------------------------------
+  const occurrenceStateFor = (blockId: string, occurrenceDate: string): OccurrenceState | null =>
+    occurrencesRef.current.find(
+      (e) => e.blockId === blockId && e.occurrenceDate === occurrenceDate,
+    )?.state ?? null;
+
+  const upsertOccurrenceLocal = (e: PlanningOccurrenceException) => {
+    const prev = occurrencesRef.current;
+    const i = prev.findIndex(
+      (x) => x.blockId === e.blockId && x.occurrenceDate === e.occurrenceDate,
+    );
+    const next = i >= 0 ? prev.map((x, j) => (j === i ? e : x)) : [...prev, e];
+    occurrencesRef.current = next;
+    setOccurrences(next);
+  };
+  const removeOccurrenceLocal = (id: string) => {
+    const next = occurrencesRef.current.filter((x) => x.id !== id);
+    occurrencesRef.current = next;
+    setOccurrences(next);
+  };
+  const upsertChangeSetLocal = (cs: PlanningChangeSet) => {
+    const prev = changeSetsRef.current;
+    const i = prev.findIndex((x) => x.id === cs.id);
+    const next = i >= 0 ? prev.map((x, j) => (j === i ? cs : x)) : [cs, ...prev];
+    changeSetsRef.current = next;
+    setChangeSets(next);
+  };
+
+  const resolveOccurrence = async (
+    blockId: string,
+    occurrenceDate: string,
+    kind: OccurrenceState,
+    toDate?: string,
+  ): Promise<MutResult> => {
+    const template = graph.blocks.find((b) => b.id === blockId);
+    if (!template) return { ok: false, errors: { _: "Block not found." } };
+    // Editing ONE occurrence never mutates the recurring template.
+    const now = nowIso();
+    const existing = occurrencesRef.current.find(
+      (e) => e.blockId === blockId && e.occurrenceDate === occurrenceDate,
+    );
+    let replacementBlockId: string | null = existing?.replacementBlockId ?? null;
+
+    if (kind === "deferred") {
+      const target = toDate ?? occurrenceDate;
+      const replacement: PlanningBlock = {
+        id: newId("blk"),
+        title: template.title,
+        domain: template.domain,
+        actionId: template.actionId,
+        day: mondayIndexOf(target),
+        date: target,
+        startMinute: template.startMinute,
+        endMinute: template.endMinute,
+        type: template.type,
+        locked: false,
+        source: "generated",
+        status: "scheduled",
+        createdAt: now,
+        updatedAt: now,
+      };
+      setGraph((g) => ({ ...g, blocks: [...g.blocks, replacement] }));
+      await persist(() => repoRef.current.blockUpsert(replacement));
+      replacementBlockId = replacement.id;
+    }
+
+    const exception: PlanningOccurrenceException = {
+      id: existing?.id ?? newId("occ"),
+      blockId,
+      occurrenceDate,
+      state: kind,
+      replacementBlockId,
+      source: "user",
+      note: existing?.note ?? "",
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    upsertOccurrenceLocal(exception);
+    await persist(() => adaptiveRepoRef.current.upsertOccurrence(exception));
+    recordRevision({
+      domain: "planning",
+      entityType: "occurrence-exception",
+      entityId: `${blockId}@${occurrenceDate}`,
+      operation: "update",
+      source: "user",
+      summary: `Occurrence ${occurrenceDate} of "${template.title}" → ${kind}`,
+      metadata: { blockId, occurrenceDate, state: kind, replacementBlockId },
+    });
+    return { ok: true, id: exception.id };
+  };
+
+  const applyPlanningDiff = async (
+    diff: PlanningDiff,
+    opts: {
+      scope: PlanningChangeSetScope;
+      targetStartDate?: string;
+      targetEndDate?: string;
+      rationale?: string;
+    },
+  ): Promise<{ ok: boolean; changeSetId: string | null; message: string }> => {
+    const createdBlockIds: string[] = [];
+    const movedBack: { id: string; startMinute: number; endMinute: number }[] = [];
+    const createdOccurrenceIds: string[] = [];
+    try {
+      for (const change of diff.changes) {
+        if (change.kind === "keep") continue;
+        if (change.kind === "add") {
+          const b = change.block as Record<string, unknown>;
+          const res = await createBlock({
+            title: String(b.title ?? "Study block"),
+            domain: String(b.domain ?? "Planning"),
+            actionId: (b.actionId as string | null) ?? null,
+            day: Number(b.day ?? 0),
+            date: (b.date as string | null) ?? null,
+            startMinute: Number(b.startMinute ?? 0),
+            endMinute: Number(b.endMinute ?? 0),
+            type: "flexible",
+            locked: false,
+            source: "generated",
+            status: "scheduled",
+          });
+          if (!res.ok) throw new Error(Object.values(res.errors)[0] ?? "add failed");
+          createdBlockIds.push(res.id);
+        } else if (change.kind === "move") {
+          const b = graph.blocks.find((x) => x.id === change.blockId);
+          if (!b) continue;
+          movedBack.push({ id: b.id, startMinute: b.startMinute, endMinute: b.endMinute });
+          const dur = b.endMinute - b.startMinute;
+          await moveBlock(b.id, {
+            startMinute: change.toStartMinute,
+            endMinute: change.toStartMinute + dur,
+          });
+        } else if (change.kind === "drop-occurrence" && !change.blockId.startsWith("__candidate:")) {
+          const r = await resolveOccurrence(change.blockId, change.occurrenceDate, "skipped");
+          if (r.ok) createdOccurrenceIds.push(r.id);
+        } else if (change.kind === "mark-occurrence-done") {
+          const r = await resolveOccurrence(change.blockId, change.occurrenceDate, "done");
+          if (r.ok) createdOccurrenceIds.push(r.id);
+        } else if (change.kind === "mark-occurrence-skipped") {
+          const r = await resolveOccurrence(change.blockId, change.occurrenceDate, "skipped");
+          if (r.ok) createdOccurrenceIds.push(r.id);
+        } else if (change.kind === "defer") {
+          const r = await resolveOccurrence(
+            change.blockId,
+            change.occurrenceDate,
+            "deferred",
+            change.toDate ?? undefined,
+          );
+          if (r.ok) createdOccurrenceIds.push(r.id);
+        }
+      }
+    } catch (e) {
+      // Compensating rollback — the diff must never land half-applied.
+      for (const id of createdBlockIds) await deleteBlock(id);
+      for (const m of movedBack) await moveBlock(m.id, { startMinute: m.startMinute, endMinute: m.endMinute });
+      for (const id of createdOccurrenceIds) {
+        removeOccurrenceLocal(id);
+        await adaptiveRepoRef.current.removeOccurrence(id).catch(() => {});
+      }
+      const failed: PlanningChangeSet = makeChangeSet(diff, opts, "apply-failed");
+      upsertChangeSetLocal(failed);
+      await adaptiveRepoRef.current.upsertChangeSet(failed).catch(() => {});
+      return {
+        ok: false,
+        changeSetId: null,
+        message: e instanceof Error ? e.message : "Could not apply the plan changes.",
+      };
+    }
+
+    const applied: PlanningChangeSet = {
+      ...makeChangeSet(diff, opts, "applied"),
+      appliedAt: nowIso(),
+    };
+    upsertChangeSetLocal(applied);
+    await persist(() => adaptiveRepoRef.current.upsertChangeSet(applied));
+    recordRevision({
+      domain: "planning",
+      entityType: "change-set",
+      entityId: applied.id,
+      operation: "apply",
+      source: "user",
+      summary: `Applied a ${opts.scope} planning diff (${diff.changes.length} change(s))`,
+      metadata: { scope: opts.scope, changes: diff.changes.length },
+    });
+    return { ok: true, changeSetId: applied.id, message: "Plan changes applied." };
+  };
+
+  const undoPlanningChangeSet = async (
+    changeSetId: string,
+  ): Promise<{ ok: boolean; message: string }> => {
+    const cs = changeSetsRef.current.find((x) => x.id === changeSetId);
+    if (!cs) return { ok: false, message: "Change set not found." };
+    if (cs.status !== "applied") return { ok: false, message: "Only an applied change set can be undone." };
+    let inverse: PlanningDiffChange[];
+    try {
+      inverse = JSON.parse(cs.inverseChangesJson) as PlanningDiffChange[];
+    } catch {
+      return { ok: false, message: "The stored inverse changes are unreadable." };
+    }
+    for (const change of inverse) {
+      if (change.kind === "move") {
+        const b = graph.blocks.find((x) => x.id === change.blockId);
+        if (b) {
+          const dur = b.endMinute - b.startMinute;
+          await moveBlock(b.id, { startMinute: change.toStartMinute, endMinute: change.toStartMinute + dur });
+        }
+      } else if (change.kind === "drop-occurrence" && change.blockId.startsWith("__candidate:")) {
+        // inverse of an "add": delete the block created for that candidate
+        const candidateId = change.blockId.slice("__candidate:".length);
+        const created = graph.blocks.find(
+          (x) => x.source === "generated" && x.date === change.occurrenceDate && x.title.length > 0 && x.id.includes(candidateId),
+        );
+        if (created) await deleteBlock(created.id);
+      } else if (change.kind === "mark-occurrence-done" || change.kind === "drop-occurrence") {
+        const ex = occurrencesRef.current.find(
+          (e) => e.blockId === change.blockId && e.occurrenceDate === change.occurrenceDate,
+        );
+        if (ex) {
+          removeOccurrenceLocal(ex.id);
+          await adaptiveRepoRef.current.removeOccurrence(ex.id).catch(() => {});
+        }
+      }
+    }
+    const undone: PlanningChangeSet = { ...cs, status: "undone", undoneAt: nowIso() };
+    upsertChangeSetLocal(undone);
+    await persist(() => adaptiveRepoRef.current.upsertChangeSet(undone));
+    return { ok: true, message: "Plan changes undone." };
+  };
+
   const value = useMemo<PlanningContextValue>(
     () => ({
       loaded,
@@ -362,9 +668,15 @@ export function PlanningProvider({ children }: { children: ReactNode }) {
       setCapacity,
       generateProposal,
       applyProposal,
+      occurrenceExceptions: occurrences,
+      occurrenceStateFor,
+      resolveOccurrence,
+      changeSets,
+      applyPlanningDiff,
+      undoPlanningChangeSet,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [graph, loaded, loadError, saveState, saveError, legacyImport, weekStartIso],
+    [graph, occurrences, changeSets, loaded, loadError, saveState, saveError, legacyImport, weekStartIso],
   );
 
   return <PlanningContext.Provider value={value}>{children}</PlanningContext.Provider>;
