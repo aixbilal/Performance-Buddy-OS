@@ -969,7 +969,7 @@ fn validate_op(conn: &Connection, op: &PlanChangeOp) -> DbResult<()> {
     }
 }
 
-fn apply_op(conn: &Connection, op: &PlanChangeOp) -> DbResult<()> {
+fn apply_op(conn: &Connection, op: &PlanChangeOp, now: &str) -> DbResult<()> {
     match op {
         PlanChangeOp::Keep { .. } => Ok(()),
         PlanChangeOp::Add { block } => block_upsert_inner(conn, block),
@@ -985,7 +985,7 @@ fn apply_op(conn: &Connection, op: &PlanChangeOp) -> DbResult<()> {
             let dur = end - start;
             conn.execute(
                 "UPDATE planning_blocks SET start_minute = ?1, end_minute = ?2, updated_at = ?3 WHERE id = ?4",
-                params![to_start_minute, to_start_minute + dur, now_or_epoch(), block_id],
+                params![to_start_minute, to_start_minute + dur, stamp(now), block_id],
             )?;
             Ok(())
         }
@@ -995,7 +995,7 @@ fn apply_op(conn: &Connection, op: &PlanChangeOp) -> DbResult<()> {
         } => {
             conn.execute(
                 "UPDATE planning_blocks SET end_minute = ?1, updated_at = ?2 WHERE id = ?3",
-                params![to_end_minute, now_or_epoch(), block_id],
+                params![to_end_minute, stamp(now), block_id],
             )?;
             Ok(())
         }
@@ -1029,6 +1029,16 @@ fn apply_op(conn: &Connection, op: &PlanChangeOp) -> DbResult<()> {
 
 fn now_or_epoch() -> String {
     "1970-01-01T00:00:00.000Z".to_string()
+}
+
+/// Use the caller-supplied ISO timestamp for `updated_at`; fall back to the
+/// epoch sentinel only if the frontend passed an empty string.
+fn stamp(now: &str) -> String {
+    if now.trim().is_empty() {
+        now_or_epoch()
+    } else {
+        now.to_string()
+    }
 }
 
 fn stale_check(conn: &Connection, expected: &[ExpectedBlock]) -> DbResult<()> {
@@ -1082,7 +1092,7 @@ pub fn plan_apply_change_set(
     let tx = conn.transaction()?;
     let mut applied = 0usize;
     for op in &request.ops {
-        apply_op(&tx, op)?;
+        apply_op(&tx, op, &request.now)?;
         applied += 1;
     }
     let mut cs = request.change_set;
@@ -1147,7 +1157,7 @@ pub fn plan_undo_change_set(
     let tx = conn.transaction()?;
     let mut applied = 0usize;
     for op in &request.ops {
-        apply_op(&tx, op)?;
+        apply_op(&tx, op, &request.now)?;
         applied += 1;
     }
     cs.status = "undone".into();
@@ -1799,6 +1809,14 @@ mod tests {
         )
         .unwrap()
     }
+    fn block_updated_at(c: &Connection, id: &str) -> String {
+        c.query_row(
+            "SELECT updated_at FROM planning_blocks WHERE id = ?1",
+            params![id],
+            |r| r.get(0),
+        )
+        .unwrap()
+    }
 
     fn apply_req(cs_id: &str, ops: Vec<PlanChangeOp>, expected: Vec<ExpectedBlock>) -> ApplyChangeSetRequest {
         ApplyChangeSetRequest {
@@ -1812,6 +1830,34 @@ mod tests {
     // The Tauri command takes `State<'_, Db>`; these tests exercise the pure
     // pieces (`validate_op`, `apply_op`, `stale_check`, one `conn.transaction()`)
     // directly, which is exactly what the command composes.
+    #[test]
+    fn move_and_shorten_stamp_the_callers_now_into_updated_at_not_the_epoch() {
+        let mut c = mem();
+        let mut b = pinned("b1", "2026-09-07");
+        b.start_minute = 9 * 60;
+        b.end_minute = 11 * 60;
+        b.updated_at = "2026-09-01T00:00:00.000Z".into();
+        block_upsert_inner(&c, &b).unwrap();
+
+        let tx = c.transaction().unwrap();
+        apply_op(
+            &tx,
+            &PlanChangeOp::Move { block_id: "b1".into(), to_start_minute: 10 * 60 },
+            "2026-09-07T14:30:00.000Z",
+        )
+        .unwrap();
+        apply_op(
+            &tx,
+            &PlanChangeOp::Shorten { block_id: "b1".into(), to_end_minute: 11 * 60 },
+            "2026-09-07T14:30:00.000Z",
+        )
+        .unwrap();
+        tx.commit().unwrap();
+
+        // the adaptive path must not regress the row's freshness to 1970
+        assert_eq!(block_updated_at(&c, "b1"), "2026-09-07T14:30:00.000Z");
+    }
+
     #[test]
     fn apply_ops_commit_together_or_roll_back_together() {
         let mut c = mem();
@@ -1836,7 +1882,7 @@ mod tests {
             }
             let tx = c.transaction().unwrap();
             for op in &ops {
-                apply_op(&tx, op).unwrap();
+                apply_op(&tx, op, "2026-09-07T10:00:00.000Z").unwrap();
             }
             let mut cs = change_set("cs1", "applied");
             cs.applied_at = Some("2026-09-07".into());
@@ -1858,7 +1904,7 @@ mod tests {
             let tx = c.transaction().unwrap();
             let mut err = None;
             for op in &bad_ops {
-                if let Err(e) = apply_op(&tx, op) {
+                if let Err(e) = apply_op(&tx, op, "2026-09-07T10:00:00.000Z") {
                     err = Some(e);
                     break;
                 }
@@ -1932,7 +1978,7 @@ mod tests {
         let op = PlanChangeOp::Defer { exception: ex, replacement };
         validate_op(&c, &op).unwrap();
         let tx = c.transaction().unwrap();
-        apply_op(&tx, &op).unwrap();
+        apply_op(&tx, &op, "2026-09-07T10:00:00.000Z").unwrap();
         tx.commit().unwrap();
 
         assert!(block_exists(&c, "repl1"));
@@ -1986,10 +2032,11 @@ mod tests {
 
             // forward: add + move
             let tx = c.transaction().unwrap();
-            apply_op(&tx, &PlanChangeOp::Add { block: added }).unwrap();
+            apply_op(&tx, &PlanChangeOp::Add { block: added }, "2026-09-07T10:00:00.000Z").unwrap();
             apply_op(
                 &tx,
                 &PlanChangeOp::Move { block_id: "b_exist".into(), to_start_minute: 11 * 60 },
+                "2026-09-07T10:00:00.000Z",
             )
             .unwrap();
             let mut cs = change_set("cs1", "applied");
@@ -2000,10 +2047,11 @@ mod tests {
 
             // undo: remove-block + move-back
             let tx = c.transaction().unwrap();
-            apply_op(&tx, &PlanChangeOp::RemoveBlock { block_id: "b_new".into() }).unwrap();
+            apply_op(&tx, &PlanChangeOp::RemoveBlock { block_id: "b_new".into() }, "2026-09-07T12:00:00.000Z").unwrap();
             apply_op(
                 &tx,
                 &PlanChangeOp::Move { block_id: "b_exist".into(), to_start_minute: 9 * 60 },
+                "2026-09-07T12:00:00.000Z",
             )
             .unwrap();
             let mut undone = change_set("cs1", "undone");
