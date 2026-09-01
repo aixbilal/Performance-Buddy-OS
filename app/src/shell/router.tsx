@@ -57,6 +57,7 @@ import { SettingsPage } from "../domains/settings/SettingsPage";
 import { OnboardingPage } from "../domains/onboarding/OnboardingPage";
 import { FocusPage } from "../domains/focus/FocusPage";
 import { FocusContextRail } from "../domains/focus/FocusContextRail";
+import { NotFoundPage } from "./NotFoundPage";
 import { NAVIGATION } from "./navigation";
 
 // Flatten nav config into routes so every sidebar item resolves somewhere real,
@@ -150,6 +151,9 @@ export const router = createHashRouter([
         handle: { title: "Focus", contextRail: FocusContextRail },
       },
       ...placeholderRoutes,
+      // Truly unknown routes keep the PBOS shell and offer a way back to Today,
+      // instead of falling through to React Router's bare default.
+      { path: "*", element: <NotFoundPage />, handle: { title: "Page not found" } },
     ],
   },
 ]);

@@ -1,7 +1,7 @@
 {
   "name": "app",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0-rc.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "build:e2e": "tsc -b && vite build --mode development",
+    "tauri:build": "tauri build",
     "tauri:build:debug": "node -e \"require('fs').utimesSync('src-tauri/tauri.conf.json', new Date(), new Date())\" && cargo build --manifest-path src-tauri/Cargo.toml",
     "pretest:e2e:tauri": "npm run build:e2e && npm run tauri:build:debug",
     "test:e2e:tauri": "wdio run wdio.conf.ts",
