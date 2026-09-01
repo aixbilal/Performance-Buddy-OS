@@ -21,7 +21,7 @@
 //! aggregated into a deterministic result, and superseded by the linked
 //! knowledge concept when one is present.
 
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -782,6 +782,192 @@ pub fn acad_reset_for_test(db: State<'_, Db>) -> DbResult<()> {
     Ok(())
 }
 
+// ===========================================================================
+// V2 — Assessment ↔ Academic Topic SCOPE (migration v11, blueprint 07 §6.1 / §9.1)
+//
+//   `academic_assessment_topics` is the ONLY source of "this topic is on this
+//   assessment". Scope is EXPLICIT and never inferred — a topic is not assumed
+//   in scope just because it belongs to the same course. SQLite cannot express a
+//   cross-table CHECK, so `scope_add_inner` enforces the reverse guard:
+//   `topic.course_id == assessment.course_id`. Unknown scope stays unknown
+//   (no row), which the study engine reads as "not known to be in scope",
+//   NEVER as "not in scope".
+// ===========================================================================
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssessmentTopicRow {
+    pub assessment_id: String,
+    pub topic_id: String,
+    #[serde(default = "default_scope_source")]
+    pub source: String,
+    pub created_at: String,
+}
+
+fn default_scope_source() -> String {
+    "user".into()
+}
+
+fn scope_for_assessment_inner(
+    conn: &Connection,
+    assessment_id: &str,
+) -> DbResult<Vec<AssessmentTopicRow>> {
+    let mut s = conn.prepare(
+        "SELECT assessment_id,topic_id,source,created_at
+         FROM academic_assessment_topics WHERE assessment_id = ?1 ORDER BY created_at, topic_id",
+    )?;
+    let rows = s
+        .query_map(params![assessment_id], |r| {
+            Ok(AssessmentTopicRow {
+                assessment_id: r.get(0)?,
+                topic_id: r.get(1)?,
+                source: r.get(2)?,
+                created_at: r.get(3)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+fn scope_load_all_inner(conn: &Connection) -> DbResult<Vec<AssessmentTopicRow>> {
+    let mut s = conn.prepare(
+        "SELECT assessment_id,topic_id,source,created_at
+         FROM academic_assessment_topics ORDER BY assessment_id, created_at, topic_id",
+    )?;
+    let rows = s
+        .query_map([], |r| {
+            Ok(AssessmentTopicRow {
+                assessment_id: r.get(0)?,
+                topic_id: r.get(1)?,
+                source: r.get(2)?,
+                created_at: r.get(3)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+/// The same-course guard. Rejects a topic that belongs to a different course
+/// from the assessment (or a missing assessment/topic).
+fn scope_add_inner(conn: &Connection, link: &AssessmentTopicRow) -> DbResult<()> {
+    let assessment_course: Option<String> = conn
+        .query_row(
+            "SELECT course_id FROM academic_assessments WHERE id = ?1",
+            params![link.assessment_id],
+            |r| r.get(0),
+        )
+        .optional()?;
+    let topic_course: Option<String> = conn
+        .query_row(
+            "SELECT course_id FROM academic_topics WHERE id = ?1",
+            params![link.topic_id],
+            |r| r.get(0),
+        )
+        .optional()?;
+
+    match (assessment_course, topic_course) {
+        (Some(ac), Some(tc)) if ac == tc => {}
+        (Some(_), Some(_)) => {
+            return Err(DbError::Forbidden(
+                "assessment scope can only include topics from the same course".into(),
+            ))
+        }
+        _ => {
+            return Err(DbError::Forbidden(
+                "assessment scope needs an existing assessment and topic".into(),
+            ))
+        }
+    }
+
+    conn.execute(
+        "INSERT INTO academic_assessment_topics (assessment_id,topic_id,source,created_at)
+         VALUES (?1,?2,?3,?4)
+         ON CONFLICT(assessment_id,topic_id) DO UPDATE SET source=excluded.source",
+        params![link.assessment_id, link.topic_id, link.source, link.created_at],
+    )?;
+    Ok(())
+}
+
+fn scope_remove_inner(conn: &Connection, assessment_id: &str, topic_id: &str) -> DbResult<()> {
+    conn.execute(
+        "DELETE FROM academic_assessment_topics WHERE assessment_id = ?1 AND topic_id = ?2",
+        params![assessment_id, topic_id],
+    )?;
+    Ok(())
+}
+
+/// Replace the full scope for one assessment in a single transaction — the
+/// operation the Assessment scope editor performs on save.
+fn scope_set_inner(
+    conn: &mut Connection,
+    assessment_id: &str,
+    topic_ids: &[String],
+    source: &str,
+    now: &str,
+) -> DbResult<()> {
+    let tx = conn.transaction()?;
+    tx.execute(
+        "DELETE FROM academic_assessment_topics WHERE assessment_id = ?1",
+        params![assessment_id],
+    )?;
+    for topic_id in topic_ids {
+        scope_add_inner(
+            &tx,
+            &AssessmentTopicRow {
+                assessment_id: assessment_id.to_string(),
+                topic_id: topic_id.clone(),
+                source: source.to_string(),
+                created_at: now.to_string(),
+            },
+        )?;
+    }
+    tx.commit()?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn acad_assessment_scope_load(db: State<'_, Db>) -> DbResult<Vec<AssessmentTopicRow>> {
+    let conn = db.0.lock().unwrap();
+    scope_load_all_inner(&conn)
+}
+
+#[tauri::command]
+pub fn acad_assessment_scope_for(
+    db: State<'_, Db>,
+    assessment_id: String,
+) -> DbResult<Vec<AssessmentTopicRow>> {
+    let conn = db.0.lock().unwrap();
+    scope_for_assessment_inner(&conn, &assessment_id)
+}
+
+#[tauri::command]
+pub fn acad_assessment_scope_add(db: State<'_, Db>, link: AssessmentTopicRow) -> DbResult<()> {
+    let conn = db.0.lock().unwrap();
+    scope_add_inner(&conn, &link)
+}
+
+#[tauri::command]
+pub fn acad_assessment_scope_remove(
+    db: State<'_, Db>,
+    assessment_id: String,
+    topic_id: String,
+) -> DbResult<()> {
+    let conn = db.0.lock().unwrap();
+    scope_remove_inner(&conn, &assessment_id, &topic_id)
+}
+
+#[tauri::command]
+pub fn acad_assessment_scope_set(
+    db: State<'_, Db>,
+    assessment_id: String,
+    topic_ids: Vec<String>,
+    source: String,
+    now: String,
+) -> DbResult<()> {
+    let mut conn = db.0.lock().unwrap();
+    scope_set_inner(&mut conn, &assessment_id, &topic_ids, &source, &now)
+}
+
 // ---------------------------------------------------------------------------
 // Rust unit tests — no Tauri, in-memory SQLite
 // ---------------------------------------------------------------------------
@@ -900,6 +1086,112 @@ mod tests {
             "assessments cascade with the course"
         );
         assert_eq!(g.attempts.len(), 0, "attempts cascade with the course");
+    }
+
+    // -- V2 assessment scope (migration v11) ---------------------------
+
+    fn scope_link(assessment_id: &str, topic_id: &str) -> AssessmentTopicRow {
+        AssessmentTopicRow {
+            assessment_id: assessment_id.into(),
+            topic_id: topic_id.into(),
+            source: "user".into(),
+            created_at: "2026-02-01T00:00:00.000Z".into(),
+        }
+    }
+
+    fn scope_fixture(c: &Connection) {
+        course_upsert_inner(c, &course("dsa", None)).unwrap();
+        course_upsert_inner(c, &course("os", None)).unwrap();
+        topic_upsert_inner(c, &topic("t1", "dsa", None)).unwrap();
+        topic_upsert_inner(c, &topic("t2", "dsa", None)).unwrap();
+        topic_upsert_inner(c, &topic("t3", "os", None)).unwrap();
+        assessment_upsert_inner(c, &assessment("mid", "dsa", None)).unwrap();
+    }
+
+    #[test]
+    fn scope_accepts_same_course_topics_and_is_explicit_only() {
+        let c = mem();
+        scope_fixture(&c);
+        // Unknown scope = no rows, never "all course topics".
+        assert_eq!(scope_for_assessment_inner(&c, "mid").unwrap().len(), 0);
+
+        scope_add_inner(&c, &scope_link("mid", "t1")).unwrap();
+        let rows = scope_for_assessment_inner(&c, "mid").unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].topic_id, "t1");
+        // t2 is in the course but is NOT in scope until explicitly added.
+        assert!(rows.iter().all(|r| r.topic_id != "t2"));
+    }
+
+    #[test]
+    fn scope_rejects_a_topic_from_a_different_course() {
+        let c = mem();
+        scope_fixture(&c);
+        let err = scope_add_inner(&c, &scope_link("mid", "t3")).unwrap_err();
+        assert!(matches!(err, DbError::Forbidden(_)));
+        assert_eq!(scope_for_assessment_inner(&c, "mid").unwrap().len(), 0);
+    }
+
+    #[test]
+    fn scope_rejects_a_missing_assessment_or_topic() {
+        let c = mem();
+        scope_fixture(&c);
+        assert!(scope_add_inner(&c, &scope_link("ghost", "t1")).is_err());
+        assert!(scope_add_inner(&c, &scope_link("mid", "ghost")).is_err());
+    }
+
+    #[test]
+    fn scope_set_replaces_atomically_and_rejects_the_whole_batch_on_a_bad_topic() {
+        let mut c = mem();
+        scope_fixture(&c);
+        scope_set_inner(&mut c, "mid", &["t1".into(), "t2".into()], "user", "2026-02-01")
+            .unwrap();
+        assert_eq!(scope_for_assessment_inner(&c, "mid").unwrap().len(), 2);
+
+        // A batch containing a cross-course topic must not partially apply.
+        let bad = scope_set_inner(
+            &mut c,
+            "mid",
+            &["t1".into(), "t3".into()],
+            "user",
+            "2026-02-02",
+        );
+        assert!(bad.is_err());
+        let rows = scope_for_assessment_inner(&c, "mid").unwrap();
+        assert_eq!(rows.len(), 2, "the failed batch rolled back to the prior scope");
+        assert!(rows.iter().any(|r| r.topic_id == "t1"));
+        assert!(rows.iter().any(|r| r.topic_id == "t2"));
+    }
+
+    #[test]
+    fn scope_links_cascade_from_assessment_and_topic() {
+        let c = mem();
+        scope_fixture(&c);
+        scope_add_inner(&c, &scope_link("mid", "t1")).unwrap();
+        scope_add_inner(&c, &scope_link("mid", "t2")).unwrap();
+
+        c.execute("DELETE FROM academic_topics WHERE id='t2'", []).unwrap();
+        assert_eq!(scope_for_assessment_inner(&c, "mid").unwrap().len(), 1);
+
+        c.execute("DELETE FROM academic_assessments WHERE id='mid'", [])
+            .unwrap();
+        assert_eq!(scope_load_all_inner(&c).unwrap().len(), 0);
+    }
+
+    #[test]
+    fn scope_wire_shape_matches_the_frontend_payload() {
+        let json = serde_json::json!({
+            "assessmentId": "mid",
+            "topicId": "t1",
+            "source": "capture-approved",
+            "createdAt": "2026-02-01T00:00:00.000Z"
+        });
+        let parsed: AssessmentTopicRow = serde_json::from_value(json).unwrap();
+        assert_eq!(parsed.assessment_id, "mid");
+        assert_eq!(parsed.source, "capture-approved");
+        let back = serde_json::to_value(&parsed).unwrap();
+        assert_eq!(back["assessmentId"], "mid");
+        assert!(back.get("assessment_id").is_none());
     }
 
     #[test]

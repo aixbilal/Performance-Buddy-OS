@@ -14,6 +14,7 @@ mod revision;
 mod routine;
 mod setup;
 mod study;
+mod today;
 
 use std::sync::Mutex;
 use tauri::Manager;
@@ -210,6 +211,30 @@ pub fn run() {
             revision::revision_append,
             revision::revision_load,
             revision::revision_reset_for_test,
+            // V2 — adaptive intelligence persistence foundation (schema v11)
+            capture::capture_proposals_load,
+            capture::capture_proposals_for,
+            capture::capture_proposal_upsert,
+            capture::capture_proposal_delete,
+            academic::acad_assessment_scope_load,
+            academic::acad_assessment_scope_for,
+            academic::acad_assessment_scope_add,
+            academic::acad_assessment_scope_remove,
+            academic::acad_assessment_scope_set,
+            planning::plan_action_constraints_load,
+            planning::plan_action_constraint_upsert,
+            planning::plan_action_constraint_delete,
+            planning::plan_occurrences_load,
+            planning::plan_occurrence_upsert,
+            planning::plan_occurrence_delete,
+            planning::plan_change_sets_load,
+            planning::plan_change_set_upsert,
+            planning::plan_change_set_delete,
+            today::today_state_load,
+            today::today_state_get,
+            today::today_state_set,
+            today::today_state_clear,
+            today::today_state_reset_for_test,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
 /// Bumped whenever a migration is added to `MIGRATIONS`.
-const CURRENT_SCHEMA_VERSION: i64 = 10;
+const CURRENT_SCHEMA_VERSION: i64 = 11;
 
 /// Ordered, forward-only migrations. `version` must be contiguous from 1.
 const MIGRATIONS: &[(i64, &str)] = &[
@@ -945,6 +945,137 @@ const MIGRATIONS: &[(i64, &str)] = &[
     CREATE INDEX IF NOT EXISTS idx_revision_created ON revision_events(created_at);
     "#,
     ),
+    (
+        11,
+        // V2 — the ADAPTIVE INTELLIGENCE persistence foundation (blueprint
+        // `docs/27 - V2 Adaptive Coach/V2 Master Blueprint - 2026-09-01/
+        // 07 - Consolidated V2 Master Blueprint.md` §6). Six NEW tables only —
+        // forward-only, non-destructive, no V1 table is altered or dropped.
+        //
+        // Architecture locks enforced by shape:
+        //   SCOPE IS EXPLICIT, NEVER INFERRED. `academic_assessment_topics` is
+        //     the ONLY source of "this topic is on this assessment". A topic is
+        //     never assumed in scope just because it sits in the same course —
+        //     and the reverse guard (topic.course_id == assessment.course_id) is
+        //     enforced in `academic.rs` before insert, since SQLite alone cannot
+        //     express a cross-table CHECK.
+        //   CAPTURE STILL OWNS NOTHING DOWNSTREAM. `capture_proposals` holds
+        //     REVIEWABLE fact/interpretation proposals for one `capture_inbox`
+        //     row (CASCADE). It is not a second Action/Transaction/Knowledge
+        //     store — an accepted proposal is applied through the shared
+        //     canonical mutation registry (Phase C) and the row records only the
+        //     decision + validation + applied-result trail. V1 `capture_inbox`
+        //     columns (`proposed_type` / `parsed_payload`) are untouched so
+        //     existing unresolved captures keep loading.
+        //   ONE SCHEDULED-BLOCK TRUTH. `action_scheduling_constraints` attaches
+        //     structured scheduling metadata to a canonical Action (1:1, CASCADE)
+        //     — it is NOT a task list and does NOT restate `actions.est_minutes`.
+        //     `planning_occurrence_exceptions` records the state of ONE date of a
+        //     recurring `planning_blocks` row WITHOUT mutating/deleting the
+        //     recurring template; a one-off move points `replacement_block_id` at
+        //     a concrete date-pinned block (SET NULL if that block is deleted).
+        //     `planning_change_sets` is the durable Planning Diff — proposed
+        //     changes + inverse changes for review/audit/undo ONLY, never a
+        //     second copy of the schedule. `changes_json` / `inverse_changes_json`
+        //     are opaque here and typed/validated at the TS boundary.
+        //   TODAY DERIVES, IT DOES NOT STORE. `today_operating_state` persists
+        //     ONLY the subjective daily capacity level (low|normal|high, default
+        //     normal). Current/next block, gaps, overload and fragility are
+        //     derived every render and are deliberately absent here.
+        r#"
+    CREATE TABLE IF NOT EXISTS academic_assessment_topics (
+        assessment_id TEXT NOT NULL REFERENCES academic_assessments(id) ON DELETE CASCADE,
+        topic_id      TEXT NOT NULL REFERENCES academic_topics(id) ON DELETE CASCADE,
+        source        TEXT NOT NULL DEFAULT 'user',   -- user | capture-approved | ai-applied
+        created_at    TEXT NOT NULL,
+        PRIMARY KEY (assessment_id, topic_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_acad_scope_assessment ON academic_assessment_topics(assessment_id);
+    CREATE INDEX IF NOT EXISTS idx_acad_scope_topic      ON academic_assessment_topics(topic_id);
+
+    CREATE TABLE IF NOT EXISTS capture_proposals (
+        id                    TEXT PRIMARY KEY NOT NULL,
+        capture_id            TEXT NOT NULL REFERENCES capture_inbox(id) ON DELETE CASCADE,
+        proposal_class        TEXT NOT NULL,                         -- fact | interpretation
+        domain                TEXT NOT NULL,
+        mutation_kind         TEXT NOT NULL,
+        title                 TEXT NOT NULL,
+        source_text           TEXT NOT NULL DEFAULT '',
+        confidence            TEXT NOT NULL DEFAULT 'needs-review',  -- clear | needs-review | ambiguous
+        ambiguity_reason      TEXT,
+        rationale             TEXT NOT NULL DEFAULT '',
+        evidence_json         TEXT NOT NULL DEFAULT '[]',
+        original_params_json  TEXT NOT NULL DEFAULT '{}',
+        effective_params_json TEXT NOT NULL DEFAULT '{}',
+        status                TEXT NOT NULL DEFAULT 'proposed',      -- proposed|accepted|modified|rejected|applied|apply-failed
+        validation_json       TEXT,
+        applied_result_json   TEXT,
+        created_at            TEXT NOT NULL,
+        decided_at            TEXT,
+        applied_at            TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_capture_proposals_capture ON capture_proposals(capture_id);
+    CREATE INDEX IF NOT EXISTS idx_capture_proposals_status  ON capture_proposals(status);
+
+    CREATE TABLE IF NOT EXISTS action_scheduling_constraints (
+        action_id             TEXT PRIMARY KEY NOT NULL REFERENCES actions(id) ON DELETE CASCADE,
+        required_before       TEXT,
+        earliest_date         TEXT,
+        preferred_time_window TEXT,                       -- morning | day | evening | anytime
+        minimum_block_minutes INTEGER,
+        splittable            INTEGER NOT NULL DEFAULT 0,  -- default: work is NOT assumed fragmentable
+        source                TEXT NOT NULL DEFAULT 'user',
+        created_at            TEXT NOT NULL,
+        updated_at            TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS planning_occurrence_exceptions (
+        id                   TEXT PRIMARY KEY NOT NULL,
+        block_id             TEXT NOT NULL REFERENCES planning_blocks(id) ON DELETE CASCADE,
+        occurrence_date      TEXT NOT NULL,
+        state                TEXT NOT NULL,               -- skipped | done | deferred
+        replacement_block_id TEXT REFERENCES planning_blocks(id) ON DELETE SET NULL,
+        source               TEXT NOT NULL DEFAULT 'user',
+        note                 TEXT NOT NULL DEFAULT '',
+        created_at           TEXT NOT NULL,
+        updated_at           TEXT NOT NULL,
+        UNIQUE (block_id, occurrence_date)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_planning_occ_block ON planning_occurrence_exceptions(block_id);
+    CREATE INDEX IF NOT EXISTS idx_planning_occ_date  ON planning_occurrence_exceptions(occurrence_date);
+
+    CREATE TABLE IF NOT EXISTS planning_change_sets (
+        id                   TEXT PRIMARY KEY NOT NULL,
+        scope                TEXT NOT NULL,               -- micro | day | week
+        status               TEXT NOT NULL,               -- proposed|applied|rejected|apply-failed|undone
+        target_start_date    TEXT,
+        target_end_date      TEXT,
+        rationale            TEXT NOT NULL DEFAULT '',
+        reason_codes_json    TEXT NOT NULL DEFAULT '[]',
+        changes_json         TEXT NOT NULL DEFAULT '[]',
+        inverse_changes_json TEXT NOT NULL DEFAULT '[]',
+        source               TEXT NOT NULL DEFAULT 'adaptive-planning',
+        created_at           TEXT NOT NULL,
+        decided_at           TEXT,
+        applied_at           TEXT,
+        undone_at            TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_planning_change_sets_status ON planning_change_sets(status, created_at);
+
+    CREATE TABLE IF NOT EXISTS today_operating_state (
+        date           TEXT PRIMARY KEY NOT NULL,
+        capacity_level TEXT NOT NULL DEFAULT 'normal',   -- low | normal | high
+        source         TEXT NOT NULL DEFAULT 'user',     -- user | capture-approved
+        note           TEXT NOT NULL DEFAULT '',
+        created_at     TEXT NOT NULL,
+        updated_at     TEXT NOT NULL
+    );
+    "#,
+    ),
 ];
 
 /// Key in `meta` recording that the one-time localStorage import ran.
@@ -1316,5 +1447,463 @@ mod tests {
                 "newer SQLite value must survive re-migration"
             );
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // V2 — schema v11 adaptive-intelligence persistence foundation
+    // (blueprint 07 §6). Forward-only, non-destructive, six new tables.
+    // -----------------------------------------------------------------------
+
+    fn table_names(conn: &Connection) -> Vec<String> {
+        conn.prepare("SELECT name FROM sqlite_master WHERE type='table'")
+            .unwrap()
+            .query_map([], |r| r.get::<_, String>(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap()
+    }
+
+    fn cols(conn: &Connection, table: &str) -> Vec<String> {
+        conn.prepare(&format!("SELECT name FROM pragma_table_info('{table}')"))
+            .unwrap()
+            .query_map([], |r| r.get::<_, String>(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap()
+    }
+
+    /// Run migrations 1..=up_to only — used to build a real "v10 database"
+    /// and then prove the v11 step is additive.
+    fn migrate_up_to(conn: &Connection, up_to: i64) {
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS schema_migrations (
+                version    INTEGER PRIMARY KEY,
+                applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );",
+        )
+        .unwrap();
+        for (version, sql) in MIGRATIONS {
+            if *version > up_to {
+                break;
+            }
+            conn.execute_batch(sql).unwrap();
+            conn.execute(
+                "INSERT OR IGNORE INTO schema_migrations (version) VALUES (?1)",
+                params![version],
+            )
+            .unwrap();
+        }
+    }
+
+    #[test]
+    fn v11_schema_version_is_eleven_and_matches_the_last_migration() {
+        let db = mem_db();
+        let conn = db.0.lock().unwrap();
+        assert_eq!(CURRENT_SCHEMA_VERSION, 11);
+        assert_eq!(schema_version(&conn), 11);
+        assert_eq!(MIGRATIONS.last().unwrap().0, 11);
+    }
+
+    #[test]
+    fn v11_adds_the_six_adaptive_tables_and_keeps_every_v1_table() {
+        // A genuine v10 database — no v11 tables yet.
+        let v10 = Connection::open_in_memory().unwrap();
+        v10.pragma_update(None, "foreign_keys", "ON").unwrap();
+        migrate_up_to(&v10, 10);
+        let before: std::collections::BTreeSet<String> = table_names(&v10).into_iter().collect();
+        for t in [
+            "academic_assessment_topics",
+            "capture_proposals",
+            "action_scheduling_constraints",
+            "planning_occurrence_exceptions",
+            "planning_change_sets",
+            "today_operating_state",
+        ] {
+            assert!(!before.contains(t), "{t} must not exist at v10");
+        }
+
+        // Apply the remaining migrations (just v11).
+        run_migrations(&v10).unwrap();
+        let after: std::collections::BTreeSet<String> = table_names(&v10).into_iter().collect();
+
+        // Every v10 table still present.
+        for t in &before {
+            assert!(after.contains(t), "v11 must not drop the v1 table `{t}`");
+        }
+        // Exactly the six new tables were added.
+        for t in [
+            "academic_assessment_topics",
+            "capture_proposals",
+            "action_scheduling_constraints",
+            "planning_occurrence_exceptions",
+            "planning_change_sets",
+            "today_operating_state",
+        ] {
+            assert!(after.contains(t), "v11 must add `{t}`");
+        }
+        assert_eq!(after.len(), before.len() + 6);
+        assert_eq!(schema_version(&v10), 11);
+    }
+
+    #[test]
+    fn v11_is_idempotent_and_preserves_pre_existing_rows() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.pragma_update(None, "foreign_keys", "ON").unwrap();
+        migrate_up_to(&conn, 10);
+
+        // Seed real v1 data that must survive the v11 step.
+        conn.execute(
+            "INSERT INTO academic_courses (id,title,created_at,updated_at)
+             VALUES ('c1','DSA','2026-01-01','2026-01-01')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO academic_topics (id,course_id,title,created_at,updated_at)
+             VALUES ('t1','c1','Binary Trees','2026-01-01','2026-01-01')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO capture_inbox (id,raw_text,status,created_at,updated_at)
+             VALUES ('cap1','spent 1200 on food','unprocessed','2026-01-01','2026-01-01')",
+            [],
+        )
+        .unwrap();
+
+        run_migrations(&conn).unwrap();
+        // Re-running is a no-op (CREATE TABLE IF NOT EXISTS + version guard).
+        run_migrations(&conn).unwrap();
+        run_migrations(&conn).unwrap();
+
+        assert_eq!(schema_version(&conn), 11);
+        let topic_title: String = conn
+            .query_row("SELECT title FROM academic_topics WHERE id='t1'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(topic_title, "Binary Trees");
+        let cap_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM capture_inbox", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(cap_count, 1, "existing unresolved captures must not disappear");
+        // V1 capture columns are untouched.
+        let cap_cols = cols(&conn, "capture_inbox");
+        assert!(cap_cols.contains(&"proposed_type".to_string()));
+        assert!(cap_cols.contains(&"parsed_payload".to_string()));
+    }
+
+    #[test]
+    fn v11_capture_proposals_round_trip_and_cascade_with_the_inbox_row() {
+        let db = mem_db();
+        let conn = db.0.lock().unwrap();
+        conn.execute(
+            "INSERT INTO capture_inbox (id,raw_text,status,created_at,updated_at)
+             VALUES ('cap1','prof covered AVL; spent 1200','unprocessed','2026-01-01','2026-01-01')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO capture_proposals
+               (id,capture_id,proposal_class,domain,mutation_kind,title,confidence,created_at)
+             VALUES
+               ('p1','cap1','fact','Academics','set-professor-coverage','Prof covered AVL','clear','2026-01-01'),
+               ('p2','cap1','interpretation','Money','create-expense','Expense 1200','needs-review','2026-01-01')",
+            [],
+        )
+        .unwrap();
+
+        let (title, ambiguity): (String, Option<String>) = conn
+            .query_row(
+                "SELECT title, ambiguity_reason FROM capture_proposals WHERE id='p1'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(title, "Prof covered AVL");
+        assert!(ambiguity.is_none());
+
+        // Deleting the inbox row cascades its proposals (raw input owns them).
+        conn.execute("DELETE FROM capture_inbox WHERE id='cap1'", [])
+            .unwrap();
+        let left: i64 = conn
+            .query_row("SELECT COUNT(*) FROM capture_proposals", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(left, 0, "capture_proposals CASCADE with their inbox row");
+    }
+
+    #[test]
+    fn v11_assessment_topic_scope_cascades_from_both_sides() {
+        let db = mem_db();
+        let conn = db.0.lock().unwrap();
+        conn.execute_batch(
+            "INSERT INTO academic_courses (id,title,created_at,updated_at)
+               VALUES ('c1','DSA','2026-01-01','2026-01-01');
+             INSERT INTO academic_topics (id,course_id,title,created_at,updated_at)
+               VALUES ('t1','c1','AVL','2026-01-01','2026-01-01'),
+                      ('t2','c1','Heaps','2026-01-01','2026-01-01');
+             INSERT INTO academic_assessments (id,course_id,category,title,created_at,updated_at)
+               VALUES ('a1','c1','midterm','Midterm 1','2026-01-01','2026-01-01');
+             INSERT INTO academic_assessment_topics (assessment_id,topic_id,source,created_at)
+               VALUES ('a1','t1','user','2026-01-01'),('a1','t2','user','2026-01-01');",
+        )
+        .unwrap();
+        let scoped: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM academic_assessment_topics WHERE assessment_id='a1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(scoped, 2);
+
+        // Removing one topic removes only its scope link.
+        conn.execute("DELETE FROM academic_topics WHERE id='t2'", [])
+            .unwrap();
+        let scoped: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM academic_assessment_topics WHERE assessment_id='a1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(scoped, 1);
+
+        // Removing the assessment clears all of its scope.
+        conn.execute("DELETE FROM academic_assessments WHERE id='a1'", [])
+            .unwrap();
+        let scoped: i64 = conn
+            .query_row("SELECT COUNT(*) FROM academic_assessment_topics", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(scoped, 0);
+    }
+
+    #[test]
+    fn v11_action_constraints_are_one_to_one_and_cascade_with_the_action() {
+        let db = mem_db();
+        let conn = db.0.lock().unwrap();
+        conn.execute(
+            "INSERT INTO actions (id,system_id,title,context,status,est_minutes,priority,timing,position,created_at,updated_at)
+             VALUES ('act1',NULL,'Write report','','todo',120,'medium','',0,'2026-01-01','2026-01-01')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO action_scheduling_constraints
+               (action_id,earliest_date,preferred_time_window,minimum_block_minutes,splittable,created_at,updated_at)
+             VALUES ('act1','2026-09-05','morning',45,0,'2026-01-01','2026-01-01')",
+            [],
+        )
+        .unwrap();
+        let split: i64 = conn
+            .query_row(
+                "SELECT splittable FROM action_scheduling_constraints WHERE action_id='act1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(split, 0, "work is not assumed fragmentable by default");
+
+        conn.execute("DELETE FROM actions WHERE id='act1'", []).unwrap();
+        let left: i64 = conn
+            .query_row("SELECT COUNT(*) FROM action_scheduling_constraints", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(left, 0);
+    }
+
+    #[test]
+    fn v11_occurrence_exception_keeps_the_recurring_template_and_survives_reopen() {
+        let path = std::env::temp_dir().join(format!(
+            "pbos-v11-occ-{}-{}.sqlite3",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.pragma_update(None, "foreign_keys", "ON").unwrap();
+            run_migrations(&conn).unwrap();
+            conn.execute_batch(
+                "INSERT INTO planning_blocks
+                   (id,title,domain,day_of_week,date,start_minute,end_minute,block_type,locked,source,status,created_at,updated_at)
+                 VALUES
+                   ('rec1','German',    'Language',1,NULL,540,600,'flexible',0,'manual','scheduled','2026-01-01','2026-01-01'),
+                   ('repl1','German (moved)','Language',0,'2026-09-08',600,660,'flexible',0,'manual','scheduled','2026-01-01','2026-01-01');
+                 INSERT INTO planning_occurrence_exceptions
+                   (id,block_id,occurrence_date,state,replacement_block_id,source,note,created_at,updated_at)
+                 VALUES
+                   ('ex1','rec1','2026-09-08','deferred','repl1','user','moved to Sunday','2026-01-01','2026-01-01');",
+            )
+            .unwrap();
+        }
+        // Reopen — mirrors "fully exit PBOS then relaunch".
+        let conn = Connection::open(&path).unwrap();
+        conn.pragma_update(None, "foreign_keys", "ON").unwrap();
+
+        let (state, repl): (String, Option<String>) = conn
+            .query_row(
+                "SELECT state, replacement_block_id FROM planning_occurrence_exceptions WHERE id='ex1'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(state, "deferred");
+        assert_eq!(repl.as_deref(), Some("repl1"));
+        // The recurring template row is untouched.
+        let recurring: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM planning_blocks WHERE id='rec1' AND date IS NULL",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(recurring, 1, "one changed occurrence must not alter the template");
+
+        // Deleting the replacement block only nulls the link; the exception stays.
+        conn.execute("DELETE FROM planning_blocks WHERE id='repl1'", [])
+            .unwrap();
+        let repl: Option<String> = conn
+            .query_row(
+                "SELECT replacement_block_id FROM planning_occurrence_exceptions WHERE id='ex1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(repl.is_none());
+
+        // Deleting the template cascades its exceptions.
+        conn.execute("DELETE FROM planning_blocks WHERE id='rec1'", [])
+            .unwrap();
+        let left: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM planning_occurrence_exceptions",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(left, 0);
+
+        drop(conn);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(path.with_extension("sqlite3-wal"));
+        let _ = std::fs::remove_file(path.with_extension("sqlite3-shm"));
+    }
+
+    #[test]
+    fn v11_occurrence_exception_is_unique_per_block_and_date() {
+        let db = mem_db();
+        let conn = db.0.lock().unwrap();
+        conn.execute(
+            "INSERT INTO planning_blocks
+               (id,title,domain,day_of_week,date,start_minute,end_minute,block_type,locked,source,status,created_at,updated_at)
+             VALUES ('rec1','German','Language',1,NULL,540,600,'flexible',0,'manual','scheduled','2026-01-01','2026-01-01')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO planning_occurrence_exceptions
+               (id,block_id,occurrence_date,state,source,note,created_at,updated_at)
+             VALUES ('ex1','rec1','2026-09-08','skipped','user','','2026-01-01','2026-01-01')",
+            [],
+        )
+        .unwrap();
+        let dup = conn.execute(
+            "INSERT INTO planning_occurrence_exceptions
+               (id,block_id,occurrence_date,state,source,note,created_at,updated_at)
+             VALUES ('ex2','rec1','2026-09-08','done','user','','2026-01-01','2026-01-01')",
+            [],
+        );
+        assert!(dup.is_err(), "one occurrence date per block");
+    }
+
+    #[test]
+    fn v11_planning_change_set_and_today_capacity_survive_close_and_reopen() {
+        let path = std::env::temp_dir().join(format!(
+            "pbos-v11-diff-{}-{}.sqlite3",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.pragma_update(None, "foreign_keys", "ON").unwrap();
+            run_migrations(&conn).unwrap();
+            conn.execute(
+                "INSERT INTO planning_change_sets
+                   (id,scope,status,rationale,reason_codes_json,changes_json,inverse_changes_json,source,created_at)
+                 VALUES ('cs1','day','proposed','remaining plan cannot fit',
+                         '[\"OVER_CAPACITY\"]',
+                         '[{\"kind\":\"move\",\"blockId\":\"b1\",\"toStartMinute\":600}]',
+                         '[{\"kind\":\"move\",\"blockId\":\"b1\",\"toStartMinute\":540}]',
+                         'adaptive-planning','2026-01-01')",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO today_operating_state (date,capacity_level,source,note,created_at,updated_at)
+                 VALUES ('2026-09-01','low','user','short night','2026-01-01','2026-01-01')",
+                [],
+            )
+            .unwrap();
+        }
+        let conn = Connection::open(&path).unwrap();
+        conn.pragma_update(None, "foreign_keys", "ON").unwrap();
+
+        let (scope, changes): (String, String) = conn
+            .query_row(
+                "SELECT scope, changes_json FROM planning_change_sets WHERE id='cs1'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(scope, "day");
+        assert!(changes.contains("\"kind\":\"move\""));
+
+        let cap: String = conn
+            .query_row(
+                "SELECT capacity_level FROM today_operating_state WHERE date='2026-09-01'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(cap, "low");
+
+        // today_operating_state stores ONLY the subjective level — no derived
+        // execution state leaked into the schema.
+        let tcols = cols(&conn, "today_operating_state");
+        for banned in ["current_block", "next_block", "gaps", "overload", "fragility"] {
+            assert!(
+                !tcols.iter().any(|c| c == banned),
+                "today_operating_state must not persist derived `{banned}`"
+            );
+        }
+
+        drop(conn);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(path.with_extension("sqlite3-wal"));
+        let _ = std::fs::remove_file(path.with_extension("sqlite3-shm"));
+    }
+
+    #[test]
+    fn v11_action_constraints_do_not_restate_the_action_estimate() {
+        let db = mem_db();
+        let conn = db.0.lock().unwrap();
+        let c = cols(&conn, "action_scheduling_constraints");
+        for banned in ["est_minutes", "estimate_minutes", "total_minutes", "est"] {
+            assert!(
+                !c.iter().any(|x| x == banned),
+                "estimate stays on `actions`, not `action_scheduling_constraints` (`{banned}`)"
+            );
+        }
+        assert!(c.contains(&"minimum_block_minutes".to_string()));
+        assert!(c.contains(&"splittable".to_string()));
     }
 }

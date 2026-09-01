@@ -204,6 +204,220 @@ pub fn capture_reset_for_test(db: State<'_, Db>) -> DbResult<()> {
     Ok(())
 }
 
+// ===========================================================================
+// V2 — Capture Proposals (migration v11, blueprint 07 §4.1 / §6.2 / §7)
+//
+//   One `capture_inbox` row may own many REVIEWABLE proposals. A proposal is a
+//   `fact` ("You said") or an `interpretation` ("PBOS interpreted") — never a
+//   "PBOS recommends" (that is a separate Intelligence Recommendation). The
+//   inbox still owns nothing downstream: an accepted proposal is applied through
+//   the shared canonical mutation registry (Phase C) and this row keeps only the
+//   decision / validation / applied-result trail. Proposals CASCADE with their
+//   inbox row.
+// ===========================================================================
+
+const CAPTURE_PROPOSAL_CLASSES: [&str; 2] = ["fact", "interpretation"];
+const CAPTURE_PROPOSAL_CONFIDENCE: [&str; 3] = ["clear", "needs-review", "ambiguous"];
+const CAPTURE_PROPOSAL_STATUS: [&str; 6] = [
+    "proposed",
+    "accepted",
+    "modified",
+    "rejected",
+    "applied",
+    "apply-failed",
+];
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CaptureProposalRow {
+    pub id: String,
+    pub capture_id: String,
+    pub proposal_class: String,
+    pub domain: String,
+    pub mutation_kind: String,
+    pub title: String,
+    #[serde(default)]
+    pub source_text: String,
+    #[serde(default = "default_confidence")]
+    pub confidence: String,
+    pub ambiguity_reason: Option<String>,
+    #[serde(default)]
+    pub rationale: String,
+    /// JSON string[] — short human evidence lines.
+    #[serde(default = "default_json_array")]
+    pub evidence_json: String,
+    /// Opaque JSON — the params as first proposed.
+    #[serde(default = "default_json_object")]
+    pub original_params_json: String,
+    /// Opaque JSON — the params after any user edit (what Apply will use).
+    #[serde(default = "default_json_object")]
+    pub effective_params_json: String,
+    #[serde(default = "default_status")]
+    pub status: String,
+    pub validation_json: Option<String>,
+    pub applied_result_json: Option<String>,
+    pub created_at: String,
+    pub decided_at: Option<String>,
+    pub applied_at: Option<String>,
+}
+
+fn default_confidence() -> String {
+    "needs-review".into()
+}
+fn default_status() -> String {
+    "proposed".into()
+}
+fn default_json_array() -> String {
+    "[]".into()
+}
+fn default_json_object() -> String {
+    "{}".into()
+}
+
+fn proposal_validate(p: &CaptureProposalRow) -> DbResult<()> {
+    if !CAPTURE_PROPOSAL_CLASSES.contains(&p.proposal_class.as_str()) {
+        return Err(DbError::Forbidden(format!(
+            "proposal_class must be one of {CAPTURE_PROPOSAL_CLASSES:?}, got `{}`",
+            p.proposal_class
+        )));
+    }
+    if !CAPTURE_PROPOSAL_CONFIDENCE.contains(&p.confidence.as_str()) {
+        return Err(DbError::Forbidden(format!(
+            "confidence must be one of {CAPTURE_PROPOSAL_CONFIDENCE:?}, got `{}`",
+            p.confidence
+        )));
+    }
+    if !CAPTURE_PROPOSAL_STATUS.contains(&p.status.as_str()) {
+        return Err(DbError::Forbidden(format!(
+            "status must be one of {CAPTURE_PROPOSAL_STATUS:?}, got `{}`",
+            p.status
+        )));
+    }
+    Ok(())
+}
+
+fn proposals_load_inner(conn: &Connection, capture_id: &str) -> DbResult<Vec<CaptureProposalRow>> {
+    let mut s = conn.prepare(
+        "SELECT id,capture_id,proposal_class,domain,mutation_kind,title,source_text,confidence,
+                ambiguity_reason,rationale,evidence_json,original_params_json,effective_params_json,
+                status,validation_json,applied_result_json,created_at,decided_at,applied_at
+         FROM capture_proposals WHERE capture_id = ?1 ORDER BY created_at, id",
+    )?;
+    let rows = s
+        .query_map(params![capture_id], row_to_proposal)?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+fn proposals_load_all_inner(conn: &Connection) -> DbResult<Vec<CaptureProposalRow>> {
+    let mut s = conn.prepare(
+        "SELECT id,capture_id,proposal_class,domain,mutation_kind,title,source_text,confidence,
+                ambiguity_reason,rationale,evidence_json,original_params_json,effective_params_json,
+                status,validation_json,applied_result_json,created_at,decided_at,applied_at
+         FROM capture_proposals ORDER BY created_at, id",
+    )?;
+    let rows = s
+        .query_map([], row_to_proposal)?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+fn row_to_proposal(r: &rusqlite::Row<'_>) -> rusqlite::Result<CaptureProposalRow> {
+    Ok(CaptureProposalRow {
+        id: r.get(0)?,
+        capture_id: r.get(1)?,
+        proposal_class: r.get(2)?,
+        domain: r.get(3)?,
+        mutation_kind: r.get(4)?,
+        title: r.get(5)?,
+        source_text: r.get(6)?,
+        confidence: r.get(7)?,
+        ambiguity_reason: r.get(8)?,
+        rationale: r.get(9)?,
+        evidence_json: r.get(10)?,
+        original_params_json: r.get(11)?,
+        effective_params_json: r.get(12)?,
+        status: r.get(13)?,
+        validation_json: r.get(14)?,
+        applied_result_json: r.get(15)?,
+        created_at: r.get(16)?,
+        decided_at: r.get(17)?,
+        applied_at: r.get(18)?,
+    })
+}
+
+fn proposal_upsert_inner(conn: &Connection, p: &CaptureProposalRow) -> DbResult<()> {
+    proposal_validate(p)?;
+    conn.execute(
+        "INSERT INTO capture_proposals
+            (id,capture_id,proposal_class,domain,mutation_kind,title,source_text,confidence,
+             ambiguity_reason,rationale,evidence_json,original_params_json,effective_params_json,
+             status,validation_json,applied_result_json,created_at,decided_at,applied_at)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19)
+         ON CONFLICT(id) DO UPDATE SET
+            proposal_class=excluded.proposal_class, domain=excluded.domain,
+            mutation_kind=excluded.mutation_kind, title=excluded.title,
+            source_text=excluded.source_text, confidence=excluded.confidence,
+            ambiguity_reason=excluded.ambiguity_reason, rationale=excluded.rationale,
+            evidence_json=excluded.evidence_json,
+            original_params_json=excluded.original_params_json,
+            effective_params_json=excluded.effective_params_json,
+            status=excluded.status, validation_json=excluded.validation_json,
+            applied_result_json=excluded.applied_result_json,
+            decided_at=excluded.decided_at, applied_at=excluded.applied_at",
+        params![
+            p.id,
+            p.capture_id,
+            p.proposal_class,
+            p.domain,
+            p.mutation_kind,
+            p.title,
+            p.source_text,
+            p.confidence,
+            p.ambiguity_reason,
+            p.rationale,
+            p.evidence_json,
+            p.original_params_json,
+            p.effective_params_json,
+            p.status,
+            p.validation_json,
+            p.applied_result_json,
+            p.created_at,
+            p.decided_at,
+            p.applied_at
+        ],
+    )?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn capture_proposals_load(db: State<'_, Db>) -> DbResult<Vec<CaptureProposalRow>> {
+    let conn = db.0.lock().unwrap();
+    proposals_load_all_inner(&conn)
+}
+
+#[tauri::command]
+pub fn capture_proposals_for(
+    db: State<'_, Db>,
+    capture_id: String,
+) -> DbResult<Vec<CaptureProposalRow>> {
+    let conn = db.0.lock().unwrap();
+    proposals_load_inner(&conn, &capture_id)
+}
+
+#[tauri::command]
+pub fn capture_proposal_upsert(db: State<'_, Db>, proposal: CaptureProposalRow) -> DbResult<()> {
+    let conn = db.0.lock().unwrap();
+    proposal_upsert_inner(&conn, &proposal)
+}
+
+#[tauri::command]
+pub fn capture_proposal_delete(db: State<'_, Db>, id: String) -> DbResult<()> {
+    let conn = db.0.lock().unwrap();
+    conn.execute("DELETE FROM capture_proposals WHERE id = ?1", params![id])?;
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Rust unit tests — no Tauri, in-memory SQLite
 // ---------------------------------------------------------------------------
@@ -267,6 +481,119 @@ mod tests {
         c.execute("DELETE FROM capture_inbox WHERE id = 'c1'", [])
             .unwrap();
         assert_eq!(load_inner(&c).unwrap().len(), 0);
+    }
+
+    // -- V2 capture proposals (migration v11) ---------------------------
+
+    fn proposal(id: &str, capture_id: &str, class: &str) -> CaptureProposalRow {
+        CaptureProposalRow {
+            id: id.into(),
+            capture_id: capture_id.into(),
+            proposal_class: class.into(),
+            domain: "Academics".into(),
+            mutation_kind: "set-professor-coverage".into(),
+            title: "Prof covered AVL trees".into(),
+            source_text: "prof covered avl today".into(),
+            confidence: "clear".into(),
+            ambiguity_reason: None,
+            rationale: "Matched an existing topic in DSA".into(),
+            evidence_json: "[\"topic: AVL trees\"]".into(),
+            original_params_json: "{\"topicId\":\"t1\",\"coverage\":\"covered\"}".into(),
+            effective_params_json: "{\"topicId\":\"t1\",\"coverage\":\"covered\"}".into(),
+            status: "proposed".into(),
+            validation_json: None,
+            applied_result_json: None,
+            created_at: "2026-09-01T08:00:00.000Z".into(),
+            decided_at: None,
+            applied_at: None,
+        }
+    }
+
+    #[test]
+    fn one_capture_owns_many_fact_and_interpretation_proposals() {
+        let c = mem();
+        upsert_inner(&c, &item("cap1", "proposed")).unwrap();
+        proposal_upsert_inner(&c, &proposal("p1", "cap1", "fact")).unwrap();
+        let mut p2 = proposal("p2", "cap1", "interpretation");
+        p2.domain = "Money".into();
+        p2.mutation_kind = "create-expense".into();
+        p2.confidence = "needs-review".into();
+        proposal_upsert_inner(&c, &p2).unwrap();
+
+        let all = proposals_load_inner(&c, "cap1").unwrap();
+        assert_eq!(all.len(), 2);
+        assert_eq!(all[0].proposal_class, "fact");
+        assert_eq!(all[1].proposal_class, "interpretation");
+    }
+
+    #[test]
+    fn proposals_cascade_when_the_inbox_row_is_deleted() {
+        let c = mem();
+        upsert_inner(&c, &item("cap1", "proposed")).unwrap();
+        proposal_upsert_inner(&c, &proposal("p1", "cap1", "fact")).unwrap();
+        c.execute("DELETE FROM capture_inbox WHERE id='cap1'", []).unwrap();
+        assert_eq!(proposals_load_all_inner(&c).unwrap().len(), 0);
+    }
+
+    #[test]
+    fn proposal_upsert_preserves_created_at_and_moves_status() {
+        let c = mem();
+        upsert_inner(&c, &item("cap1", "proposed")).unwrap();
+        proposal_upsert_inner(&c, &proposal("p1", "cap1", "fact")).unwrap();
+        let mut decided = proposal("p1", "cap1", "fact");
+        decided.status = "accepted".into();
+        decided.decided_at = Some("2026-09-01T09:00:00.000Z".into());
+        decided.created_at = "2099-01-01".into(); // must be ignored on update
+        proposal_upsert_inner(&c, &decided).unwrap();
+        let rows = proposals_load_inner(&c, "cap1").unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].status, "accepted");
+        assert_eq!(rows[0].created_at, "2026-09-01T08:00:00.000Z");
+    }
+
+    #[test]
+    fn proposal_rejects_unknown_class_confidence_or_status() {
+        let c = mem();
+        upsert_inner(&c, &item("cap1", "proposed")).unwrap();
+        let mut bad = proposal("p1", "cap1", "recommendation"); // not a capture class
+        assert!(proposal_upsert_inner(&c, &bad).is_err());
+        bad.proposal_class = "fact".into();
+        bad.confidence = "0.87".into(); // no fake numeric confidence
+        assert!(proposal_upsert_inner(&c, &bad).is_err());
+        bad.confidence = "clear".into();
+        bad.status = "done".into();
+        assert!(proposal_upsert_inner(&c, &bad).is_err());
+    }
+
+    #[test]
+    fn proposal_wire_shape_matches_the_frontend_payload() {
+        let json = serde_json::json!({
+            "id": "p1",
+            "captureId": "cap1",
+            "proposalClass": "interpretation",
+            "domain": "Reading & Language",
+            "mutationKind": "create-language-session",
+            "title": "German study 25m",
+            "sourceText": "did 25 min of german",
+            "confidence": "needs-review",
+            "ambiguityReason": null,
+            "rationale": "",
+            "evidenceJson": "[]",
+            "originalParamsJson": "{}",
+            "effectiveParamsJson": "{}",
+            "status": "proposed",
+            "validationJson": null,
+            "appliedResultJson": null,
+            "createdAt": "2026-09-01T08:00:00.000Z",
+            "decidedAt": null,
+            "appliedAt": null
+        });
+        let parsed: CaptureProposalRow = serde_json::from_value(json).unwrap();
+        assert_eq!(parsed.proposal_class, "interpretation");
+        assert_eq!(parsed.mutation_kind, "create-language-session");
+        let back = serde_json::to_value(&parsed).unwrap();
+        assert_eq!(back["proposalClass"], "interpretation");
+        assert!(back.get("proposal_class").is_none());
     }
 
     #[test]
