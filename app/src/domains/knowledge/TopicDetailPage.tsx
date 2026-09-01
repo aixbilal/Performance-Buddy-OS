@@ -10,6 +10,7 @@ import { useAcademic } from "../academic/store";
 import { useObsidian } from "../obsidian/store";
 import { EMPTY_SOURCE_FORM, SourceForm } from "./SourceForm";
 import { GenerateRecallButton } from "./GenerateRecallButton";
+import { ContextualInsight } from "../../components/ContextualInsight";
 import { EVIDENCE_TYPES, type EvidenceType, type SourceType } from "./types";
 import { Button } from "../../components/Button";
 
@@ -161,6 +162,27 @@ export function TopicDetailPage() {
           . The course reads this concept's mastery — it does not store its own.
         </div>
       )}
+
+      <ContextualInsight
+        headline={
+          !topic.hasEvidence
+            ? "No mastery evidence yet — use “Generate Recall” above to run a governed check."
+            : reviewDue
+              ? "This concept is due for review (tracked separately from mastery)."
+              : evidenceList.length === 1
+                ? "Mastery here rests on a single piece of evidence — another check would firm it up."
+                : null
+        }
+        reasons={[
+          !topic.hasEvidence
+            ? "Mastery is evidence-derived: a completed, evaluated recall/self check is what moves it. Adding a source or reading a note does not."
+            : `${evidenceList.length} evidence record(s); current state is "${topic.state}".`,
+          reviewDue
+            ? "A review occurring does not raise mastery — it only reschedules the next review."
+            : "Review is not currently due.",
+        ]}
+      />
+
 
       <div className="grid grid-cols-2 gap-4">
         {/* ---- Sources ---- */}

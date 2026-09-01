@@ -377,7 +377,7 @@ export function TodayPage() {
               ))}
             </div>
           )}
-          <div className="mt-3 flex gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             <Button variant="secondary" size="sm" onClick={() => navigate("/planner")}>
               Review the plan
             </Button>
@@ -387,6 +387,9 @@ export function TodayPage() {
               onClick={() => window.dispatchEvent(new CustomEvent("pbos:open-natural-capture"))}
             >
               Capture what changed
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/ai-coach")}>
+              Explore alternatives
             </Button>
           </div>
         </Card>

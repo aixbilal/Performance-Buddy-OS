@@ -61,11 +61,14 @@ export function PlanningDiffReview({
   busy = false,
   onApply,
   onDiscard,
+  onExploreAlternatives,
 }: {
   diff: PlanningDiff;
   busy?: boolean;
   onApply: () => void;
   onDiscard: () => void;
+  /** Offered only when something Could Not Fit — deep reasoning is the AI Coach's job. */
+  onExploreAlternatives?: () => void;
 }) {
   const protectedChanges = diff.changes.filter((c) => c.kind === "keep");
   const realChanges = diff.changes.filter((c) => c.kind !== "keep");
@@ -133,6 +136,11 @@ export function PlanningDiffReview({
               </li>
             ))}
           </ul>
+          {onExploreAlternatives && (
+            <Button variant="ghost" size="sm" onClick={onExploreAlternatives} className="mt-1.5">
+              Consider alternatives in AI Coach
+            </Button>
+          )}
         </section>
       )}
 

@@ -133,6 +133,24 @@ describe("Normal Study — honest states + target selection + Study→Focus", ()
     expect(screen.getByText(/No mastery evidence yet/i)).toBeInTheDocument();
   });
 
+  it("V2 contextual insight: selecting a topic surfaces a deterministic 'why' with a Plan-this action; nothing selected shows no AI surface", async () => {
+    const user = userEvent.setup();
+    await mount();
+    await seedCourseTopicLinked();
+    // nothing selected → no contextual insight
+    expect(screen.queryByRole("button", { name: /why this/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /plan this/i })).not.toBeInTheDocument();
+
+    await user.click(await screen.findByRole("button", { name: /Study Binary Trees/i }));
+    // a compact insight appears headlined "Why Binary Trees…" with subordinate actions
+    expect(await screen.findByText(/Why Binary Trees/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /explore in ai coach/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /plan this/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^why this\?$/i }));
+    // it is deterministic reason text, not a fabricated number
+    expect(screen.queryByText(/\d+% likely|confidence: \d/i)).not.toBeInTheDocument();
+  });
+
   it("'Start Focus' launches a canonical Focus session with academic context; finishing it (no recall) adds NO mastery", async () => {
     const user = userEvent.setup();
     await mount();

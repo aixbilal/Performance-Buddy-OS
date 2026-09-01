@@ -15,8 +15,15 @@ import {
   type StudyMode,
   type StudyTopicInput,
 } from "./studyEngine";
+import {
+  ATTENTION_REASON_LABEL,
+  reasonsForSignal,
+  selectStudyRequirements,
+  type AcademicTopicSignal,
+} from "./attentionEngine";
 import type { OperatingMode } from "../settings/types";
 import { Button } from "../../components/Button";
+import { ContextualInsight } from "../../components/ContextualInsight";
 
 const MODE_TABS: { key: StudyMode; label: string; hint: string; operating: OperatingMode }[] = [
   { key: "normal", label: "Normal", hint: "Balanced progression and review.", operating: "normal" },
@@ -38,7 +45,8 @@ const COVERAGE_LABEL: Record<string, string> = {
 
 export function NormalStudyPage() {
   const navigate = useNavigate();
-  const { courses, topics, getCourse, setPersonalStudyCoverage, loaded } = useAcademic();
+  const academic = useAcademic();
+  const { courses, topics, getCourse, setPersonalStudyCoverage, loaded } = academic;
   const { getTopic } = useKnowledge();
   const { mode, setMode } = useSettings();
   const { startWith, getSessionsForAcademicTopic } = useFocus();
@@ -82,6 +90,47 @@ export function NormalStudyPage() {
   const selectedAcademicTopic = selected ? topics.find((t) => t.id === selected.academicTopicId) : undefined;
   const lastFocus = selected ? getSessionsForAcademicTopic(selected.academicTopicId)[0] : undefined;
   const lastCheck = selected ? getChecksForAcademicTopic(selected.academicTopicId)[0] : undefined;
+
+  /** The Academic Intelligence signal + Study Requirement for the selected
+   *  topic — surfaced as a compact `ContextualInsight`, deterministic only. */
+  const selectedRequirement = useMemo(() => {
+    if (!selected) return null;
+    const checks = getChecksForAcademicTopic(selected.academicTopicId);
+    let streak = 0;
+    for (const c of checks) {
+      if (c.status !== "completed") continue;
+      const weak = c.maxScore > 0 && c.score / c.maxScore < 0.6;
+      if (weak) streak += 1;
+      else break;
+    }
+    const focusSessions = getSessionsForAcademicTopic(selected.academicTopicId);
+    const lastCompleted = focusSessions.find((s) => s.completedAt)?.completedAt ?? null;
+    const daysSinceLastFocus = lastCompleted
+      ? Math.round((Date.now() - new Date(lastCompleted).getTime()) / 86_400_000)
+      : null;
+    const scopedAssessments = academic.assessments
+      .filter((a) => academic.getAssessmentScopeTopicIds(a.id).includes(selected.academicTopicId))
+      .map((a) => ({ assessmentId: a.id, title: a.title, date: a.date, weightPercent: a.weightPercent }));
+
+    const signal: AcademicTopicSignal = {
+      academicTopicId: selected.academicTopicId,
+      courseId: selected.courseId,
+      courseTitle: selected.courseTitle,
+      topicTitle: selected.topicTitle,
+      professorCoverage: selected.professorCoverage,
+      personalStudyPercent: selected.personalStudyPercent,
+      knowledgeTopicId: selected.knowledgeTopicId,
+      knowledge: selected.knowledge,
+      scopedAssessments,
+      daysSinceLastFocus,
+      unresolvedWeaknessStreak: streak,
+      userPriority: false,
+      suggestedMinutes: null,
+    };
+    const req = selectStudyRequirements([signal], studyMode)[0] ?? null;
+    return { signal, req };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, studyMode, academic.assessments]);
 
   const startFocus = () => {
     if (!selected) return;
@@ -262,6 +311,37 @@ export function NormalStudyPage() {
                     Start Mastery Check
                   </button>
                 </div>
+
+                {selectedRequirement?.req && (
+                  <ContextualInsight
+                    headline={
+                      selectedRequirement.signal
+                        ? `Why ${selected.topicTitle}${
+                            selectedRequirement.req.requiredBefore
+                              ? ` — before ${selectedRequirement.req.requiredBefore}`
+                              : ""
+                          }`
+                        : null
+                    }
+                    reasons={reasonsForSignal(selectedRequirement.signal, new Date()).map(
+                      (r) => ATTENTION_REASON_LABEL[r],
+                    )}
+                    note={selectedRequirement.req.methodSuggestion}
+                    actions={[
+                      {
+                        label: "Plan this",
+                        variant: "secondary",
+                        onClick: () => navigate("/planner"),
+                        title: "Turn this into a scheduled block in the Planner",
+                      },
+                      {
+                        label: "Explore in AI Coach",
+                        onClick: () => navigate("/ai-coach"),
+                        title: "Deeper reasoning and cross-domain trade-offs",
+                      },
+                    ]}
+                  />
+                )}
 
                 <div className="border-t border-border-subtle pt-2">
                   <div className="text-text-muted text-[11px] mb-1">Mark personally studied (explicit — not from a timer)</div>

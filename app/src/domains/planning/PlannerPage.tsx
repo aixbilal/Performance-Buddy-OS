@@ -524,6 +524,7 @@ export function PlannerPage() {
             busy={v2Busy}
             onApply={() => void applyV2Diff()}
             onDiscard={() => setV2Diff(null)}
+            onExploreAlternatives={() => navigate("/ai-coach")}
           />
         )}
         {recentChangeSets.length > 0 && (
