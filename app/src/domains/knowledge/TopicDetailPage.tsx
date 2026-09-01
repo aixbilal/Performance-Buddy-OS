@@ -123,6 +123,10 @@ export function TopicDetailPage() {
             knowledgeTopicId={topic.id}
             topicTitle={topic.title}
             linkedSourceTitles={sources.map((s) => s.title)}
+            linkedNotes={obs.linksForTopic(topic.id).map((l) => ({
+              relativePath: l.relativePath,
+              title: l.title,
+            }))}
           />
         </Card>
         <Card>
