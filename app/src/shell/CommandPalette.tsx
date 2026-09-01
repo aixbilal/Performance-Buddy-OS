@@ -17,6 +17,7 @@ import { Button } from "../components/Button";
 
 const QUICK_COMMANDS = [
   { id: "cmd.today", title: "Go to Today", route: "/" },
+  { id: "cmd.capture", title: "Natural Capture — tell PBOS what happened", route: "pbos:natural-capture" },
   { id: "cmd.goals", title: "Go to Goals", route: "/goals" },
   { id: "cmd.planner", title: "Open Planner", route: "/planner" },
   { id: "cmd.calendar", title: "Open Calendar", route: "/calendar" },
@@ -24,6 +25,15 @@ const QUICK_COMMANDS = [
   { id: "cmd.aicoach", title: "Open AI Coach", route: "/ai-coach" },
   { id: "cmd.settings", title: "Open Settings", route: "/settings" },
 ];
+
+/** A QUICK_COMMANDS `route` is either a real route or a `pbos:` action sentinel. */
+function runCommandRoute(route: string, navigate: (to: string) => void) {
+  if (route === "pbos:natural-capture") {
+    window.dispatchEvent(new CustomEvent("pbos:open-natural-capture"));
+    return;
+  }
+  navigate(route);
+}
 
 const CONFIRMABLE: CaptureType[] = ["action", "expense", "routine-checkin"];
 const TYPE_CHOICES: CaptureType[] = ["action", "expense", "routine-checkin", "note"];
@@ -77,7 +87,7 @@ export function CommandPalette() {
     } else if (e.key === "Enter") {
       e.preventDefault();
       if (selectedIndex < commandMatches.length) {
-        navigate(commandMatches[selectedIndex].route);
+        runCommandRoute(commandMatches[selectedIndex].route, navigate);
       } else {
         const r = results[selectedIndex - commandMatches.length];
         if (r) {
@@ -243,7 +253,7 @@ export function CommandPalette() {
                         i === selectedIndex ? "bg-surface-selected text-text-primary" : "text-text-secondary"
                       }`}
                       onClick={() => {
-                        navigate(c.route);
+                        runCommandRoute(c.route, navigate);
                         close();
                       }}
                     >

@@ -22,10 +22,20 @@ import type { SaveState } from "../resilience/types";
 import { classifyCapture, requiresManualReview } from "./engine";
 import { newCaptureId } from "./ids";
 import { makeCaptureRepo, type CaptureRepo } from "./repo";
+import { buildProposals, type CaptureResolvers, type EntityResolution } from "./naturalCapture";
 import type { CaptureInboxItem, CaptureType } from "./types";
 import { usePerformance } from "../performance/store";
 import { useMoney } from "../money/store";
 import { useRoutine } from "../routine/store";
+import { useAcademic } from "../academic/store";
+import { useLanguage } from "../language/store";
+import { useAICoach } from "../intelligence/store";
+import { useMutationContext } from "../mutations/useMutationContext";
+import { getMutation, runMutation } from "../mutations/registry";
+import { makeCaptureProposalsRepo, type CaptureProposalsRepo } from "../adaptive/repo";
+import type { CaptureProposalRecord } from "../adaptive/types";
+import { recordRevision } from "../revision/recorder";
+import type { RevisionDomain } from "../revision/types";
 
 type ConfirmResult = { ok: true; target: CaptureType; entityId: string | null } | { ok: false; error: string };
 
@@ -48,6 +58,25 @@ type CaptureContextValue = {
   dismissItem: (itemId: string) => Promise<void>;
   /** Hard-delete a capture row. */
   deleteItem: (itemId: string) => Promise<void>;
+
+  // --- Natural Capture V2 ---------------------------------------------
+  /** All persisted V2 proposals (across every capture). */
+  proposals: CaptureProposalRecord[];
+  proposalsFor: (captureId: string) => CaptureProposalRecord[];
+  /**
+   * Persist raw text FIRST, then run deterministic local segmentation +
+   * classification + entity resolution + duplicate detection, and persist a
+   * multi-proposal bundle. Raw text is never lost, even with no structure.
+   */
+  captureNatural: (rawText: string) => Promise<{ item: CaptureInboxItem; proposals: CaptureProposalRecord[] }>;
+  /** Accept / modify / reject one proposal (records the decision + edited params). */
+  decideProposal: (
+    proposalId: string,
+    decision: "accepted" | "modified" | "rejected",
+    effectiveParams?: Record<string, unknown>,
+  ) => Promise<void>;
+  /** Validate + apply one accepted/modified proposal through the shared mutation engine. */
+  applyProposal: (proposalId: string) => Promise<{ ok: boolean; message: string; reasonCodes: string[] }>;
 };
 
 const CaptureContext = createContext<CaptureContextValue | null>(null);
@@ -64,6 +93,16 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
   const { addAction } = usePerformance();
   const { createTransaction } = useMoney();
   const { routines, checkInRoutine } = useRoutine();
+  const academic = useAcademic();
+  const language = useLanguage();
+  const { permissions } = useAICoach();
+  const mutationCtx = useMutationContext();
+
+  const proposalsRepoRef = useRef<CaptureProposalsRepo>(makeCaptureProposalsRepo());
+  const [proposals, setProposals] = useState<CaptureProposalRecord[]>([]);
+  /** Always-current mirror so chained store calls in one tick see fresh data. */
+  const proposalsRef = useRef<CaptureProposalRecord[]>([]);
+  proposalsRef.current = proposals;
 
   useEffect(() => {
     let cancelled = false;
@@ -71,9 +110,14 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
       try {
         const repo = repoRef.current;
         await repo.importItems([]); // marks the (empty) legacy import done once
-        const items = await repo.load();
+        const [items, props] = await Promise.all([
+          repo.load(),
+          proposalsRepoRef.current.load().catch(() => [] as CaptureProposalRecord[]),
+        ]);
         if (!cancelled) {
           setInbox(items);
+          proposalsRef.current = props;
+          setProposals(props);
           setLoaded(true);
         }
       } catch (e) {
@@ -217,6 +261,183 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
     await persist(() => repoRef.current.remove(itemId));
   };
 
+  // --- Natural Capture V2 -------------------------------------------------
+
+  const upsertProposalLocal = (p: CaptureProposalRecord) => {
+    const prev = proposalsRef.current;
+    const i = prev.findIndex((x) => x.id === p.id);
+    const next = i >= 0 ? prev.map((x) => (x.id === p.id ? p : x)) : [...prev, p];
+    proposalsRef.current = next;
+    setProposals(next);
+  };
+
+  /** Entity resolvers built from the live canonical stores — existing first. */
+  const buildResolvers = (): CaptureResolvers => {
+    const dedupe = (
+      matches: { id: string; label: string }[],
+    ): EntityResolution =>
+      matches.length === 0
+        ? { status: "none" }
+        : matches.length === 1
+          ? { status: "resolved", id: matches[0].id, label: matches[0].label }
+          : { status: "ambiguous", candidates: matches };
+    const norm = (s: string) => s.trim().toLowerCase();
+    return {
+      resolveAcademicTopic: (title) => {
+        const q = norm(title);
+        const exact = academic.topics.filter((t) => norm(t.title) === q);
+        const pool = exact.length ? exact : academic.topics.filter((t) => norm(t.title).includes(q));
+        return dedupe(
+          pool.map((t) => ({
+            id: t.id,
+            label: `${t.title} (${academic.getCourse(t.courseId)?.title ?? "course"})`,
+          })),
+        );
+      },
+      resolveAssessment: (title) => {
+        const q = norm(title);
+        const pool = academic.assessments.filter(
+          (a) => norm(a.title) === q || norm(a.title).includes(q),
+        );
+        return dedupe(pool.map((a) => ({ id: a.id, label: a.title })));
+      },
+      resolveRoutine: (hint) => {
+        const q = norm(hint);
+        const pool = routines.filter(
+          (r) => !r.archived && (norm(r.title).includes(q) || norm(r.category).includes(q)),
+        );
+        return dedupe(pool.map((r) => ({ id: r.id, label: r.title })));
+      },
+      resolveLanguagePath: (lang) => {
+        const q = norm(lang);
+        const pool = language.paths.filter(
+          (p) => norm(p.language) === q || norm(p.language).includes(q),
+        );
+        return dedupe(pool.map((p) => ({ id: p.id, label: `${p.language} · ${p.title}` })));
+      },
+    };
+  };
+
+  const captureNatural = async (rawText: string) => {
+    const now = new Date();
+    const nowStr = now.toISOString();
+    const item: CaptureInboxItem = {
+      id: newCaptureId(),
+      rawText,
+      status: "unprocessed",
+      proposal: null,
+      resolution: null,
+      createdAt: nowStr,
+      updatedAt: nowStr,
+    };
+    // 1. raw text is persisted FIRST — a later failure cannot lose it.
+    upsertLocal(item);
+    await persist(() => repoRef.current.upsert(item));
+
+    // 2. deterministic local engine → multi-proposal bundle.
+    const { proposals: built } = buildProposals({
+      captureId: item.id,
+      rawText,
+      now,
+      permissions,
+      resolvers: buildResolvers(),
+      newId: () => `cprop_${crypto.randomUUID?.() ?? Math.random().toString(36).slice(2)}`,
+    });
+
+    for (const p of built) {
+      upsertProposalLocal(p);
+      try {
+        await proposalsRepoRef.current.upsert(p);
+      } catch {
+        /* proposal cache is still usable; ret/re-persist on next decision */
+      }
+    }
+    const next: CaptureInboxItem = {
+      ...item,
+      status: built.length > 0 ? "proposed" : "unprocessed",
+      updatedAt: new Date().toISOString(),
+    };
+    upsertLocal(next);
+    await persist(() => repoRef.current.upsert(next));
+    return { item: next, proposals: built };
+  };
+
+  const proposalsFor = (captureId: string) =>
+    proposalsRef.current.filter((p) => p.captureId === captureId);
+
+  const settleCaptureIfDone = async (captureId: string) => {
+    const item = inbox.find((i) => i.id === captureId);
+    if (!item || item.status === "resolved") return;
+    const mine = proposalsRef.current.filter((p) => p.captureId === captureId);
+    if (mine.length > 0 && mine.every((p) => p.status === "applied" || p.status === "rejected")) {
+      await markResolved(item, { kind: "confirmed", target: "note", entityId: null });
+    }
+  };
+
+  const decideProposal = async (
+    proposalId: string,
+    decision: "accepted" | "modified" | "rejected",
+    effectiveParams?: Record<string, unknown>,
+  ) => {
+    const p = proposalsRef.current.find((x) => x.id === proposalId);
+    if (!p) return;
+    const next: CaptureProposalRecord = {
+      ...p,
+      status: decision,
+      effectiveParamsJson:
+        decision === "modified" && effectiveParams
+          ? JSON.stringify({ ...JSON.parse(p.effectiveParamsJson || "{}"), ...effectiveParams })
+          : p.effectiveParamsJson,
+      decidedAt: new Date().toISOString(),
+    };
+    upsertProposalLocal(next);
+    await persist(() => proposalsRepoRef.current.upsert(next));
+    if (decision === "rejected") await settleCaptureIfDone(p.captureId);
+  };
+
+  const applyProposal = async (proposalId: string) => {
+    const p = proposalsRef.current.find((x) => x.id === proposalId);
+    if (!p) return { ok: false, message: "Proposal not found.", reasonCodes: ["NOT_FOUND"] };
+    if (p.status !== "accepted" && p.status !== "modified") {
+      return { ok: false, message: "Accept or modify the proposal before applying it.", reasonCodes: ["NOT_DECIDED"] };
+    }
+    const descriptor = getMutation(p.mutationKind);
+    if (!descriptor) {
+      const failed: CaptureProposalRecord = {
+        ...p,
+        status: "apply-failed",
+        validationJson: JSON.stringify({ ok: false, reasonCodes: ["UNKNOWN_KIND"], message: "No such mutation." }),
+      };
+      upsertProposalLocal(failed);
+      await persist(() => proposalsRepoRef.current.upsert(failed));
+      return { ok: false, message: "No such mutation.", reasonCodes: ["UNKNOWN_KIND"] };
+    }
+    const params = JSON.parse(p.effectiveParamsJson || "{}") as Record<string, unknown>;
+    const outcome = await runMutation(p.mutationKind, params, mutationCtx);
+    const settled: CaptureProposalRecord = {
+      ...p,
+      status: outcome.ok ? "applied" : "apply-failed",
+      validationJson: JSON.stringify({ ok: outcome.ok, reasonCodes: outcome.reasonCodes, message: outcome.message }),
+      appliedResultJson: outcome.ok ? JSON.stringify(outcome.result) : null,
+      appliedAt: outcome.ok ? new Date().toISOString() : null,
+    };
+    upsertProposalLocal(settled);
+    await persist(() => proposalsRepoRef.current.upsert(settled));
+    if (outcome.ok) {
+      recordRevision({
+        domain: descriptor.revisionDomain as RevisionDomain,
+        entityType: descriptor.revisionEntityType ?? descriptor.kind,
+        entityId: String((outcome.result as Record<string, unknown>).id ?? p.id),
+        operation: "apply",
+        source: "user",
+        summary: `Natural Capture: ${p.title}`,
+        metadata: { captureId: p.captureId, mutationKind: p.mutationKind },
+      });
+      await settleCaptureIfDone(p.captureId);
+    }
+    return outcome;
+  };
+
   const value = useMemo<CaptureContextValue>(
     () => ({
       loaded,
@@ -230,9 +451,14 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
       confirmItem,
       dismissItem,
       deleteItem,
+      proposals,
+      proposalsFor,
+      captureNatural,
+      decideProposal,
+      applyProposal,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [inbox, loaded, loadError, saveState],
+    [inbox, loaded, loadError, saveState, proposals],
   );
 
   return <CaptureContext.Provider value={value}>{children}</CaptureContext.Provider>;

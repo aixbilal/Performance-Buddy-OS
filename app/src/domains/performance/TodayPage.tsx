@@ -180,12 +180,21 @@ export function TodayPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="t-h2 text-text-primary">Today</h2>
-        <p className="text-text-muted text-sm">
-          {dateLabel} · {todaysBlocks.length} block{todaysBlocks.length === 1 ? "" : "s"} planned ·{" "}
-          {completedActions} action{completedActions === 1 ? "" : "s"} done
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="t-h2 text-text-primary">Today</h2>
+          <p className="text-text-muted text-sm">
+            {dateLabel} · {todaysBlocks.length} block{todaysBlocks.length === 1 ? "" : "s"} planned ·{" "}
+            {completedActions} action{completedActions === 1 ? "" : "s"} done
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent("pbos:open-natural-capture"))}
+          className="h-8 px-3 rounded-md text-[0.8125rem] bg-action-secondary text-text-primary border border-border-subtle hover:border-border-strong"
+        >
+          Capture what happened
+        </button>
       </div>
 
       {/* PRIMARY — one strong "what should I do now?" surface (§17–§18). */}

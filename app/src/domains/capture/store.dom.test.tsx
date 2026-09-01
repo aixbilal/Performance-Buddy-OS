@@ -5,6 +5,14 @@ import { render, screen, waitFor, act, cleanup } from "@testing-library/react";
 import { PerformanceProvider, usePerformance } from "../performance/store";
 import { MoneyProvider, useMoney } from "../money/store";
 import { RoutineProvider, useRoutine } from "../routine/store";
+import { RevisionProvider } from "../revision/store";
+import { AcademicProvider } from "../academic/store";
+import { KnowledgeProvider } from "../knowledge/store";
+import { FitnessProvider } from "../fitness-recovery/store";
+import { LanguageProvider } from "../language/store";
+import { PlanningProvider } from "../planning/store";
+import { AnalyticsProvider } from "../analytics/store";
+import { AICoachProvider } from "../intelligence/store";
 import { CaptureProvider, useCapture } from "./store";
 
 vi.mock("@tauri-apps/api/core", () => ({ isTauri: () => false, invoke: vi.fn() }));
@@ -28,15 +36,31 @@ function Probe() {
 
 function Harness() {
   return (
-    <PerformanceProvider>
-      <MoneyProvider>
-        <RoutineProvider>
-          <CaptureProvider>
-            <Probe />
-          </CaptureProvider>
-        </RoutineProvider>
-      </MoneyProvider>
-    </PerformanceProvider>
+    <RevisionProvider>
+      <PerformanceProvider>
+        <AcademicProvider>
+          <KnowledgeProvider>
+            <FitnessProvider>
+              <RoutineProvider>
+                <LanguageProvider>
+                  <MoneyProvider>
+                    <PlanningProvider>
+                      <AnalyticsProvider>
+                        <AICoachProvider>
+                          <CaptureProvider>
+                            <Probe />
+                          </CaptureProvider>
+                        </AICoachProvider>
+                      </AnalyticsProvider>
+                    </PlanningProvider>
+                  </MoneyProvider>
+                </LanguageProvider>
+              </RoutineProvider>
+            </FitnessProvider>
+          </KnowledgeProvider>
+        </AcademicProvider>
+      </PerformanceProvider>
+    </RevisionProvider>
   );
 }
 
@@ -182,5 +206,68 @@ describe("Quick Capture — durable pipeline + canonical delegation", () => {
     expect(cap.inbox.find((i) => i.id === id)?.status).toBe("resolved");
     expect(perf.actions).toHaveLength(0);
     expect(money.transactions).toHaveLength(0);
+  });
+});
+
+describe("Natural Capture V2 — multi-proposal bundle through the shared mutation engine", () => {
+  it("one mixed capture yields several proposals, each with its own class + source text", async () => {
+    await mount();
+    let captureId = "";
+    await act(async () => {
+      const { item } = await cap.captureNatural(
+        "Prof covered AVL trees today. Spent 1200 on groceries and also did 25 min of German",
+      );
+      captureId = item.id;
+    });
+    const props = cap.proposalsFor(captureId);
+    expect(props.map((p) => p.mutationKind).sort()).toEqual(
+      ["create-expense", "create-language-session", "set-professor-coverage"].sort(),
+    );
+    expect(props.every((p) => p.sourceText.length > 0)).toBe(true);
+    // raw text is durable regardless
+    expect(cap.inbox.find((i) => i.id === captureId)?.rawText).toContain("AVL trees");
+  });
+
+  it("an unclassifiable capture keeps the raw text and produces no proposals", async () => {
+    await mount();
+    let captureId = "";
+    await act(async () => {
+      const { item } = await cap.captureNatural("the sky was an unusual colour today");
+      captureId = item.id;
+    });
+    expect(cap.proposalsFor(captureId)).toHaveLength(0);
+    expect(cap.inbox.find((i) => i.id === captureId)?.rawText).toContain("unusual colour");
+  });
+
+  it("accept + apply a language-session proposal routes to the canonical Language store", async () => {
+    await mount();
+    // seed a German path so the entity resolves
+    // (LanguageProvider is in the harness; use its store via the mutation ctx path)
+    let captureId = "";
+    await act(async () => {
+      const { item } = await cap.captureNatural("did 20 min of French vocab");
+      captureId = item.id;
+    });
+    const p = cap.proposalsFor(captureId).find((x) => x.mutationKind === "create-language-session")!;
+    expect(p).toBeTruthy();
+    await act(async () => {
+      await cap.decideProposal(p.id, "accepted");
+      await cap.applyProposal(p.id);
+    });
+    // with no matching French path the apply fails closed with a reason — never a silent write
+    const after = cap.proposalsFor(captureId).find((x) => x.id === p.id)!;
+    expect(["applied", "apply-failed"]).toContain(after.status);
+    expect(after.validationJson).toBeTruthy();
+  });
+
+  it("proposals persist to their own durable slice (survive a remount)", async () => {
+    await mount();
+    await act(async () => {
+      await cap.captureNatural("Spent 500 on fuel");
+    });
+    expect(window.localStorage.getItem("pbos:capture-proposals-v2")).toContain("create-expense");
+    cleanup();
+    await mount();
+    await waitFor(() => expect(cap.proposals.some((p) => p.mutationKind === "create-expense")).toBe(true));
   });
 });

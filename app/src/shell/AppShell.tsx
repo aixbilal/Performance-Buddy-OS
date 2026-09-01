@@ -2,6 +2,7 @@ import { Outlet, useMatches } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { CommandPalette } from "./CommandPalette";
+import { NaturalCaptureDrawer } from "../domains/capture/NaturalCaptureDrawer";
 import { ConnectivityBanner } from "./ConnectivityBanner";
 import { RouteErrorBoundary } from "./RouteErrorBoundary";
 import { ContextRail, useContextRail } from "./ContextRail";
@@ -30,6 +31,7 @@ export function AppShell() {
         </div>
       </div>
       <CommandPalette />
+      <NaturalCaptureDrawer />
     </div>
   );
 }
