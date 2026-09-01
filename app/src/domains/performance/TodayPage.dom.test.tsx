@@ -12,6 +12,8 @@ import { RoutineProvider } from "../routine/store";
 import { MoneyProvider } from "../money/store";
 import { AnalyticsProvider } from "../analytics/store";
 import { AICoachProvider } from "../intelligence/store";
+import { RevisionProvider } from "../revision/store";
+import { FocusProvider } from "../focus/store";
 import { TodayPage } from "./TodayPage";
 
 vi.mock("@tauri-apps/api/core", () => ({ isTauri: () => false, invoke: vi.fn() }));
@@ -27,28 +29,32 @@ function Probe() {
 }
 function App() {
   return (
-    <PerformanceProvider>
-      <AcademicProvider>
-        <KnowledgeProvider>
-          <FitnessProvider>
-            <RoutineProvider>
-              <MoneyProvider>
-                <PlanningProvider>
-                  <AnalyticsProvider>
-                    <AICoachProvider>
-                      <MemoryRouter>
-                        <Probe />
-                        <TodayPage />
-                      </MemoryRouter>
-                    </AICoachProvider>
-                  </AnalyticsProvider>
-                </PlanningProvider>
-              </MoneyProvider>
-            </RoutineProvider>
-          </FitnessProvider>
-        </KnowledgeProvider>
-      </AcademicProvider>
-    </PerformanceProvider>
+    <RevisionProvider>
+      <PerformanceProvider>
+        <AcademicProvider>
+          <KnowledgeProvider>
+            <FitnessProvider>
+              <RoutineProvider>
+                <MoneyProvider>
+                  <PlanningProvider>
+                    <AnalyticsProvider>
+                      <AICoachProvider>
+                        <FocusProvider>
+                          <MemoryRouter>
+                            <Probe />
+                            <TodayPage />
+                          </MemoryRouter>
+                        </FocusProvider>
+                      </AICoachProvider>
+                    </AnalyticsProvider>
+                  </PlanningProvider>
+                </MoneyProvider>
+              </RoutineProvider>
+            </FitnessProvider>
+          </KnowledgeProvider>
+        </AcademicProvider>
+      </PerformanceProvider>
+    </RevisionProvider>
   );
 }
 
@@ -88,7 +94,7 @@ describe("TodayPage — canonical Planning integration", () => {
       startMinute: 9 * 60,
       endMinute: 10 * 60,
     });
-    await waitFor(() => expect(screen.getByText("Today session")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("Today session").length).toBeGreaterThan(0));
     expect(screen.getByText(/Scheduled Today/i).parentElement).toHaveTextContent(/1 block/);
   });
 
@@ -122,7 +128,7 @@ describe("TodayPage — canonical Planning integration", () => {
     await mount();
     await plan.createBlock({ ...base, title: "X", day: 0, date: plan.todayIso, startMinute: 600, endMinute: 660 });
     await waitFor(() => expect(plan.todaysBlocks).toHaveLength(1));
-    expect(screen.getByText("X")).toBeInTheDocument();
+    expect(screen.getAllByText("X").length).toBeGreaterThan(0);
   });
 
   // ---- V1 Visual Correction §16–§21: operating hierarchy ----

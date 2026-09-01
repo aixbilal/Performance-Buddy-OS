@@ -10,8 +10,13 @@ import { ProposalCard } from "../intelligence/ProposalCard";
 import { usePerformance } from "./store";
 import { usePlanning } from "../planning/store";
 import { useAICoach } from "../intelligence/store";
+import { useFocus } from "../focus/store";
+import { deriveTodayState } from "./todayEngine";
+import { useTodayCapacity } from "./useTodayCapacity";
+import { isoDateOf } from "../planning/engine";
 import type { PlanningBlock } from "../planning/types";
 import type { Action } from "./types";
+import type { TodayCapacityLevel } from "../adaptive/types";
 
 /**
  * Today reads the canonical Planning store's `todaysBlocks` — there is no
@@ -122,8 +127,20 @@ function TimelineGroup({
 
 export function TodayPage() {
   const { actions, systems, systemHealth, loaded: perfLoaded, loadError: perfError } = usePerformance();
-  const { todaysBlocks, loaded: planLoaded, loadError: planError } = usePlanning();
+  const {
+    todaysBlocks,
+    todayIso,
+    capacity,
+    weeklyScheduledMinutes,
+    occurrenceStateFor,
+    resolveOccurrence,
+    loaded: planLoaded,
+    loadError: planError,
+  } = usePlanning();
   const { visibleRecommendations } = useAICoach();
+  const focus = useFocus();
+  const capIso = todayIso ?? isoDateOf(new Date());
+  const { level: capacityLevel, setLevel: setCapacityLevel } = useTodayCapacity(capIso);
   const navigate = useNavigate();
 
   // Day-17: LOADING ≠ EMPTY. Never flash "your day is open" while the canonical
@@ -175,8 +192,38 @@ export function TodayPage() {
     day: "numeric",
   });
 
-  const startFocus = () => navigate("/focus");
   const featuredAction = featured ? actionFor(featured) : null;
+
+  // --- Adaptive Today derivation (pure engine, `now` passed in) --------
+  const focusMinutesForBlock = (blockId: string) =>
+    focus.history
+      .filter((r) => r.planningBlockId === blockId && r.completedAt?.slice(0, 10) === capIso)
+      .reduce((s, r) => s + r.durationMinutes, 0);
+  const todayState = deriveTodayState({
+    nowMinute: nowMin,
+    nowIso: capIso,
+    blocksToday: todaysBlocks,
+    occurrenceStateFor: (id, iso) => occurrenceStateFor(id, iso),
+    focusMinutesForBlock,
+    actionStatusFor: (id) => actions.find((a) => a.id === id)?.status ?? null,
+    dailyCapacityMinutes: capacity.dailyCapacityMinutes,
+    weeklyCapacityMinutes: capacity.weeklyCapacityMinutes,
+    weeklyScheduledMinutes,
+    capacityLevel,
+  });
+
+  const startFocus = () => {
+    if (featured) {
+      focus.startWith({
+        title: featured.title,
+        linkedBlockId: featured.id,
+        linkedActionId: featured.actionId,
+        targetMinutes: Math.max(0, featured.endMinute - featured.startMinute),
+        returnTo: "/",
+      });
+    }
+    navigate("/focus");
+  };
 
   return (
     <div className="space-y-6">
@@ -188,13 +235,33 @@ export function TodayPage() {
             {completedActions} action{completedActions === 1 ? "" : "s"} done
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => window.dispatchEvent(new CustomEvent("pbos:open-natural-capture"))}
-          className="h-8 px-3 rounded-md text-[0.8125rem] bg-action-secondary text-text-primary border border-border-subtle hover:border-border-strong"
-        >
-          Capture what happened
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1" role="group" aria-label="Today's operating capacity">
+            <span className="t-caption text-text-muted mr-1">Capacity</span>
+            {(["low", "normal", "high"] as TodayCapacityLevel[]).map((lvl) => (
+              <button
+                key={lvl}
+                type="button"
+                aria-pressed={capacityLevel === lvl}
+                onClick={() => void setCapacityLevel(lvl)}
+                className={`h-7 px-2 rounded text-[0.75rem] border capitalize ${
+                  capacityLevel === lvl
+                    ? "bg-surface-selected text-text-primary border-border-focus"
+                    : "text-text-muted border-border-subtle hover:text-text-secondary"
+                }`}
+              >
+                {lvl}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent("pbos:open-natural-capture"))}
+            className="h-8 px-3 rounded-md text-[0.8125rem] bg-action-secondary text-text-primary border border-border-subtle hover:border-border-strong"
+          >
+            Capture what happened
+          </button>
+        </div>
       </div>
 
       {/* PRIMARY — one strong "what should I do now?" surface (§17–§18). */}
@@ -252,6 +319,77 @@ export function TodayPage() {
             </Button>
           </div>
         </PrimaryActionSurface>
+      )}
+
+      {/* CONDITIONAL — ADAPTATION. Shown only on material divergence (§11.1). */}
+      {todayState.mode === "adaptation-needed" && (
+        <Card title="Adaptation needed" emphasis="secondary">
+          <ul className="space-y-1 text-sm text-text-secondary">
+            {todayState.adaptationReasons.map((r, i) => (
+              <li key={i} className="flex gap-2">
+                <span aria-hidden className="text-status-warning">•</span>
+                {r}
+              </li>
+            ))}
+          </ul>
+          {todayState.elapsedUnresolved.length > 0 && (
+            <div className="mt-3 space-y-2">
+              <p className="t-caption text-text-muted uppercase tracking-wide">
+                Passed, still unresolved
+              </p>
+              {todayState.elapsedUnresolved.map((v) => (
+                <div
+                  key={v.block.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border-subtle bg-surface-inset px-3 py-2"
+                >
+                  <div className="text-sm text-text-primary">
+                    {v.block.title}{" "}
+                    <span className="text-text-muted text-xs">
+                      · {timeLabel(v.block.startMinute)}–{timeLabel(v.block.endMinute)}
+                      {v.actualFocusMinutes > 0 && ` · ${v.actualFocusMinutes} min focused`}
+                    </span>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={() =>
+                        void resolveOccurrence(v.block.id, capIso, "done")
+                      }
+                      className="px-2 py-1 rounded text-[11px] border border-border-subtle text-text-secondary hover:text-text-primary"
+                    >
+                      Mark done
+                    </button>
+                    <button
+                      onClick={() =>
+                        void resolveOccurrence(v.block.id, capIso, "skipped")
+                      }
+                      className="px-2 py-1 rounded text-[11px] border border-border-subtle text-text-secondary hover:text-text-primary"
+                    >
+                      Skip
+                    </button>
+                    <button
+                      onClick={() => navigate("/planner")}
+                      className="px-2 py-1 rounded text-[11px] border border-border-subtle text-text-secondary hover:text-text-primary"
+                    >
+                      Re-plan
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="mt-3 flex gap-2">
+            <Button variant="secondary" size="sm" onClick={() => navigate("/planner")}>
+              Review the plan
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => window.dispatchEvent(new CustomEvent("pbos:open-natural-capture"))}
+            >
+              Capture what changed
+            </Button>
+          </div>
+        </Card>
       )}
 
       {/* SECONDARY — the timeline + the advisory AI panel (§20–§21). */}
