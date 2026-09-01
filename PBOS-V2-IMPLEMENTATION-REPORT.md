@@ -1,7 +1,11 @@
 # PBOS V2 — IMPLEMENTATION REPORT
 
 Run date: 2026-09-01 → 2026-09-02
-Result: **V2 PARTIAL — SAFE CHECKPOINT** (all ten build phases A–K executed; see "Definition of Done" for the gap vs a full PASS).
+Result: **V2 IMPLEMENTATION PASS — RELEASE CANDIDATE READY FOR PRODUCT-OWNER QA**
+(Phases A–K reached SAFE CHECKPOINT on 2026-09-01; the Final Hardening Run on
+2026-09-02 closed every remaining locked V2 acceptance item — see
+[Final Hardening Run](#final-hardening-run-2026-09-02) at the end of this file,
+which supersedes the "Definition of Done" and "Remaining work" sections below.)
 Repository state: passing, coherent, recoverable. No half-applied migration, no broken flow, no half-wired store.
 
 ---
@@ -234,3 +238,80 @@ Reporting **V2 PARTIAL — SAFE CHECKPOINT** rather than **V2 IMPLEMENTATION PAS
 - Test harnesses that mount `AICoachProvider` / `CaptureProvider` / `RoutineDetailPage` / `TopicDetailPage` gained the extra domain providers the shared mutation context now needs — no product code depends on those wrappers.
 
 Nothing is hidden. All ten phases were executed; the five gaps above are why this is a checkpoint and not a full PASS.
+
+---
+
+## Final Hardening Run (2026-09-02)
+
+**Starting checkpoint:** `50e2435` — `docs(v2): finalize implementation report (phases A–K, safe checkpoint)`.
+Branch `v2/adaptive-intelligence-foundation`, still local-only, still off `main` @ `c1e82a3`. No Phase A–K work was restarted, no architecture redesigned, no scope broadened (no V3 / mobile / cloud / RAG). Release version unchanged (`1.0.0-rc.2`).
+
+Governing prompt: `PBOS-V2-FINAL-HARDENING-OVERNIGHT-PROMPT.md` (committed this run as governing history). Executed in its stated priority order.
+
+### Per-item closure
+
+| # | Item (from the checkpoint's "Remaining work") | Status | Evidence |
+| --- | --- | --- | --- |
+| 1 | True transactional Rust `plan_apply_change_set` / `plan_undo_change_set` | **DONE** | `35e508f` + `1121059`. `planning.rs`: typed allow-listed `PlanChangeOp` enum (`keep / add / move / shorten / remove-block / defer / drop-occurrence / mark-occurrence-done|skipped / clear-occurrence`), `validate_op` (fixed/locked blocks never moved; only `source='generated'` blocks added/removed), deterministic `stale_check` (expected-before snapshot), then **one** `conn.transaction()` — every op **plus** the change-set row status update commit together or roll back together (`tx` auto-rolls-back on drop unless `.commit()`). `plan_undo_change_set` re-reads the row, refuses anything not `applied`, replays the stored inverse ops in one transaction, flips status to `undone`. Registered in `lib.rs`. Store (`planning/store.tsx`): `buildTxOps` maps the reviewed `PlanningDiffChange[]` to `{ops, inverseOps, expected}`; under SQLite `applyPlanningDiff` / `undoPlanningChangeSet` call the Rust commands and `reloadAdaptiveState()`; the sequential + compensating-rollback path is kept **only** as the localStorage fallback. Rust tests: `apply_ops_commit_together_or_roll_back_together`, `stale_expected_state_is_refused_before_any_write`, `undo_atomically_reverses_an_add_and_a_move_and_survives_reopen`, `validate_op_rejects_moving_a_fixed_or_locked_block_and_removing_a_manual_one`, `apply_change_set_wire_shape_deserializes_the_typed_op_list`, `move_and_shorten_stamp_the_callers_now_into_updated_at_not_the_epoch`. TS: `adaptive/repo.test.ts` asserts the single documented `{ request }` payload shape and that the browser repo returns `null`. |
+| 2 | Contextual intelligence surface audit + completion | **DONE** | `7c9089d`. Built `docs/27 ... V2 Master Blueprint - 2026-09-01/08 - Contextual Intelligence Surface Matrix.md` first (every V2 surface x the question it must answer x whether deterministic state already answers it). New shared `ContextualInsight` primitive (calm strip, renders nothing without a headline, "Why this?" disclosure with `aria-expanded`/`aria-controls`, at most 2 subordinate ghost actions, optional muted note). Wired **only** where deterministic state did not already answer: Normal Study (selected topic — `attentionEngine` reasons + repeated-weakness method note + "Plan this" / "Explore in AI Coach"), Today (an "Explore alternatives" action on the already-conditional "Adaptation needed" card), Planner / `PlanningDiffReview` ("Consider alternatives in AI Coach" — appears **only** under Could Not Fit), Knowledge Topic Detail (evidence/review-boundary explanation on a gap). No AI hero cards, no provider calls added, no permission widening — `ContextualInsight` is 100% deterministic. Tests: `ContextualInsight.dom.test.tsx` (x3), `academic/study.dom.test.tsx` contextual case, `PlanningDiffReview` label exhaustiveness. |
+| 3 | Provider-wired scoped Obsidian previews for Generate Recall | **DONE** | `c764cad`. `GenerateRecallButton` rewritten: `linkedNotes` prop; when AI is allowed **and** the topic has linked notes, a `<fieldset>` of radio buttons (nothing selected by default) + "Clear selection". On generate, **only** the one ticked note is read on demand via `obsidian.readNote`, sliced to `PAYLOAD_PREVIEW_CHARS = 1500`, and passed **only** inside that one scoped provider request's `user` message (built by `buildRecallRequest`); the generic AI `context` carries `facts: []` — note bodies never enter generic `domainFacts`, never persisted, never in recommendation history. Truncation (`preview.truncated || length > 1500`) is disclosed with a one-shot non-persisted note. Deterministic PBOS prompts when AI is not allowed or the provider fails; a governed `kind:"recall"` mastery check is still started with real prompts either way. Generated prompts are **not** evidence — mastery only changes after the user completes + rates the check and takes the explicit record-evidence action (unchanged path; `masteryStore` maps `recallPrompts` to `MasteryItem[]` with `rating: null`, status `in-progress`). Tests: `GenerateRecallButton.dom.test.tsx` (x4: no tick / one tick + truncation disclosed / permission denied -> provider & readNote untouched / provider failure -> honest fallback). |
+| 4 | Agent Browser + accessibility + visual hardening | **DONE (no code fixes needed)** | `d4e7f24` + `docs/27 ... /09 - Visual and Accessibility QA Record.md`. Reviewed every new V2 surface against `DESIGN.md` with `agent-browser` (system Chrome) at 1440x900, plus the automated `visual-system.spec.ts` no-horizontal-overflow sweep (1024/1280/1440/1600/1920 px) and the `@axe-core/playwright` assertions — all green. Static token audit of all new V2 components: **0 violations** (no raw hex, no `rgb()`, no arbitrary Tailwind values, no gaming/neon/AI-purple/orb/glass; the only animation is `Button`'s inherited `motion-safe:animate-spin`). Screen-by-screen: all new cards reuse V1 card + header-action patterns, calm copy, honest empty states. a11y: correct heading levels, labelled controls, `aria-expanded`/`aria-controls` on disclosures, `aria-pressed` on the capacity control, text label on every status badge, open-drawer axe assertion green. Tool limitation recorded: `agent-browser` has no `resize` verb, so the 1280x800 check was covered by `visual-system.spec.ts` rather than interactively. One pre-existing, codebase-wide item noted as separate follow-up (the overlay pattern — `CommandPalette` and the capture drawer — does not trap focus); **not** a V2 regression. |
+| 5 | Native WDIO / Tauri verification (`npm run test:e2e:tauri`) | **DONE — documented infrastructure limitation, unchanged from V1** | Pre-build: `npm run build:e2e` (tsc -b + dev-mode vite) and `tauri:build:debug` (cargo) both succeed. Edge WebDriver compatibility: WebView2 `151.0.4129.107` detected, matching `msedgedriver 151.0.4129.107` downloaded. `tauri-driver` ready (`~/.cargo/bin/tauri-driver.exe`), listening on 127.0.0.1. **Diagnostics: 6/6 checks passed.** A live WebView2 WebDriver session is created against `src-tauri/target/debug/app.exe`. Every spec then fails at the same boundary — `Tauri plugin not available. Make sure @wdio/tauri-plugin is installed and registered in your Tauri app.` — because driving the PBOS renderer's own DOM requires `tauri-plugin-wdio` wired into `src-tauri`, an intentional product-source omission (`CLAUDE.md`). Result: 0 passed / 1 spec file failed (9 cases, all blocked identically). This is **identical to V1** — no V2 renderer/WebDriver contract changed. Per the hardening prompt, not treated as a V2 product failure and no product source was changed to force it. No commit (nothing changed). |
+| 6 | Cross-domain integrity audit (7 end-to-end chains) | **DONE** | `1121059` + `997c12c`. Audited Natural Capture -> proposals -> Capture Inbox -> confirm; Academic assessment-scope -> `attentionEngine` -> study requirements; Planning change-set -> transactional apply -> occurrences/blocks -> undo; Today operating-state <- planning + performance + academic; Knowledge recall -> mastery check -> evidence handoff; Routine pattern engine <- check-in history; AI Coach context governance -> domain permissions -> provider payload. **One real product defect found and fixed:** `plan_apply_change_set` / `plan_undo_change_set` stamped `planning_blocks.updated_at = "1970-01-01T00:00:00.000Z"` on every `move` / `shorten` (hardcoded epoch sentinel in `apply_op`), while the sequential fallback path correctly used `nowIso()` — the two apply paths disagreed on row freshness. Fixed by threading the caller's `request.now` through `apply_op` via a `stamp()` helper (epoch only if the frontend passes an empty string); Rust regression test added. **One test-infrastructure defect found and fixed:** the `adaptive-today` E2E `addBlock` helper pinned blocks to a **UTC** date (`toISOString().slice(0,10)`) while Adaptive Today keys off the **local** civil date — in a non-UTC timezone in the hours around midnight the block landed on "yesterday" and the elapsed-block assertion failed; fixed with a `localIsoDate()` helper matching the app + a late-day skip guard mirroring the existing pre-dawn one. No other integration defects. |
+
+### Atomicity (Priority 1)
+
+A reviewed Planning Diff now lands through exactly one SQLite transaction under Tauri. `plan_apply_change_set` validates every typed op and the expected-before snapshot with **no writes**, then opens `conn.transaction()`, applies each op, upserts the `planning_change_sets` row as `applied`, and commits — a failure anywhere drops `tx` and rolls back everything, and the store records the change set as `apply-failed`. `plan_undo_change_set` is the same shape over the stored inverse ops, ending at status `undone`; it refuses any change set not currently `applied`, so a double-undo is impossible after `reloadAdaptiveState()`. A stale plan (a block moved or deleted since the diff was reviewed) is refused before any write with a `stale-plan:` error the store turns into "The plan changed since this diff was reviewed — regenerate it." The localStorage build keeps the sequential + compensating-rollback path (a diff still never lands half-applied there).
+
+### Contextual intelligence matrix (Priority 2)
+
+`docs/27 - V2 Adaptive Coach/V2 Master Blueprint - 2026-09-01/08 - Contextual Intelligence Surface Matrix.md` is the authority for which surfaces carry a contextual affordance and which deliberately do not (because deterministic state — a status, a count, an honest empty state — already answers the question). Surfaces intentionally left without a `ContextualInsight` (Calendar, Academics overview, Course Detail, Knowledge/Routines overview, Focus, Analytics, Patterns, Language/Development/Fitness/Money) are a matrix decision, not an omission.
+
+### Obsidian / Recall privacy (Priority 3)
+
+Verified end to end: no note is read or sent unless the user ticks exactly one linked note; the ticked note is read on demand, bounded to 1500 chars, and rides **only** in the single scoped recall request; generic AI context stays note-body-free (`facts: []`); truncation is disclosed; nothing is persisted; Money stays `no-access`; provider failure and permission-denied both fall back to deterministic PBOS prompts with an honest message; generated prompts never change mastery.
+
+### Visual QA (Priority 4)
+
+`DESIGN.md`-compliant across every new surface; 0 static token violations; a11y clean; no horizontal overflow 1024–1920 px. Full detail in `docs/27 ... /09 - Visual and Accessibility QA Record.md`. No code fixes were required.
+
+### Native E2E (Priority 5)
+
+Infrastructure smoke passes (diagnostics 6/6, drivers resolve, WebView2 session opens); renderer-DOM assertions remain blocked by the intentional `tauri-plugin-wdio` omission — **unchanged from V1**, documented, not a V2 defect.
+
+### Full final regression (Priority 7)
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Unit / component | `npm test` | **824 passed / 100 files**, 0 failed |
+| Rust | `cargo test` (`src-tauri`) | **145 passed**, 0 failed (was 144 at checkpoint; +1 regression test) |
+| Lint | `npm run lint` (oxlint) | **0 errors**; ~54 pre-existing `react(only-export-components)` + 1 `react(preserve-manual-memoization)` warnings — unchanged categories from V1 (the P1 Planner refactor removed one manual-memoization warning) |
+| Type-check + prod build | `npm run build` (`tsc -b && vite build`) | **exit 0** |
+| Browser E2E | `npm run test:e2e` (Playwright, system Chrome) | **70 passed**, 0 failed |
+| Release type-check | `cargo check --release` | **exit 0** |
+| Native bundle | `npm run tauri:build` | **exit 0** — produced `src-tauri/target/release/app.exe` + `Performance Buddy OS_1.0.0-rc.2_x64-setup.exe` (NSIS, x64); version unchanged; artifact not committed |
+| Native desktop E2E | `npm run test:e2e:tauri` (WebdriverIO) | diagnostics 6/6, drivers + WebView2 session OK; renderer-DOM blocked by documented `tauri-plugin-wdio` omission (V1-identical) |
+
+No AI provider (fake or live) was used as acceptance evidence anywhere.
+
+### Git
+
+| | |
+| --- | --- |
+| Branch | `v2/adaptive-intelligence-foundation` (local only) |
+| Commits this hardening run | `35e508f`, `7c9089d`, `c764cad`, `d4e7f24`, `1121059`, `997c12c` + this report |
+| Force push / remote push / reset | **none** |
+| V1 release history / tag / version | untouched; release stays `1.0.0-rc.2` |
+| Working tree | clean at every phase boundary; `app/src-tauri/target/` is git-ignored; QA screenshots kept out of the repo (scratchpad) |
+
+### Remaining V2 scope
+
+- **`tauri-plugin-wdio` renderer-DOM attach** — the one item still open. It is a test-infrastructure limitation requiring a `src-tauri` product-source change that is intentionally out of scope for this run (and for V1). It does not affect shipped behaviour; the browser E2E suite covers the same user flows.
+- Screens the surface matrix marks as needing no contextual affordance remain unchanged **by design**.
+- No V3 / mobile / cloud / RAG work was started.
+
+### Final status
+
+**V2 IMPLEMENTATION PASS — RELEASE CANDIDATE READY FOR PRODUCT-OWNER QA.**
+
+Every locked V2 acceptance criterion is implemented and verified: durable schema v11; one canonical store per domain; Natural Capture multi-domain review/apply; evidence reuse; explicit assessment scope; explainable academic prioritisation; deterministic concrete-date planning with typed diffs, Could Not Fit and protected-block preservation; occurrence-specific recurring behaviour; **transactional** Planning Diff apply/undo with stale detection; Adaptive Today follow-plan/adapt with the daily-capacity boundary; Focus evidence reuse; scoped-preview Knowledge recall without fake mastery; the Routine pattern evidence threshold; permission-scoped contextual intelligence with a deterministic core and provider-failure fallback; the audit/revision trail; exact Tauri wire tests; and a green unit / Rust / lint / build / browser-E2E / release-check / native-bundle regression. The sole open item — native-renderer WebDriver DOM assertions — is a documented, V1-identical infrastructure limitation, not a product gap.
