@@ -4,6 +4,12 @@ Performance Buddy OS (PBOS) is a **Tauri 2 desktop app** with a **React 19 + Rea
 Router 7 + Vite 8 + Tailwind 4 + TypeScript** frontend in `app/`, and a Rust
 backend in `app/src-tauri/`. Unit tests run on **Vitest**.
 
+For any UI/frontend work, read and follow **`/DESIGN.md`** before implementation.
+DESIGN.md is the canonical PBOS visual authority (it consolidates
+`docs/07 - Visual & Design System`, the locked Visual Identity, and
+`app/src/tokens/`). External UI sources are inspiration only and must never
+override PBOS design rules or tokens.
+
 ---
 
 ## AUTONOMOUS TASK COMPLETION
