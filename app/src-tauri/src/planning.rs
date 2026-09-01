@@ -36,10 +36,16 @@ pub struct PlanningBlockRow {
     pub title: String,
     pub domain: String,
     pub action_id: Option<String>,
+    // The canonical frontend model (`app/src/domains/planning/types.ts`) names
+    // these `day` and `type`; the SQLite columns are `day_of_week` / `block_type`.
+    // The wire names MUST match the frontend or `plan_block_upsert` /
+    // `plan_import_graph` fail to deserialize and no block is ever persisted.
+    #[serde(rename = "day")]
     pub day_of_week: i64,
     pub date: Option<String>,
     pub start_minute: i64,
     pub end_minute: i64,
+    #[serde(rename = "type")]
     pub block_type: String,
     pub locked: bool,
     pub source: String,
@@ -558,5 +564,104 @@ mod tests {
                 "EDITED"
             );
         }
+    }
+
+    // -- RC1 release-blocker regression -----------------------------------
+    // A Planner/Calendar block created in the installed app vanished on the
+    // next launch. Root cause: the Tauri wire struct expected `dayOfWeek` /
+    // `blockType`, but the frontend model sends `day` / `type` — so
+    // `plan_block_upsert` failed to deserialize and nothing was ever written
+    // to SQLite. Every prior planning test constructed `PlanningBlockRow` in
+    // Rust directly (or exercised the localStorage repo), so the wire contract
+    // was never covered.
+
+    /// The EXACT JSON `SqliteRepo.blockUpsert` sends over `invoke`.
+    fn frontend_block_json(id: &str, locked: bool) -> serde_json::Value {
+        serde_json::json!({
+            "id": id,
+            "title": "Deep work",
+            "domain": "Planning",
+            "actionId": null,
+            "day": 1,
+            "date": "2026-09-01",
+            "startMinute": 540,
+            "endMinute": 600,
+            "type": "fixed",
+            "locked": locked,
+            "source": "manual",
+            "status": "scheduled",
+            "createdAt": "2026-09-01T09:00:00.000Z",
+            "updatedAt": "2026-09-01T09:00:00.000Z"
+        })
+    }
+
+    fn temp_db_path(tag: &str) -> std::path::PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!("pbos-planning-{tag}-{}-{nanos}.sqlite3", std::process::id()))
+    }
+
+    #[test]
+    fn frontend_wire_shape_deserializes_and_survives_db_close_and_reopen() {
+        // 1. The frontend payload deserializes into the wire struct at all.
+        let block: PlanningBlockRow = serde_json::from_value(frontend_block_json("blk_1", true))
+            .expect("frontend `day`/`type` payload must deserialize — this is the RC1 bug");
+        assert_eq!(block.day_of_week, 1);
+        assert_eq!(block.block_type, "fixed");
+        assert!(block.locked);
+
+        let path = temp_db_path("reopen");
+
+        // 2. Open a real file DB, migrate, write the block, then DROP the connection.
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.pragma_update(None, "journal_mode", "WAL").unwrap();
+            conn.pragma_update(None, "foreign_keys", "ON").unwrap();
+            run_migrations_for_test(&conn).unwrap();
+            block_upsert_inner(&conn, &block).unwrap();
+        } // connection closed here — mirrors "fully exit PBOS"
+
+        // 3. Reopen the SAME file in a fresh connection — mirrors "relaunch".
+        let restored = {
+            let conn = Connection::open(&path).unwrap();
+            conn.pragma_update(None, "foreign_keys", "ON").unwrap();
+            load_inner(&conn).unwrap()
+        };
+
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(path.with_extension("sqlite3-wal"));
+        let _ = std::fs::remove_file(path.with_extension("sqlite3-shm"));
+
+        assert_eq!(restored.blocks.len(), 1, "block must survive close + reopen");
+        let b = &restored.blocks[0];
+        assert_eq!(b.id, "blk_1");
+        assert_eq!(b.day_of_week, 1);
+        assert_eq!(b.block_type, "fixed");
+        assert_eq!(b.date.as_deref(), Some("2026-09-01"));
+        assert!(b.locked, "lock state must survive relaunch");
+        assert_eq!(b.source, "manual", "manual provenance must survive relaunch");
+    }
+
+    #[test]
+    fn plan_load_emits_the_field_names_the_frontend_reads() {
+        let c = mem();
+        let block: PlanningBlockRow =
+            serde_json::from_value(frontend_block_json("blk_2", false)).unwrap();
+        block_upsert_inner(&c, &block).unwrap();
+
+        let graph = load_inner(&c).unwrap();
+        let json = serde_json::to_value(&graph).unwrap();
+        let wire = &json["blocks"][0];
+
+        // The frontend reads `block.day` / `block.type`; anything else renders
+        // the block on no weekday and it "disappears".
+        assert_eq!(wire["day"], 1);
+        assert_eq!(wire["type"], "fixed");
+        assert!(wire.get("dayOfWeek").is_none());
+        assert!(wire.get("blockType").is_none());
+        assert_eq!(wire["startMinute"], 540);
+        assert_eq!(wire["actionId"], serde_json::Value::Null);
     }
 }
