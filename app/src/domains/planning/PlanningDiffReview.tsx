@@ -20,6 +20,8 @@ const KIND_LABEL: Record<string, string> = {
   "drop-occurrence": "Skip occurrence",
   "mark-occurrence-done": "Mark occurrence done",
   "mark-occurrence-skipped": "Skip occurrence",
+  "remove-block": "Remove",
+  "clear-occurrence": "Clear occurrence",
 };
 
 function describe(c: PlanningDiffChange): string {
@@ -41,6 +43,10 @@ function describe(c: PlanningDiffChange): string {
       return `${c.occurrenceDate} of ${c.blockId} is skipped; the weekly block stays.`;
     case "mark-occurrence-done":
       return `${c.occurrenceDate} of ${c.blockId} is marked done.`;
+    case "remove-block":
+      return `Block ${c.blockId} is removed.`;
+    case "clear-occurrence":
+      return `The ${c.occurrenceDate} exception on ${c.blockId} is cleared.`;
   }
 }
 

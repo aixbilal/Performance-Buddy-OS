@@ -47,7 +47,9 @@ import { resolveLegacyPlanning, type PlanningLegacyReport } from "./legacyImport
 import { makePlanningRepo, type PlanningRepo } from "./repo";
 import { makeAdaptivePlanningRepo, type AdaptivePlanningRepo } from "../adaptive/repo";
 import type {
+  ExpectedBlock,
   OccurrenceState,
+  PlanChangeOp,
   PlanningChangeSet,
   PlanningChangeSetScope,
   PlanningDiffChange,
@@ -496,6 +498,136 @@ export function PlanningProvider({ children }: { children: ReactNode }) {
     return { ok: true, id: exception.id };
   };
 
+  /**
+   * Turn the reviewed `PlanningDiffChange[]` into the typed transactional op
+   * list + its inverse + the expected-before snapshot, using the CURRENT graph.
+   * `add`/`defer` blocks get concrete ids here so the inverse can remove them.
+   */
+  const buildTxOps = (
+    changes: PlanningDiffChange[],
+  ): { ops: PlanChangeOp[]; inverseOps: PlanChangeOp[]; expected: ExpectedBlock[] } => {
+    const now = nowIso();
+    const ops: PlanChangeOp[] = [];
+    const inverseOps: PlanChangeOp[] = [];
+    const expected: ExpectedBlock[] = [];
+    const seenExpected = new Set<string>();
+    const snapshot = (id: string) => {
+      const b = graph.blocks.find((x) => x.id === id);
+      if (b && !seenExpected.has(id)) {
+        seenExpected.add(id);
+        expected.push({ id, startMinute: b.startMinute, endMinute: b.endMinute });
+      }
+    };
+
+    for (const c of changes) {
+      if (c.kind === "keep") {
+        ops.push({ kind: "keep", blockId: c.blockId });
+      } else if (c.kind === "add") {
+        const b = c.block as Record<string, unknown>;
+        const id = newId("blk");
+        const date = (b.date as string | null) ?? null;
+        const block = {
+          id,
+          title: String(b.title ?? "Study block"),
+          domain: String(b.domain ?? "Planning"),
+          actionId: (b.actionId as string | null) ?? null,
+          day: date ? mondayIndexOf(date) : Number(b.day ?? 0),
+          date,
+          startMinute: Number(b.startMinute ?? 0),
+          endMinute: Number(b.endMinute ?? 0),
+          type: "flexible" as const,
+          locked: false,
+          source: "generated" as const,
+          status: "scheduled" as const,
+          createdAt: now,
+          updatedAt: now,
+        };
+        ops.push({ kind: "add", block });
+        inverseOps.push({ kind: "remove-block", blockId: id });
+      } else if (c.kind === "move") {
+        snapshot(c.blockId);
+        const b = graph.blocks.find((x) => x.id === c.blockId);
+        ops.push({ kind: "move", blockId: c.blockId, toStartMinute: c.toStartMinute });
+        if (b) inverseOps.push({ kind: "move", blockId: c.blockId, toStartMinute: b.startMinute });
+      } else if (c.kind === "shorten") {
+        snapshot(c.blockId);
+        const b = graph.blocks.find((x) => x.id === c.blockId);
+        ops.push({ kind: "shorten", blockId: c.blockId, toEndMinute: c.toEndMinute });
+        if (b) inverseOps.push({ kind: "shorten", blockId: c.blockId, toEndMinute: b.endMinute });
+      } else if (
+        c.kind === "drop-occurrence" ||
+        c.kind === "mark-occurrence-skipped" ||
+        c.kind === "mark-occurrence-done"
+      ) {
+        const state = c.kind === "mark-occurrence-done" ? "done" : "skipped";
+        const exception: PlanningOccurrenceException = {
+          id: newId("occ"),
+          blockId: c.blockId,
+          occurrenceDate: c.occurrenceDate,
+          state: state as OccurrenceState,
+          replacementBlockId: null,
+          source: "user",
+          note: "",
+          createdAt: now,
+          updatedAt: now,
+        };
+        ops.push({ kind: c.kind === "mark-occurrence-done" ? "mark-occurrence-done" : "drop-occurrence", exception });
+        inverseOps.push({ kind: "clear-occurrence", blockId: c.blockId, occurrenceDate: c.occurrenceDate });
+      } else if (c.kind === "defer") {
+        const template = graph.blocks.find((x) => x.id === c.blockId);
+        const replacementId = newId("blk");
+        const replacement = {
+          id: replacementId,
+          title: template?.title ?? "Study block",
+          domain: template?.domain ?? "Planning",
+          actionId: template?.actionId ?? null,
+          day: mondayIndexOf(c.toDate),
+          date: c.toDate,
+          startMinute: template?.startMinute ?? 9 * 60,
+          endMinute: template?.endMinute ?? 10 * 60,
+          type: "flexible" as const,
+          locked: false,
+          source: "generated" as const,
+          status: "scheduled" as const,
+          createdAt: now,
+          updatedAt: now,
+        };
+        const exception: PlanningOccurrenceException = {
+          id: newId("occ"),
+          blockId: c.blockId,
+          occurrenceDate: c.occurrenceDate,
+          state: "deferred",
+          replacementBlockId: replacementId,
+          source: "user",
+          note: "",
+          createdAt: now,
+          updatedAt: now,
+        };
+        ops.push({ kind: "defer", exception, replacement });
+        inverseOps.push({ kind: "clear-occurrence", blockId: c.blockId, occurrenceDate: c.occurrenceDate });
+        inverseOps.push({ kind: "remove-block", blockId: replacementId });
+      }
+    }
+    return { ops, inverseOps, expected };
+  };
+
+  const reloadAdaptiveState = async () => {
+    try {
+      const [g, occ, cs] = await Promise.all([
+        repoRef.current.load(),
+        adaptiveRepoRef.current.loadOccurrences(),
+        adaptiveRepoRef.current.loadChangeSets(),
+      ]);
+      setGraph(g);
+      occurrencesRef.current = occ;
+      setOccurrences(occ);
+      changeSetsRef.current = cs;
+      setChangeSets(cs);
+    } catch {
+      /* keep optimistic state; a later load reconciles */
+    }
+  };
+
   const applyPlanningDiff = async (
     diff: PlanningDiff,
     opts: {
@@ -505,6 +637,50 @@ export function PlanningProvider({ children }: { children: ReactNode }) {
       rationale?: string;
     },
   ): Promise<{ ok: boolean; changeSetId: string | null; message: string }> => {
+    // --- Transactional path (Rust, one SQLite transaction) --------------
+    if (adaptiveRepoRef.current.kind === "sqlite") {
+      const now = nowIso();
+      const { ops, inverseOps, expected } = buildTxOps(diff.changes);
+      const cs: PlanningChangeSet = {
+        ...makeChangeSet(diff, opts, "applied"),
+        inverseChangesJson: JSON.stringify(inverseOps),
+        appliedAt: now,
+      };
+      try {
+        const report = await adaptiveRepoRef.current.applyChangeSet({
+          changeSet: cs,
+          ops,
+          expected,
+          now,
+        });
+        if (!report) throw new Error("transactional apply returned nothing");
+        await reloadAdaptiveState();
+        recordRevision({
+          domain: "planning",
+          entityType: "change-set",
+          entityId: cs.id,
+          operation: "apply",
+          source: "user",
+          summary: `Applied a ${opts.scope} planning diff atomically (${ops.length} op(s))`,
+          metadata: { scope: opts.scope, ops: ops.length, transactional: true },
+        });
+        return { ok: true, changeSetId: cs.id, message: "Plan changes applied." };
+      } catch (e) {
+        const failed: PlanningChangeSet = makeChangeSet(diff, opts, "apply-failed");
+        upsertChangeSetLocal(failed);
+        await adaptiveRepoRef.current.upsertChangeSet(failed).catch(() => {});
+        const msg = e instanceof Error ? e.message : "Could not apply the plan changes.";
+        return {
+          ok: false,
+          changeSetId: null,
+          message: /stale-plan/.test(msg)
+            ? "The plan changed since this diff was reviewed — regenerate it."
+            : msg,
+        };
+      }
+    }
+
+    // --- Fallback path (localStorage): sequential + compensating rollback --
     const createdBlockIds: string[] = [];
     const movedBack: { id: string; startMinute: number; endMinute: number }[] = [];
     const createdOccurrenceIds: string[] = [];
@@ -598,6 +774,29 @@ export function PlanningProvider({ children }: { children: ReactNode }) {
     const cs = changeSetsRef.current.find((x) => x.id === changeSetId);
     if (!cs) return { ok: false, message: "Change set not found." };
     if (cs.status !== "applied") return { ok: false, message: "Only an applied change set can be undone." };
+
+    // --- Transactional undo (Rust) ------------------------------------
+    if (adaptiveRepoRef.current.kind === "sqlite") {
+      let ops: PlanChangeOp[];
+      try {
+        ops = JSON.parse(cs.inverseChangesJson) as PlanChangeOp[];
+      } catch {
+        return { ok: false, message: "The stored inverse changes are unreadable." };
+      }
+      try {
+        const report = await adaptiveRepoRef.current.undoChangeSet({
+          changeSetId,
+          ops,
+          now: nowIso(),
+        });
+        if (!report) throw new Error("transactional undo returned nothing");
+        await reloadAdaptiveState();
+        return { ok: true, message: "Plan changes undone." };
+      } catch (e) {
+        return { ok: false, message: e instanceof Error ? e.message : "Could not undo." };
+      }
+    }
+
     let inverse: PlanningDiffChange[];
     try {
       inverse = JSON.parse(cs.inverseChangesJson) as PlanningDiffChange[];

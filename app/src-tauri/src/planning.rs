@@ -759,6 +759,409 @@ pub fn plan_change_set_delete(db: State<'_, Db>, id: String) -> DbResult<()> {
     Ok(())
 }
 
+// ===========================================================================
+// V2 hardening — TRANSACTIONAL Planning Diff apply / undo.
+//
+// The renderer sends a TYPED, allowlisted op list (never SQL). Rust
+// re-validates the critical invariants, does a deterministic expected-before
+// check for stale plan state, then applies every op inside ONE SQLite
+// transaction: commit only if all succeed, automatic rollback on any error.
+// The user never sees "applied" if only part persisted.
+//
+// Allowed forward ops mirror the persisted change vocabulary. `remove-block`
+// is restricted to a `source = 'generated'`, unlocked block (so it can be the
+// inverse of an `add` and nothing else); `clear-occurrence` deletes an
+// exception (inverse of a `skip`/`done`/`defer`).
+// ===========================================================================
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case", rename_all_fields = "camelCase")]
+pub enum PlanChangeOp {
+    Keep {
+        #[allow(dead_code)]
+        block_id: String,
+    },
+    Add {
+        block: PlanningBlockRow,
+    },
+    Move {
+        block_id: String,
+        to_start_minute: i64,
+    },
+    Shorten {
+        block_id: String,
+        to_end_minute: i64,
+    },
+    RemoveBlock {
+        block_id: String,
+    },
+    Defer {
+        exception: OccurrenceExceptionRow,
+        /// Concrete date-pinned replacement created for the deferred date.
+        replacement: PlanningBlockRow,
+    },
+    DropOccurrence {
+        exception: OccurrenceExceptionRow,
+    },
+    MarkOccurrenceDone {
+        exception: OccurrenceExceptionRow,
+    },
+    MarkOccurrenceSkipped {
+        exception: OccurrenceExceptionRow,
+    },
+    ClearOccurrence {
+        block_id: String,
+        occurrence_date: String,
+    },
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExpectedBlock {
+    pub id: String,
+    pub start_minute: i64,
+    pub end_minute: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyChangeSetRequest {
+    pub change_set: PlanningChangeSetRow,
+    pub ops: Vec<PlanChangeOp>,
+    /// Rows whose current (start,end) must still match, or the apply is refused
+    /// as stale. Empty = no stale check requested.
+    #[serde(default)]
+    pub expected: Vec<ExpectedBlock>,
+    pub now: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UndoChangeSetRequest {
+    pub change_set_id: String,
+    pub ops: Vec<PlanChangeOp>,
+    pub now: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangeSetApplyReport {
+    pub ok: bool,
+    pub change_set_id: String,
+    pub applied_ops: usize,
+}
+
+fn block_exists(conn: &Connection, id: &str) -> bool {
+    conn.query_row("SELECT 1 FROM planning_blocks WHERE id = ?1", params![id], |_| Ok(()))
+        .optional()
+        .ok()
+        .flatten()
+        .is_some()
+}
+
+fn require_removable_generated_block(conn: &Connection, id: &str) -> DbResult<()> {
+    let row: Option<(String, i64)> = conn
+        .query_row(
+            "SELECT source, locked FROM planning_blocks WHERE id = ?1",
+            params![id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()?;
+    match row {
+        None => Err(DbError::Forbidden(format!("block `{id}` not found"))),
+        Some((source, locked)) if source == "generated" && locked == 0 => Ok(()),
+        Some(_) => Err(DbError::Forbidden(format!(
+            "block `{id}` is not a removable generated block"
+        ))),
+    }
+}
+
+/// Re-validate the critical invariants of one op against current state. Does no
+/// writes. Runs before the transaction so a clearly bad request is rejected
+/// without opening one.
+fn validate_op(conn: &Connection, op: &PlanChangeOp) -> DbResult<()> {
+    match op {
+        PlanChangeOp::Keep { .. } => Ok(()),
+        PlanChangeOp::Add { block } => {
+            if block.id.trim().is_empty() {
+                return Err(DbError::Forbidden("add op needs a block id".into()));
+            }
+            if block.source != "generated" {
+                return Err(DbError::Forbidden(
+                    "an added block must have source = 'generated'".into(),
+                ));
+            }
+            if block.end_minute <= block.start_minute {
+                return Err(DbError::Forbidden("added block has an impossible time range".into()));
+            }
+            Ok(())
+        }
+        PlanChangeOp::Move {
+            block_id,
+            to_start_minute,
+        } => {
+            if !block_exists(conn, block_id) {
+                return Err(DbError::Forbidden(format!("move: block `{block_id}` not found")));
+            }
+            if *to_start_minute < 0 || *to_start_minute >= 24 * 60 {
+                return Err(DbError::Forbidden("move: start minute out of range".into()));
+            }
+            // fixed/locked blocks are never moved by an adaptive apply
+            let (bt, locked): (String, i64) = conn.query_row(
+                "SELECT block_type, locked FROM planning_blocks WHERE id = ?1",
+                params![block_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )?;
+            if bt == "fixed" || locked != 0 {
+                return Err(DbError::Forbidden(format!(
+                    "move: block `{block_id}` is fixed or locked and cannot be moved"
+                )));
+            }
+            Ok(())
+        }
+        PlanChangeOp::Shorten {
+            block_id,
+            to_end_minute,
+        } => {
+            let start: Option<i64> = conn
+                .query_row(
+                    "SELECT start_minute FROM planning_blocks WHERE id = ?1",
+                    params![block_id],
+                    |r| r.get(0),
+                )
+                .optional()?;
+            match start {
+                None => Err(DbError::Forbidden(format!("shorten: block `{block_id}` not found"))),
+                Some(s) if *to_end_minute > s => Ok(()),
+                Some(_) => Err(DbError::Forbidden("shorten: end must stay after start".into())),
+            }
+        }
+        PlanChangeOp::RemoveBlock { block_id } => require_removable_generated_block(conn, block_id),
+        PlanChangeOp::Defer {
+            exception,
+            replacement,
+        } => {
+            if !OCCURRENCE_STATES.contains(&exception.state.as_str()) {
+                return Err(DbError::Forbidden("defer: bad occurrence state".into()));
+            }
+            if !block_exists(conn, &exception.block_id) {
+                return Err(DbError::Forbidden("defer: recurring block not found".into()));
+            }
+            if replacement.id.trim().is_empty() || replacement.source != "generated" {
+                return Err(DbError::Forbidden(
+                    "defer: replacement must be a generated block with an id".into(),
+                ));
+            }
+            Ok(())
+        }
+        PlanChangeOp::DropOccurrence { exception }
+        | PlanChangeOp::MarkOccurrenceDone { exception }
+        | PlanChangeOp::MarkOccurrenceSkipped { exception } => {
+            if !OCCURRENCE_STATES.contains(&exception.state.as_str()) {
+                return Err(DbError::Forbidden("occurrence op: bad state".into()));
+            }
+            if !block_exists(conn, &exception.block_id) {
+                return Err(DbError::Forbidden("occurrence op: block not found".into()));
+            }
+            Ok(())
+        }
+        PlanChangeOp::ClearOccurrence { .. } => Ok(()),
+    }
+}
+
+fn apply_op(conn: &Connection, op: &PlanChangeOp) -> DbResult<()> {
+    match op {
+        PlanChangeOp::Keep { .. } => Ok(()),
+        PlanChangeOp::Add { block } => block_upsert_inner(conn, block),
+        PlanChangeOp::Move {
+            block_id,
+            to_start_minute,
+        } => {
+            let (start, end): (i64, i64) = conn.query_row(
+                "SELECT start_minute, end_minute FROM planning_blocks WHERE id = ?1",
+                params![block_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )?;
+            let dur = end - start;
+            conn.execute(
+                "UPDATE planning_blocks SET start_minute = ?1, end_minute = ?2, updated_at = ?3 WHERE id = ?4",
+                params![to_start_minute, to_start_minute + dur, now_or_epoch(), block_id],
+            )?;
+            Ok(())
+        }
+        PlanChangeOp::Shorten {
+            block_id,
+            to_end_minute,
+        } => {
+            conn.execute(
+                "UPDATE planning_blocks SET end_minute = ?1, updated_at = ?2 WHERE id = ?3",
+                params![to_end_minute, now_or_epoch(), block_id],
+            )?;
+            Ok(())
+        }
+        PlanChangeOp::RemoveBlock { block_id } => {
+            conn.execute("DELETE FROM planning_blocks WHERE id = ?1", params![block_id])?;
+            Ok(())
+        }
+        PlanChangeOp::Defer {
+            exception,
+            replacement,
+        } => {
+            block_upsert_inner(conn, replacement)?;
+            occurrence_upsert_inner(conn, exception)?;
+            Ok(())
+        }
+        PlanChangeOp::DropOccurrence { exception }
+        | PlanChangeOp::MarkOccurrenceDone { exception }
+        | PlanChangeOp::MarkOccurrenceSkipped { exception } => occurrence_upsert_inner(conn, exception),
+        PlanChangeOp::ClearOccurrence {
+            block_id,
+            occurrence_date,
+        } => {
+            conn.execute(
+                "DELETE FROM planning_occurrence_exceptions WHERE block_id = ?1 AND occurrence_date = ?2",
+                params![block_id, occurrence_date],
+            )?;
+            Ok(())
+        }
+    }
+}
+
+fn now_or_epoch() -> String {
+    "1970-01-01T00:00:00.000Z".to_string()
+}
+
+fn stale_check(conn: &Connection, expected: &[ExpectedBlock]) -> DbResult<()> {
+    for e in expected {
+        let cur: Option<(i64, i64)> = conn
+            .query_row(
+                "SELECT start_minute, end_minute FROM planning_blocks WHERE id = ?1",
+                params![e.id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()?;
+        match cur {
+            Some((s, en)) if s == e.start_minute && en == e.end_minute => {}
+            Some(_) => {
+                return Err(DbError::Forbidden(format!(
+                    "stale-plan: block `{}` changed since this diff was reviewed — regenerate it",
+                    e.id
+                )))
+            }
+            None => {
+                return Err(DbError::Forbidden(format!(
+                    "stale-plan: block `{}` no longer exists — regenerate the diff",
+                    e.id
+                )))
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn plan_apply_change_set(
+    db: State<'_, Db>,
+    request: ApplyChangeSetRequest,
+) -> DbResult<ChangeSetApplyReport> {
+    let mut conn = db.0.lock().unwrap();
+
+    if request.change_set.status != "applied" {
+        return Err(DbError::Forbidden(
+            "apply request's change_set must carry status 'applied'".into(),
+        ));
+    }
+    // 1. re-validate every op against current state (no writes)
+    for op in &request.ops {
+        validate_op(&conn, op)?;
+    }
+    // 2. deterministic expected-before check
+    stale_check(&conn, &request.expected)?;
+
+    // 3. one transaction — commit only if all ops + the status update succeed
+    let tx = conn.transaction()?;
+    let mut applied = 0usize;
+    for op in &request.ops {
+        apply_op(&tx, op)?;
+        applied += 1;
+    }
+    let mut cs = request.change_set;
+    cs.status = "applied".into();
+    cs.applied_at = Some(request.now.clone());
+    change_set_upsert_inner(&tx, &cs)?;
+    tx.commit()?;
+
+    Ok(ChangeSetApplyReport {
+        ok: true,
+        change_set_id: cs.id,
+        applied_ops: applied,
+    })
+}
+
+#[tauri::command]
+pub fn plan_undo_change_set(
+    db: State<'_, Db>,
+    request: UndoChangeSetRequest,
+) -> DbResult<ChangeSetApplyReport> {
+    let mut conn = db.0.lock().unwrap();
+
+    let cs: Option<PlanningChangeSetRow> = conn
+        .query_row(
+            "SELECT id,scope,status,target_start_date,target_end_date,rationale,reason_codes_json,
+                    changes_json,inverse_changes_json,source,created_at,decided_at,applied_at,undone_at
+             FROM planning_change_sets WHERE id = ?1",
+            params![request.change_set_id],
+            |r| {
+                Ok(PlanningChangeSetRow {
+                    id: r.get(0)?,
+                    scope: r.get(1)?,
+                    status: r.get(2)?,
+                    target_start_date: r.get(3)?,
+                    target_end_date: r.get(4)?,
+                    rationale: r.get(5)?,
+                    reason_codes_json: r.get(6)?,
+                    changes_json: r.get(7)?,
+                    inverse_changes_json: r.get(8)?,
+                    source: r.get(9)?,
+                    created_at: r.get(10)?,
+                    decided_at: r.get(11)?,
+                    applied_at: r.get(12)?,
+                    undone_at: r.get(13)?,
+                })
+            },
+        )
+        .optional()?;
+    let mut cs = match cs {
+        Some(c) => c,
+        None => return Err(DbError::Forbidden("undo: change set not found".into())),
+    };
+    if cs.status != "applied" {
+        return Err(DbError::Forbidden(
+            "undo: only an applied change set can be undone".into(),
+        ));
+    }
+    for op in &request.ops {
+        validate_op(&conn, op)?;
+    }
+
+    let tx = conn.transaction()?;
+    let mut applied = 0usize;
+    for op in &request.ops {
+        apply_op(&tx, op)?;
+        applied += 1;
+    }
+    cs.status = "undone".into();
+    cs.undone_at = Some(request.now.clone());
+    change_set_upsert_inner(&tx, &cs)?;
+    tx.commit()?;
+
+    Ok(ChangeSetApplyReport {
+        ok: true,
+        change_set_id: cs.id,
+        applied_ops: applied,
+    })
+}
+
 // ---------------------------------------------------------------------------
 // Rust unit tests — no Tauri, in-memory SQLite
 // ---------------------------------------------------------------------------
@@ -1351,4 +1754,333 @@ mod tests {
         assert_eq!(back["inverseChangesJson"], "[]");
         assert!(back.get("inverse_changes_json").is_none());
     }
+
+    // === V2 hardening — transactional change-set apply / undo ============
+
+    fn change_set(id: &str, status: &str) -> PlanningChangeSetRow {
+        PlanningChangeSetRow {
+            id: id.into(),
+            scope: "week".into(),
+            status: status.into(),
+            target_start_date: Some("2026-09-07".into()),
+            target_end_date: Some("2026-09-13".into()),
+            rationale: "adapt the week".into(),
+            reason_codes_json: "[]".into(),
+            changes_json: "[]".into(),
+            inverse_changes_json: "[]".into(),
+            source: "adaptive-planning".into(),
+            created_at: "2026-09-06T10:00:00.000Z".into(),
+            decided_at: Some("2026-09-06T10:00:00.000Z".into()),
+            applied_at: None,
+            undone_at: None,
+        }
+    }
+
+    fn count_blocks(c: &Connection) -> i64 {
+        c.query_row("SELECT COUNT(*) FROM planning_blocks", [], |r| r.get(0)).unwrap()
+    }
+    fn count_occ(c: &Connection) -> i64 {
+        c.query_row("SELECT COUNT(*) FROM planning_occurrence_exceptions", [], |r| r.get(0))
+            .unwrap()
+    }
+    fn block_start(c: &Connection, id: &str) -> i64 {
+        c.query_row(
+            "SELECT start_minute FROM planning_blocks WHERE id = ?1",
+            params![id],
+            |r| r.get(0),
+        )
+        .unwrap()
+    }
+    fn cs_status(c: &Connection, id: &str) -> String {
+        c.query_row(
+            "SELECT status FROM planning_change_sets WHERE id = ?1",
+            params![id],
+            |r| r.get(0),
+        )
+        .unwrap()
+    }
+
+    fn apply_req(cs_id: &str, ops: Vec<PlanChangeOp>, expected: Vec<ExpectedBlock>) -> ApplyChangeSetRequest {
+        ApplyChangeSetRequest {
+            change_set: change_set(cs_id, "applied"),
+            ops,
+            expected,
+            now: "2026-09-07T09:00:00.000Z".into(),
+        }
+    }
+
+    // The Tauri command takes `State<'_, Db>`; these tests exercise the pure
+    // pieces (`validate_op`, `apply_op`, `stale_check`, one `conn.transaction()`)
+    // directly, which is exactly what the command composes.
+    #[test]
+    fn apply_ops_commit_together_or_roll_back_together() {
+        let mut c = mem();
+        let mut existing = pinned("b_exist", "2026-09-07");
+        existing.start_minute = 9 * 60;
+        existing.end_minute = 10 * 60;
+        block_upsert_inner(&c, &existing).unwrap();
+        change_set_upsert_inner(&c, &change_set("cs1", "proposed")).unwrap();
+
+        let mut added = pinned("b_new", "2026-09-08");
+        added.start_minute = 14 * 60;
+        added.end_minute = 15 * 60;
+
+        // success: add + move commit together, change set flips to applied
+        {
+            let ops = vec![
+                PlanChangeOp::Add { block: added.clone() },
+                PlanChangeOp::Move { block_id: "b_exist".into(), to_start_minute: 11 * 60 },
+            ];
+            for op in &ops {
+                validate_op(&c, op).unwrap();
+            }
+            let tx = c.transaction().unwrap();
+            for op in &ops {
+                apply_op(&tx, op).unwrap();
+            }
+            let mut cs = change_set("cs1", "applied");
+            cs.applied_at = Some("2026-09-07".into());
+            change_set_upsert_inner(&tx, &cs).unwrap();
+            tx.commit().unwrap();
+        }
+        assert_eq!(count_blocks(&c), 2);
+        assert_eq!(block_start(&c, "b_exist"), 11 * 60);
+        assert_eq!(cs_status(&c, "cs1"), "applied");
+
+        // failure mid-way: a second add + a bad move → nothing from THIS tx persists
+        let before_blocks = count_blocks(&c);
+        let before_start = block_start(&c, "b_exist");
+        {
+            let bad_ops = vec![
+                PlanChangeOp::Add { block: pinned("b_x", "2026-09-09") },
+                PlanChangeOp::Move { block_id: "does_not_exist".into(), to_start_minute: 600 },
+            ];
+            let tx = c.transaction().unwrap();
+            let mut err = None;
+            for op in &bad_ops {
+                if let Err(e) = apply_op(&tx, op) {
+                    err = Some(e);
+                    break;
+                }
+            }
+            assert!(err.is_some(), "the bad move must error");
+            drop(tx); // rolls back
+        }
+        assert_eq!(count_blocks(&c), before_blocks, "failed tx added nothing");
+        assert_eq!(block_start(&c, "b_exist"), before_start, "failed tx moved nothing");
+    }
+
+    #[test]
+    fn stale_expected_state_is_refused_before_any_write() {
+        let c = mem();
+        let mut b = pinned("b1", "2026-09-07");
+        b.start_minute = 9 * 60;
+        b.end_minute = 10 * 60;
+        block_upsert_inner(&c, &b).unwrap();
+
+        // reviewed at 9:00–10:00, but someone moved it to 12:00 since
+        conn_move(&c, "b1", 12 * 60);
+        let expected = vec![ExpectedBlock {
+            id: "b1".into(),
+            start_minute: 9 * 60,
+            end_minute: 10 * 60,
+        }];
+        let err = stale_check(&c, &expected).unwrap_err();
+        assert!(matches!(err, DbError::Forbidden(m) if m.contains("stale-plan")));
+
+        // a matching expected passes
+        let ok_expected = vec![ExpectedBlock {
+            id: "b1".into(),
+            start_minute: 12 * 60,
+            end_minute: 13 * 60,
+        }];
+        stale_check(&c, &ok_expected).unwrap();
+    }
+
+    fn conn_move(c: &Connection, id: &str, to_start: i64) {
+        let (s, e): (i64, i64) = c
+            .query_row(
+                "SELECT start_minute,end_minute FROM planning_blocks WHERE id=?1",
+                params![id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        let dur = e - s;
+        c.execute(
+            "UPDATE planning_blocks SET start_minute=?1,end_minute=?2 WHERE id=?3",
+            params![to_start, to_start + dur, id],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn defer_occurrence_and_its_replacement_are_atomic() {
+        let mut c = mem();
+        block_upsert_inner(&c, &recurring("rec1")).unwrap();
+        let replacement = pinned("repl1", "2026-09-10");
+        let ex = OccurrenceExceptionRow {
+            id: "ex1".into(),
+            block_id: "rec1".into(),
+            occurrence_date: "2026-09-08".into(),
+            state: "deferred".into(),
+            replacement_block_id: Some("repl1".into()),
+            source: "user".into(),
+            note: String::new(),
+            created_at: "2026-09-07".into(),
+            updated_at: "2026-09-07".into(),
+        };
+        let op = PlanChangeOp::Defer { exception: ex, replacement };
+        validate_op(&c, &op).unwrap();
+        let tx = c.transaction().unwrap();
+        apply_op(&tx, &op).unwrap();
+        tx.commit().unwrap();
+
+        assert!(block_exists(&c, "repl1"));
+        let (state, repl): (String, Option<String>) = c
+            .query_row(
+                "SELECT state,replacement_block_id FROM planning_occurrence_exceptions WHERE block_id='rec1'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(state, "deferred");
+        assert_eq!(repl.as_deref(), Some("repl1"));
+        // the recurring template is untouched
+        assert_eq!(
+            c.query_row(
+                "SELECT COUNT(*) FROM planning_blocks WHERE id='rec1' AND date IS NULL",
+                [],
+                |r| r.get::<_, i64>(0)
+            )
+            .unwrap(),
+            1
+        );
+    }
+
+    #[test]
+    fn undo_atomically_reverses_an_add_and_a_move_and_survives_reopen() {
+        let path = std::env::temp_dir().join(format!(
+            "pbos-undo-{}-{}.sqlite3",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        {
+            let mut c = Connection::open(&path).unwrap();
+            c.pragma_update(None, "foreign_keys", "ON").unwrap();
+            run_migrations_for_test(&c).unwrap();
+
+            let mut existing = pinned("b_exist", "2026-09-07");
+            existing.start_minute = 9 * 60;
+            existing.end_minute = 10 * 60;
+            block_upsert_inner(&c, &existing).unwrap();
+            let added = {
+                let mut a = pinned("b_new", "2026-09-08");
+                a.start_minute = 14 * 60;
+                a.end_minute = 15 * 60;
+                a
+            };
+            change_set_upsert_inner(&c, &change_set("cs1", "proposed")).unwrap();
+
+            // forward: add + move
+            let tx = c.transaction().unwrap();
+            apply_op(&tx, &PlanChangeOp::Add { block: added }).unwrap();
+            apply_op(
+                &tx,
+                &PlanChangeOp::Move { block_id: "b_exist".into(), to_start_minute: 11 * 60 },
+            )
+            .unwrap();
+            let mut cs = change_set("cs1", "applied");
+            cs.applied_at = Some("2026-09-07".into());
+            change_set_upsert_inner(&tx, &cs).unwrap();
+            tx.commit().unwrap();
+            assert_eq!(count_blocks(&c), 2);
+
+            // undo: remove-block + move-back
+            let tx = c.transaction().unwrap();
+            apply_op(&tx, &PlanChangeOp::RemoveBlock { block_id: "b_new".into() }).unwrap();
+            apply_op(
+                &tx,
+                &PlanChangeOp::Move { block_id: "b_exist".into(), to_start_minute: 9 * 60 },
+            )
+            .unwrap();
+            let mut undone = change_set("cs1", "undone");
+            undone.applied_at = Some("2026-09-07".into());
+            undone.undone_at = Some("2026-09-07T12:00:00.000Z".into());
+            change_set_upsert_inner(&tx, &undone).unwrap();
+            tx.commit().unwrap();
+        }
+        // reopen — the undone state persists
+        let c = Connection::open(&path).unwrap();
+        c.pragma_update(None, "foreign_keys", "ON").unwrap();
+        assert_eq!(count_blocks(&c), 1, "the added block is gone after undo");
+        assert_eq!(block_start(&c, "b_exist"), 9 * 60, "the move was reversed");
+        assert_eq!(cs_status(&c, "cs1"), "undone");
+
+        drop(c);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(path.with_extension("sqlite3-wal"));
+        let _ = std::fs::remove_file(path.with_extension("sqlite3-shm"));
+    }
+
+    #[test]
+    fn validate_op_rejects_moving_a_fixed_or_locked_block_and_removing_a_manual_one() {
+        let c = mem();
+        let mut fixed = pinned("fx", "2026-09-07");
+        fixed.block_type = "fixed".into();
+        block_upsert_inner(&c, &fixed).unwrap();
+        let mut manual = pinned("mn", "2026-09-07");
+        manual.source = "manual".into();
+        block_upsert_inner(&c, &manual).unwrap();
+
+        assert!(validate_op(
+            &c,
+            &PlanChangeOp::Move { block_id: "fx".into(), to_start_minute: 600 }
+        )
+        .is_err());
+        assert!(validate_op(&c, &PlanChangeOp::RemoveBlock { block_id: "mn".into() }).is_err());
+        // a generated unlocked block IS removable
+        let gen = pinned("gn", "2026-09-07");
+        block_upsert_inner(&c, &gen).unwrap();
+        validate_op(&c, &PlanChangeOp::RemoveBlock { block_id: "gn".into() }).unwrap();
+    }
+
+    #[test]
+    fn apply_change_set_wire_shape_deserializes_the_typed_op_list() {
+        let json = serde_json::json!({
+            "changeSet": {
+                "id": "cs1", "scope": "day", "status": "applied",
+                "targetStartDate": "2026-09-07", "targetEndDate": "2026-09-07",
+                "rationale": "", "reasonCodesJson": "[]", "changesJson": "[]",
+                "inverseChangesJson": "[]", "source": "adaptive-planning",
+                "createdAt": "2026-09-06", "decidedAt": null, "appliedAt": null, "undoneAt": null
+            },
+            "ops": [
+                { "kind": "keep", "blockId": "b1" },
+                { "kind": "move", "blockId": "b2", "toStartMinute": 600 },
+                { "kind": "shorten", "blockId": "b3", "toEndMinute": 630 },
+                { "kind": "drop-occurrence", "exception": {
+                    "id": "ex1", "blockId": "rec1", "occurrenceDate": "2026-09-08",
+                    "state": "skipped", "replacementBlockId": null, "source": "user",
+                    "note": "", "createdAt": "t", "updatedAt": "t"
+                }},
+                { "kind": "clear-occurrence", "blockId": "rec1", "occurrenceDate": "2026-09-08" }
+            ],
+            "expected": [{ "id": "b2", "startMinute": 540, "endMinute": 600 }],
+            "now": "2026-09-07T09:00:00.000Z"
+        });
+        let req: ApplyChangeSetRequest = serde_json::from_value(json).unwrap();
+        assert_eq!(req.ops.len(), 5);
+        assert_eq!(req.expected.len(), 1);
+        // an unknown kind is rejected by serde (fails closed)
+        let bad = serde_json::json!({
+            "changeSet": serde_json::to_value(change_set("cs1", "applied")).unwrap(),
+            "ops": [{ "kind": "exec-sql", "sql": "DROP TABLE planning_blocks" }],
+            "now": "t"
+        });
+        assert!(serde_json::from_value::<ApplyChangeSetRequest>(bad).is_err());
+    }
+
 }

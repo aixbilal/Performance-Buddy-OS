@@ -223,6 +223,14 @@ describe("LocalAdaptivePlanningRepo", () => {
       { kind: "move", blockId: "b1", toStartMinute: 540 },
     ]);
   });
+
+  it("has no browser transaction — applyChangeSet/undoChangeSet return null so the store falls back", async () => {
+    const repo = new LocalAdaptivePlanningRepo();
+    expect(
+      await repo.applyChangeSet({ changeSet: changeSet(), ops: [], expected: [], now: TS }),
+    ).toBeNull();
+    expect(await repo.undoChangeSet({ changeSetId: "cs1", ops: [], now: TS })).toBeNull();
+  });
 });
 
 describe("LocalTodayStateRepo", () => {
@@ -309,6 +317,23 @@ describe("SqliteRepo wire contract", () => {
     expect(calls[1].args).toEqual({ exception: occurrence() });
     expect(calls[2].args).toEqual({ changeSet: changeSet() });
     expect(calls[3].args).toEqual({ actionId: "act1" });
+  });
+
+  it("transactional apply/undo send a single `request` payload under the documented commands", async () => {
+    const calls = record();
+    const repo = makeAdaptivePlanningRepo();
+    const applyReq = {
+      changeSet: changeSet(),
+      ops: [{ kind: "keep" as const, blockId: "b1" }],
+      expected: [{ id: "b1", startMinute: 540, endMinute: 600 }],
+      now: TS,
+    };
+    const undoReq = { changeSetId: "cs1", ops: [{ kind: "remove-block" as const, blockId: "b9" }], now: TS };
+    await repo.applyChangeSet(applyReq);
+    await repo.undoChangeSet(undoReq);
+    expect(calls.map((c) => c.cmd)).toEqual(["plan_apply_change_set", "plan_undo_change_set"]);
+    expect(calls[0].args).toEqual({ request: applyReq });
+    expect(calls[1].args).toEqual({ request: undoReq });
   });
 
   it("today state sends `state` on set and `date` on get/clear", async () => {

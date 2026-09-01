@@ -130,8 +130,10 @@ export function PlannerPage() {
   const horizonStartIso = startOfWeekIso(todayIso ?? isoDateOf(new Date()));
   const horizonEndIso = addDaysIso(horizonStartIso, 6);
 
-  /** Resolve the canonical blocks onto each date of the coming week. */
-  const datedBlocks = useMemo<DatedBlock[]>(() => {
+  /** Resolve the canonical blocks onto each date of the coming week. Built on
+   *  demand (only the adapt flow needs it) so nothing at component scope is
+   *  mutated. */
+  const resolveWeekBlocks = (): DatedBlock[] => {
     const out: DatedBlock[] = [];
     for (let i = 0; i < 7; i++) {
       const iso = addDaysIso(horizonStartIso, i);
@@ -147,10 +149,11 @@ export function PlannerPage() {
       }
     }
     return out;
-  }, [blocks, occurrenceExceptions, horizonStartIso]);
+  };
 
   const runAdaptWeek = () => {
     setV2Msg(null);
+    const datedBlocks = resolveWeekBlocks();
     const candidates: PlanningCandidate[] = unscheduledActions
       .filter((a) => picked.has(a.id))
       .map((a, i) => ({

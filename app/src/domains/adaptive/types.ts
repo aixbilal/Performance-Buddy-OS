@@ -144,7 +144,9 @@ export type PlanningChangeSet = {
 };
 
 /** The typed change vocabulary (§10.6). `could-not-fit` is explanatory output,
- *  never an applied mutation, so it is not in this union. */
+ *  never an applied mutation, so it is not in this union. `remove-block` and
+ *  `clear-occurrence` exist only as the inverse of `add` and of an occurrence
+ *  change, for a practical Undo. */
 export type PlanningDiffChange =
   | { kind: "keep"; blockId: string }
   | { kind: "add"; block: Record<string, unknown> }
@@ -153,7 +155,9 @@ export type PlanningDiffChange =
   | { kind: "defer"; blockId: string; occurrenceDate: string; toDate: string }
   | { kind: "drop-occurrence"; blockId: string; occurrenceDate: string }
   | { kind: "mark-occurrence-done"; blockId: string; occurrenceDate: string }
-  | { kind: "mark-occurrence-skipped"; blockId: string; occurrenceDate: string };
+  | { kind: "mark-occurrence-skipped"; blockId: string; occurrenceDate: string }
+  | { kind: "remove-block"; blockId: string }
+  | { kind: "clear-occurrence"; blockId: string; occurrenceDate: string };
 
 const DIFF_KINDS: ReadonlySet<string> = new Set([
   "keep",
@@ -164,7 +168,49 @@ const DIFF_KINDS: ReadonlySet<string> = new Set([
   "drop-occurrence",
   "mark-occurrence-done",
   "mark-occurrence-skipped",
+  "remove-block",
+  "clear-occurrence",
 ]);
+
+// --- Transactional Planning Diff apply (V2 hardening) --------------------
+
+/** A block whose (start, end) must still match, or the apply is refused as
+ *  stale. Snapshotted at diff-review time. */
+export type ExpectedBlock = { id: string; startMinute: number; endMinute: number };
+
+/**
+ * The typed op the renderer sends to the Rust `plan_apply_change_set` /
+ * `plan_undo_change_set` transaction. Richer than `PlanningDiffChange`: it
+ * carries the fully-resolved occurrence-exception and replacement-block rows so
+ * Rust never has to look anything up beyond validation. Serde on the Rust side
+ * rejects any unknown `kind` (fails closed).
+ */
+export type PlanChangeOp =
+  | { kind: "keep"; blockId: string }
+  | { kind: "add"; block: Record<string, unknown> }
+  | { kind: "move"; blockId: string; toStartMinute: number }
+  | { kind: "shorten"; blockId: string; toEndMinute: number }
+  | { kind: "remove-block"; blockId: string }
+  | { kind: "defer"; exception: PlanningOccurrenceException; replacement: Record<string, unknown> }
+  | { kind: "drop-occurrence"; exception: PlanningOccurrenceException }
+  | { kind: "mark-occurrence-done"; exception: PlanningOccurrenceException }
+  | { kind: "mark-occurrence-skipped"; exception: PlanningOccurrenceException }
+  | { kind: "clear-occurrence"; blockId: string; occurrenceDate: string };
+
+export type ApplyChangeSetRequest = {
+  changeSet: PlanningChangeSet;
+  ops: PlanChangeOp[];
+  expected: ExpectedBlock[];
+  now: string;
+};
+
+export type UndoChangeSetRequest = {
+  changeSetId: string;
+  ops: PlanChangeOp[];
+  now: string;
+};
+
+export type ChangeSetApplyReport = { ok: boolean; changeSetId: string; appliedOps: number };
 
 /** Parse + validate a `changesJson` / `inverseChangesJson` blob. Returns `null`
  *  on any malformed entry rather than a partially-trusted list. */

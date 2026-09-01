@@ -230,6 +230,8 @@ pub fn run() {
             planning::plan_change_sets_load,
             planning::plan_change_set_upsert,
             planning::plan_change_set_delete,
+            planning::plan_apply_change_set,
+            planning::plan_undo_change_set,
             today::today_state_load,
             today::today_state_get,
             today::today_state_set,

@@ -13,11 +13,14 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import type {
   ActionSchedulingConstraint,
+  ApplyChangeSetRequest,
   AssessmentTopicLink,
   CaptureProposalRecord,
+  ChangeSetApplyReport,
   PlanningChangeSet,
   PlanningOccurrenceException,
   TodayOperatingState,
+  UndoChangeSetRequest,
 } from "./types";
 
 function underTauri(): boolean {
@@ -210,6 +213,13 @@ export interface AdaptivePlanningRepo {
   loadChangeSets(): Promise<PlanningChangeSet[]>;
   upsertChangeSet(cs: PlanningChangeSet): Promise<void>;
   removeChangeSet(id: string): Promise<void>;
+  /**
+   * Apply a whole Planning Diff in ONE SQLite transaction (Rust). `null` means
+   * the transactional path is unavailable in this backend — the caller falls
+   * back to its own sequential apply + compensating rollback.
+   */
+  applyChangeSet(request: ApplyChangeSetRequest): Promise<ChangeSetApplyReport | null>;
+  undoChangeSet(request: UndoChangeSetRequest): Promise<ChangeSetApplyReport | null>;
 }
 
 class SqliteAdaptivePlanningRepo implements AdaptivePlanningRepo {
@@ -240,6 +250,12 @@ class SqliteAdaptivePlanningRepo implements AdaptivePlanningRepo {
   }
   async removeChangeSet(id: string) {
     await invoke("plan_change_set_delete", { id });
+  }
+  applyChangeSet(request: ApplyChangeSetRequest) {
+    return invoke<ChangeSetApplyReport>("plan_apply_change_set", { request });
+  }
+  undoChangeSet(request: UndoChangeSetRequest) {
+    return invoke<ChangeSetApplyReport>("plan_undo_change_set", { request });
   }
 }
 
@@ -293,6 +309,15 @@ export class LocalAdaptivePlanningRepo implements AdaptivePlanningRepo {
       LS_CHANGE_SETS,
       (await this.loadChangeSets()).filter((cs) => cs.id !== id),
     );
+  }
+  /** No SQLite transaction in the browser — the store's sequential path runs. */
+  async applyChangeSet(_request: ApplyChangeSetRequest): Promise<ChangeSetApplyReport | null> {
+    void _request;
+    return null;
+  }
+  async undoChangeSet(_request: UndoChangeSetRequest): Promise<ChangeSetApplyReport | null> {
+    void _request;
+    return null;
   }
 }
 
