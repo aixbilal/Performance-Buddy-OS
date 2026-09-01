@@ -338,14 +338,16 @@ export function OnboardingPage() {
           </Card>
         )}
 
-        <div className="text-center">
-          <button
-            onClick={simulateRelaunch}
-            className="text-text-secondary text-[11px] underline hover:text-text-secondary"
-          >
-            Simulate relaunch (replays the startup gate in place)
-          </button>
-        </div>
+        {import.meta.env.DEV && (
+          <div className="text-center">
+            <button
+              onClick={simulateRelaunch}
+              className="text-text-secondary text-[11px] underline hover:text-text-secondary"
+            >
+              Simulate relaunch (replays the startup gate in place)
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
