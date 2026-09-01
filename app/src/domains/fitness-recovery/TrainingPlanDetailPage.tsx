@@ -5,6 +5,7 @@ import { Badge } from "../../components/Badge";
 import { SaveIndicator } from "../../components/SaveIndicator";
 import { useFitness } from "./store";
 import type { ExercisePrescription } from "./types";
+import { Button } from "../../components/Button";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -49,7 +50,7 @@ export function TrainingPlanDetailPage() {
           <Link to="/fitness" className="text-text-muted text-xs hover:text-text-secondary">
             ← Fitness
           </Link>
-          <h2 className="text-text-primary text-xl font-semibold mt-1">
+          <h2 className="t-h2 text-text-primary mt-1">
             {plan.title}
             {plan.archived && (
               <span className="ml-2">
@@ -65,18 +66,12 @@ export function TrainingPlanDetailPage() {
         <div className="flex items-center gap-3">
           <SaveIndicator state={fit.saveState} />
           <Badge tone={plan.status === "active" ? "success" : "neutral"}>{plan.status}</Badge>
-          <button
-            onClick={() => navigate(`/fitness/plans/${plan.id}/edit`)}
-            className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-          >
+          <Button variant="secondary" onClick={() => navigate(`/fitness/plans/${plan.id}/edit`)}>
             Edit Plan
-          </button>
-          <button
-            onClick={() => fit.archivePlan(plan.id, !plan.archived)}
-            className="px-3 py-1.5 rounded-md text-text-muted text-xs hover:text-text-secondary"
-          >
+          </Button>
+          <Button variant="ghost" onClick={() => fit.archivePlan(plan.id, !plan.archived)}>
             {plan.archived ? "Unarchive" : "Archive"}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -191,12 +186,9 @@ export function TrainingPlanDetailPage() {
               </button>
             </div>
             {sErr && <p className="text-status-danger text-[11px]">{sErr}</p>}
-            <button
-              type="submit"
-              className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-            >
+            <Button variant="primary" type="submit">
               Add Session
-            </button>
+            </Button>
           </form>
         )}
 
@@ -247,7 +239,7 @@ export function TrainingPlanDetailPage() {
 
       {/* ---- Actual history ---- */}
       <Card title={`Workout History (${workouts.length})`}>
-        <p className="text-text-disabled text-[11px] mb-2">
+        <p className="text-text-muted text-[11px] mb-2">
           What you actually did. Separate from the plan above — editing the plan never rewrites these,
           and completing one never rewrites the plan.
         </p>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
+import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { useFocus } from "./store";
 import { useAcademic } from "../academic/store";
@@ -73,21 +74,21 @@ export function FocusPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-text-primary text-xl font-semibold">Focus Mode</h2>
-          <p className="text-text-muted text-sm">
+          <h2 className="t-h2 text-text-primary">Focus Mode</h2>
+          <p className="t-small text-text-muted max-w-prose">
             Targeted, uninterrupted execution — not a generic timer, not the study engine. Time logged is
             activity, never mastery.
           </p>
         </div>
         {session.returnTo && (
-          <button
+          <Button
+            variant="secondary"
             onClick={() => navigate(session.returnTo as string)}
-            className="px-3 py-1 rounded-md border border-border-subtle text-text-secondary text-xs hover:bg-surface-inset"
           >
             Back to study
-          </button>
+          </Button>
         )}
       </div>
 
@@ -121,10 +122,10 @@ export function FocusPage() {
         )}
 
         <div className="text-center mb-4">
-          <div className="text-text-primary text-5xl font-semibold tabular-nums">
+          <div className="t-timer text-text-primary">
             {formatTime(session.elapsedSeconds)}
           </div>
-          <div className="text-text-muted text-xs mt-1">
+          <div className="t-small text-text-muted mt-1">
             {percent}% of {session.targetMinutes}:00 target
           </div>
         </div>
@@ -133,28 +134,24 @@ export function FocusPage() {
           <div className="h-full bg-action-primary transition-all" style={{ width: `${percent}%` }} />
         </div>
 
-        {error && <p className="text-status-danger text-xs mb-3">{error}</p>}
+        {error && <p className="t-small text-status-danger mb-3">{error}</p>}
 
         <div className="flex gap-2 justify-center mb-4">
           {session.status === "idle" && (
-            <button
-              onClick={start}
-              className="px-4 py-2 rounded-md bg-action-primary text-text-inverse text-sm font-medium"
-            >
+            <Button variant="primary" size="md" onClick={start}>
               Start
-            </button>
+            </Button>
           )}
           {session.status === "active" && (
             <>
-              <button
-                onClick={pause}
-                className="px-4 py-2 rounded-md bg-action-secondary text-text-primary text-sm font-medium"
-              >
+              <Button variant="secondary" size="md" onClick={pause}>
                 Pause
-              </button>
+              </Button>
+              {/* Finish is a deliberate success-tinted control — completion is a
+                  distinct, positive action, not an ordinary secondary button. */}
               <button
                 onClick={handleFinish}
-                className="px-4 py-2 rounded-md bg-status-success/20 text-status-success text-sm font-medium"
+                className="h-10 px-4 rounded-md border border-status-success/40 text-status-success text-sm font-medium hover:bg-status-success/10 transition-colors"
               >
                 Finish
               </button>
@@ -162,30 +159,28 @@ export function FocusPage() {
           )}
           {session.status === "paused" && (
             <>
-              <button
-                onClick={resume}
-                className="px-4 py-2 rounded-md bg-action-primary text-text-inverse text-sm font-medium"
-              >
+              <Button variant="primary" size="md" onClick={resume}>
                 Resume
-              </button>
+              </Button>
               <button
                 onClick={handleFinish}
-                className="px-4 py-2 rounded-md bg-status-success/20 text-status-success text-sm font-medium"
+                className="h-10 px-4 rounded-md border border-status-success/40 text-status-success text-sm font-medium hover:bg-status-success/10 transition-colors"
               >
                 Finish
               </button>
             </>
           )}
           {session.status === "completed" && (
-            <button
+            <Button
+              variant="secondary"
+              size="md"
               onClick={() => {
                 reset();
                 setLastResult(null);
               }}
-              className="px-4 py-2 rounded-md bg-action-secondary text-text-primary text-sm font-medium"
             >
               Start another
-            </button>
+            </Button>
           )}
         </div>
 
@@ -255,7 +250,7 @@ export function FocusPage() {
             })}
           </ul>
         )}
-        <p className="text-text-disabled text-[10px] mt-2">Stored durably ({backend}).</p>
+        <p className="text-text-muted text-[10px] mt-2">Stored durably ({backend}).</p>
       </Card>
     </div>
   );

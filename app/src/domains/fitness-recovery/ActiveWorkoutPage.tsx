@@ -5,6 +5,7 @@ import { Badge } from "../../components/Badge";
 import { SaveIndicator } from "../../components/SaveIndicator";
 import { useFitness } from "./store";
 import type { ExerciseActual } from "./types";
+import { Button } from "../../components/Button";
 
 export function ActiveWorkoutPage() {
   const { workoutId } = useParams();
@@ -50,7 +51,7 @@ export function ActiveWorkoutPage() {
           <Link to="/fitness" className="text-text-muted text-xs hover:text-text-secondary">
             ← Fitness
           </Link>
-          <h2 className="text-text-primary text-xl font-semibold mt-1">{workout.title}</h2>
+          <h2 className="t-h2 text-text-primary mt-1">{workout.title}</h2>
           <p className="text-text-muted text-sm">
             {workout.date} · recording the ACTUAL session
             {planned && " (started from the plan — the plan is not changed)"}
@@ -107,7 +108,7 @@ export function ActiveWorkoutPage() {
                   placeholder="15,14,11"
                   className="bg-surface-inset border border-border-subtle rounded px-2 py-1 text-text-primary text-xs outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
                 />
-                <span className="text-text-disabled text-[10px]">
+                <span className="text-text-muted text-[10px]">
                   {rx ? `plan: ${rx.sets}×${rx.reps}` : ""}
                 </span>
               </div>
@@ -136,22 +137,13 @@ export function ActiveWorkoutPage() {
         </label>
 
         <div className="flex gap-2 mt-3">
-          <button
-            onClick={save}
-            className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-          >
+          <Button variant="secondary" onClick={save}>
             Save Progress
-          </button>
+          </Button>
           {!workout.completed && (
-            <button
-              onClick={async () => {
-                await save();
-                await fit.completeWorkout(workout.id);
-              }}
-              className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-            >
+            <Button variant="primary" onClick={async () => { await save(); await fit.completeWorkout(workout.id); }}>
               Complete Workout
-            </button>
+            </Button>
           )}
           <button
             onClick={async () => {

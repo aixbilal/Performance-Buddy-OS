@@ -4,15 +4,21 @@
  * Knowledge forms. Every field: real <label htmlFor>, aria-invalid, error text
  * wired via aria-describedby, visible focus ring from the design tokens.
  *
+ * Batch 9: normalized to the canonical control scale — 40px input/select
+ * height, `.t-label` labels, `.t-small` hint/error text, canonical spacing.
+ * Keyboard focus comes from the global `:focus-visible` ring in index.css.
+ *
  * `domains/performance/formPrimitives.tsx` re-exports this module so Batch 1
  * imports keep working unchanged — there is exactly ONE implementation.
  */
 import { useId, type ReactNode } from "react";
 
-const baseInput =
-  "w-full bg-surface-inset border rounded-md px-3 py-2 text-text-primary text-sm " +
-  "outline-none focus-visible:ring-2 focus-visible:ring-border-focus " +
-  "disabled:opacity-50 disabled:cursor-not-allowed";
+const fieldBase =
+  "w-full bg-surface-inset border rounded-md px-3 text-text-primary text-sm " +
+  "outline-none disabled:opacity-50 disabled:cursor-not-allowed";
+const lineHeight = "h-10"; // canonical 40px control height
+const baseInput = `${fieldBase} ${lineHeight}`;
+const baseArea = `${fieldBase} py-2 min-h-[80px] leading-normal`;
 
 function Wrap({
   id,
@@ -31,18 +37,18 @@ function Wrap({
   const hintId = `${id}-hint`;
   const describedBy = [error ? errId : null, hint ? hintId : null].filter(Boolean).join(" ") || undefined;
   return (
-    <div className="space-y-1">
-      <label htmlFor={id} className="block text-text-secondary text-xs font-medium">
+    <div className="space-y-1.5">
+      <label htmlFor={id} className="block t-label text-text-secondary">
         {label}
       </label>
       {children({ id, describedBy })}
       {hint && !error && (
-        <p id={hintId} className="text-text-secondary text-xs">
+        <p id={hintId} className="t-small text-text-muted">
           {hint}
         </p>
       )}
       {error && (
-        <p id={errId} className="text-status-danger text-[11px]">
+        <p id={errId} className="t-small text-status-danger">
           {error}
         </p>
       )}
@@ -97,13 +103,13 @@ export function TextArea(props: {
       {({ id, describedBy }) => (
         <textarea
           id={id}
-          rows={props.rows ?? 2}
+          rows={props.rows ?? 3}
           value={props.value}
           placeholder={props.placeholder}
           aria-invalid={props.error ? true : undefined}
           aria-describedby={describedBy}
           onChange={(e) => props.onChange(e.target.value)}
-          className={`${baseInput} ${props.error ? "border-status-danger" : "border-border-subtle"}`}
+          className={`${baseArea} ${props.error ? "border-status-danger" : "border-border-subtle"}`}
         />
       )}
     </Wrap>

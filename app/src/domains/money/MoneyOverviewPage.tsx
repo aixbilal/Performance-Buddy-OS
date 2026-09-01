@@ -6,6 +6,7 @@ import { SaveIndicator } from "../../components/SaveIndicator";
 import { StatCard } from "../../components/StatCard";
 import { LoadingState } from "../../components/StateViews";
 import { useMoney } from "./store";
+import { Button, buttonClass } from "../../components/Button";
 
 const STATUS_TONE = {
   "within-budget": "success",
@@ -33,7 +34,7 @@ export function MoneyOverviewPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-text-primary text-xl font-semibold">Money</h2>
+          <h2 className="t-h2 text-text-primary">Money</h2>
           <p className="text-text-muted text-sm">
             Manual tracking. Figures below are your recorded totals — not a verified bank balance.
           </p>
@@ -42,22 +43,19 @@ export function MoneyOverviewPage() {
           <SaveIndicator state={money.saveState} />
           <Link
             to="/money/insights"
-            className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
+            className={buttonClass("secondary")}
           >
             Insights
           </Link>
           <Link
             to="/money/budget"
-            className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
+            className={buttonClass("secondary")}
           >
             Budget &amp; Savings
           </Link>
-          <button
-            onClick={() => navigate("/money/transactions")}
-            className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-          >
+          <Button variant="primary" onClick={() => navigate("/money/transactions")}>
             Transactions
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -90,7 +88,7 @@ export function MoneyOverviewPage() {
               label="Moved to savings"
               value={`Rs ${money.savingsTransferredTotal.toLocaleString()}`}
               sub={
-                <span className="text-text-disabled text-[10px]">
+                <span className="text-text-muted text-[10px]">
                   A movement, not spending.
                 </span>
               }
@@ -129,7 +127,7 @@ export function MoneyOverviewPage() {
             </Card>
 
             <Card title="Upcoming planned expenses">
-              <p className="text-text-disabled text-[10px] mb-2">
+              <p className="text-text-muted text-[10px] mb-2">
                 Not counted in "Spent" until an actual transaction records each one.
               </p>
               {upcoming.length === 0 ? (
@@ -181,7 +179,7 @@ export function MoneyOverviewPage() {
                       <div className="flex items-center justify-between mb-1 text-sm">
                         <span className="text-text-primary">
                           {b.category}{" "}
-                          <span className="text-text-disabled text-[11px]">· {b.period}</span>
+                          <span className="text-text-muted text-[11px]">· {b.period}</span>
                         </span>
                         <div className="flex items-center gap-2">
                           <span className="text-text-secondary text-xs tabular-nums">

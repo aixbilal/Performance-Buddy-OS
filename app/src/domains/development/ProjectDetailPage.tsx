@@ -4,6 +4,7 @@ import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { SaveIndicator } from "../../components/SaveIndicator";
 import { useDevelopment } from "./store";
+import { Button } from "../../components/Button";
 
 const STATUS_TONE = { active: "success", paused: "warning", completed: "neutral" } as const;
 
@@ -43,7 +44,7 @@ export function ProjectDetailPage() {
           <Link to="/development" className="text-text-muted text-xs hover:text-text-secondary">
             ← Development
           </Link>
-          <h2 className="text-text-primary text-xl font-semibold mt-1">
+          <h2 className="t-h2 text-text-primary mt-1">
             {project.title}
             {project.archived && (
               <span className="ml-2">
@@ -56,18 +57,12 @@ export function ProjectDetailPage() {
         <div className="flex items-center gap-3">
           <SaveIndicator state={dev.saveState} />
           <Badge tone={STATUS_TONE[project.status]}>{project.status}</Badge>
-          <button
-            onClick={() => navigate(`/development/projects/${project.id}/edit`)}
-            className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-          >
+          <Button variant="secondary" onClick={() => navigate(`/development/projects/${project.id}/edit`)}>
             Edit Project
-          </button>
-          <button
-            onClick={() => dev.archiveProject(project.id, !project.archived)}
-            className="px-3 py-1.5 rounded-md text-text-muted text-xs hover:text-text-secondary"
-          >
+          </Button>
+          <Button variant="ghost" onClick={() => dev.archiveProject(project.id, !project.archived)}>
             {project.archived ? "Unarchive" : "Archive"}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -77,7 +72,7 @@ export function ProjectDetailPage() {
           <div className="text-text-primary text-lg font-semibold">
             {progress.total === 0 ? "—" : `${progress.percent}%`}
           </div>
-          <p className="text-text-disabled text-[10px] mt-1">
+          <p className="text-text-muted text-[10px] mt-1">
             {progress.total === 0
               ? "No milestones yet — not 0%."
               : `${progress.completed} of ${progress.total} complete. This is project work, not skill capability.`}
@@ -86,7 +81,7 @@ export function ProjectDetailPage() {
         <Card>
           <div className="text-text-muted text-xs mb-1">Skills exercised</div>
           <div className="text-text-primary text-lg font-semibold">{linkedSkills.length}</div>
-          <p className="text-text-disabled text-[10px] mt-1">
+          <p className="text-text-muted text-[10px] mt-1">
             Linking a skill does not raise its capability — evidence does.
           </p>
         </Card>
@@ -108,12 +103,9 @@ export function ProjectDetailPage() {
             placeholder="Add a milestone…"
             className="flex-1 bg-surface-inset border border-border-subtle rounded-md px-3 py-2 text-text-primary text-sm outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
           />
-          <button
-            type="submit"
-            className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-          >
+          <Button variant="primary" type="submit">
             Add Milestone
-          </button>
+          </Button>
         </form>
 
         {milestones.length === 0 ? (

@@ -24,7 +24,7 @@ export function AICoachPermissionsPage() {
         <Link to="/ai-coach" className="text-text-muted text-xs hover:text-text-secondary">
           ← AI Coach
         </Link>
-        <h2 className="text-text-primary text-xl font-semibold mt-1">Context & Permissions</h2>
+        <h2 className="t-h2 text-text-primary mt-1">Context & Permissions</h2>
         <p className="text-text-muted text-sm">
           What the AI Coach may and may not use. Changes are saved immediately and apply to every
           future request.

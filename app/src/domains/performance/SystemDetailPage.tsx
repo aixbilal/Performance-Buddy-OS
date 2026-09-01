@@ -13,6 +13,7 @@ import {
 } from "./ActionForm";
 import { SystemForm } from "./SystemForm";
 import { ACTION_STATUSES, type Action, type ActionStatus } from "./types";
+import { Button } from "../../components/Button";
 
 const PRIORITY_TONE = { high: "danger", normal: "warning", low: "neutral" } as const;
 
@@ -41,7 +42,7 @@ function ActionRow({
             aria-label={`Move ${action.title} up`}
             disabled={index === 0}
             onClick={() => onMove(-1)}
-            className="text-text-disabled hover:text-text-secondary disabled:opacity-30 text-[10px] leading-none"
+            className="text-text-muted hover:text-text-secondary disabled:opacity-30 text-[10px] leading-none"
           >
             ▲
           </button>
@@ -49,7 +50,7 @@ function ActionRow({
             aria-label={`Move ${action.title} down`}
             disabled={index === count - 1}
             onClick={() => onMove(1)}
-            className="text-text-disabled hover:text-text-secondary disabled:opacity-30 text-[10px] leading-none"
+            className="text-text-muted hover:text-text-secondary disabled:opacity-30 text-[10px] leading-none"
           >
             ▼
           </button>
@@ -158,12 +159,12 @@ export function SystemDetailPage() {
             </Link>{" "}
             / {system.title}
           </div>
-          <h2 className="text-text-primary text-xl font-semibold mt-1">
+          <h2 className="t-h2 text-text-primary mt-1">
             {system.title}{" "}
             <button
               onClick={() => toggleSystemStar(system.id)}
               aria-label={system.starred ? "Unstar system" : "Star system"}
-              className={system.starred ? "text-accent-primary" : "text-text-disabled hover:text-text-secondary"}
+              className={system.starred ? "text-accent-primary" : "text-text-muted hover:text-text-secondary"}
             >
               ★
             </button>
@@ -179,18 +180,12 @@ export function SystemDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           <SaveIndicator state={saveState} />
-          <button
-            onClick={() => setEditingSystem((e) => !e)}
-            className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-          >
+          <Button variant="secondary" onClick={() => setEditingSystem((e) => !e)}>
             Edit System
-          </button>
-          <button
-            onClick={() => setAddingAction(true)}
-            className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-          >
+          </Button>
+          <Button variant="primary" onClick={() => setAddingAction(true)}>
             + Add Action
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -335,12 +330,9 @@ export function SystemDetailPage() {
             >
               Confirm delete
             </button>
-            <button
-              onClick={() => setConfirmDelete(false)}
-              className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-            >
+            <Button variant="secondary" onClick={() => setConfirmDelete(false)}>
               Keep
-            </button>
+            </Button>
           </div>
         ) : (
           <button

@@ -23,7 +23,7 @@ export function PatternsPage() {
         <Link to="/analytics" className="text-text-muted text-xs hover:text-text-secondary">
           ← Analytics
         </Link>
-        <h2 className="text-text-primary text-xl font-semibold mt-1">Patterns &amp; Insights</h2>
+        <h2 className="t-h2 text-text-primary mt-1">Patterns &amp; Insights</h2>
         <p className="text-text-muted text-sm">
           Associations found in your logged history. An association is not a cause and does not
           predict the future.

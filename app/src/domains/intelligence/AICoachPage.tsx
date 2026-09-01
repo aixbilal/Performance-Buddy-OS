@@ -6,6 +6,7 @@ import { RecommendationCard } from "../../components/RecommendationCard";
 import { LoadingState } from "../../components/StateViews";
 import { useAICoach } from "./store";
 import { useAnalytics } from "../analytics/store";
+import { Button, buttonClass } from "../../components/Button";
 
 const AVAIL_TONE = {
   ready: "success",
@@ -49,7 +50,7 @@ export function AICoachPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-text-primary text-xl font-semibold">AI Coach</h2>
+          <h2 className="t-h2 text-text-primary">AI Coach</h2>
           <p className="text-text-muted text-sm">
             AI proposes. You decide. PBOS validates deterministically. Only then do systems change.
           </p>
@@ -63,7 +64,7 @@ export function AICoachPage() {
           </Link>
           <Link
             to="/ai-coach/permissions"
-            className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
+            className={buttonClass("secondary")}
           >
             Permissions
           </Link>
@@ -84,12 +85,9 @@ export function AICoachPage() {
               )}
             </p>
           </div>
-          <button
-            onClick={() => coach.setEnabled(!coach.config.enabled)}
-            className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-          >
+          <Button variant="secondary" onClick={() => coach.setEnabled(!coach.config.enabled)}>
             {coach.config.enabled ? "Disable AI" : "Enable AI"}
-          </button>
+          </Button>
         </div>
       </Card>
 

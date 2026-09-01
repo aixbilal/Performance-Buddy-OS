@@ -57,7 +57,7 @@ export function KnowledgeTopicBuilderPage() {
         >
           ← {isEdit ? "Topic" : "Knowledge"}
         </button>
-        <h2 className="text-text-primary text-xl font-semibold mt-1">
+        <h2 className="t-h2 text-text-primary mt-1">
           {isEdit ? "Edit Topic" : "Add Knowledge Topic"}
         </h2>
         <p className="text-text-muted text-sm">

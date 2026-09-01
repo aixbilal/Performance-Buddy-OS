@@ -25,9 +25,9 @@ export function StatCard({
 
   return (
     <Card>
-      <div className="text-text-muted text-xs mb-1">{label}</div>
-      <div className={`text-lg font-semibold ${valueColor}`}>{value}</div>
-      {sub && <div className="text-text-secondary text-xs mt-0.5">{sub}</div>}
+      <div className="t-label uppercase text-text-muted mb-1">{label}</div>
+      <div className={`t-metric-md ${valueColor}`}>{value}</div>
+      {sub && <div className="t-small text-text-secondary mt-0.5">{sub}</div>}
     </Card>
   );
 }

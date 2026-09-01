@@ -36,7 +36,7 @@ function Shell({
         >
           ← {backLabel}
         </button>
-        <h2 className="text-text-primary text-xl font-semibold mt-1">{title}</h2>
+        <h2 className="t-h2 text-text-primary mt-1">{title}</h2>
         <p className="text-text-muted text-sm">{subtitle}</p>
       </div>
       <Card>{children}</Card>

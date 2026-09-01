@@ -12,6 +12,7 @@ import {
   type TransactionFormValues,
 } from "./TransactionForm";
 import type { Transaction, TransactionInput } from "./types";
+import { Button } from "../../components/Button";
 
 const TYPE_TONE = {
   income: "success",
@@ -54,19 +55,16 @@ export function TransactionsPage() {
           <Link to="/money" className="text-text-muted text-xs hover:text-text-secondary">
             ← Money
           </Link>
-          <h2 className="text-text-primary text-xl font-semibold mt-1">Transactions</h2>
+          <h2 className="t-h2 text-text-primary mt-1">Transactions</h2>
           <p className="text-text-muted text-sm">
             Money that actually moved. A savings transfer is a movement, never spending.
           </p>
         </div>
         <div className="flex items-center gap-3">
           <SaveIndicator state={money.saveState} />
-          <button
-            onClick={() => setAdding((a) => !a)}
-            className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-          >
+          <Button variant="primary" onClick={() => setAdding((a) => !a)}>
             {adding ? "Close" : "Add Transaction"}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -125,7 +123,7 @@ export function TransactionsPage() {
                         <span className="text-text-muted text-xs"> · {t.description}</span>
                       ) : null}
                     </div>
-                    <div className="text-text-disabled text-[11px]">{t.date}</div>
+                    <div className="text-text-muted text-[11px]">{t.date}</div>
                   </div>
                   <div className="flex items-center gap-3">
                     <Badge tone={TYPE_TONE[t.type]}>{TYPE_LABEL[t.type]}</Badge>

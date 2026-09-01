@@ -16,6 +16,7 @@ import {
   type StudyTopicInput,
 } from "./studyEngine";
 import type { OperatingMode } from "../settings/types";
+import { Button } from "../../components/Button";
 
 const MODE_TABS: { key: StudyMode; label: string; hint: string; operating: OperatingMode }[] = [
   { key: "normal", label: "Normal", hint: "Balanced progression and review.", operating: "normal" },
@@ -119,7 +120,7 @@ export function NormalStudyPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-text-primary text-xl font-semibold">Normal Study</h2>
+          <h2 className="t-h2 text-text-primary">Normal Study</h2>
           <p className="text-text-muted text-sm">
             What to study, why, and what happens next — from real coverage and Knowledge state, never a guess.
           </p>
@@ -148,7 +149,7 @@ export function NormalStudyPage() {
             {t.label}
           </button>
         ))}
-        <span className="text-text-disabled text-[11px] self-center">
+        <span className="text-text-muted text-[11px] self-center">
           {MODE_TABS.find((t) => t.key === studyMode)?.hint} Mode changes ordering only — no course, topic or evidence
           data is touched.
         </span>
@@ -199,7 +200,7 @@ export function NormalStudyPage() {
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-text-primary">{t.topicTitle}</span>
-                        <span className="text-text-disabled text-xs">{t.courseTitle}</span>
+                        <span className="text-text-muted text-xs">{t.courseTitle}</span>
                       </div>
                       <div className="flex flex-wrap gap-1 mt-1">
                         {t.reasons.map((r) => (
@@ -245,18 +246,15 @@ export function NormalStudyPage() {
                         {selected.knowledge.reviewDue && <Badge tone="warning">review due</Badge>}
                       </>
                     ) : (
-                      <span className="text-text-disabled">not linked to a Knowledge concept</span>
+                      <span className="text-text-muted">not linked to a Knowledge concept</span>
                     )}
                   </div>
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <button
-                    onClick={startFocus}
-                    className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-                  >
+                  <Button variant="primary" onClick={startFocus}>
                     Start Focus
-                  </button>
+                  </Button>
                   <button
                     onClick={startMastery}
                     className="px-3 py-1.5 rounded-md border border-border-subtle text-text-secondary text-xs font-medium hover:bg-surface-inset"
@@ -313,7 +311,7 @@ export function NormalStudyPage() {
                     )}
                   </div>
                   {selectedAcademicTopic && !selectedAcademicTopic.knowledgeTopicId && (
-                    <div className="text-text-disabled">
+                    <div className="text-text-muted">
                       Link a Knowledge concept on the course page to record mastery evidence.
                     </div>
                   )}

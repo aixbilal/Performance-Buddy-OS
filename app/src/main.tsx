@@ -20,7 +20,8 @@ const rootEl = document.getElementById('root')!
 // A real "loading" surface — not a blank screen, and distinct from "empty".
 rootEl.innerHTML =
   '<div style="height:100vh;display:flex;align-items:center;justify-content:center;' +
-  'background:#0a0b0d;color:#7a7d84;font:14px Inter,system-ui,sans-serif">Starting Performance Buddy OS…</div>'
+  'background:#0a0c0f;color:#7c8490;font:14px/1.5 \'Inter Variable\',Inter,system-ui,sans-serif">' +
+  'Starting Performance Buddy OS…</div>'
 
 // Persistence must be up before any domain store reads its slice — but a slow
 // or stuck backend must never permanently block the UI. The bootstrap records

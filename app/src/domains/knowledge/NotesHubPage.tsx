@@ -7,6 +7,7 @@ import { SaveIndicator } from "../../components/SaveIndicator";
 import { useObsidian } from "../obsidian/store";
 import { useKnowledge } from "./store";
 import type { ObsidianNote } from "../obsidian/types";
+import { Button } from "../../components/Button";
 
 /**
  * Notes Hub — the V1 Obsidian slice (docs 16.01–16.09).
@@ -45,7 +46,7 @@ export function NotesHubPage() {
           <Link to="/knowledge" className="text-text-muted text-xs hover:text-text-secondary">
             ← Knowledge
           </Link>
-          <h2 className="text-text-primary text-xl font-semibold mt-1">Notes Hub</h2>
+          <h2 className="t-h2 text-text-primary mt-1">Notes Hub</h2>
           <p className="text-text-muted text-sm">
             Read-only view of your Obsidian vault. PBOS indexes note metadata only — Obsidian keeps
             the note bodies.
@@ -124,12 +125,9 @@ export function NotesHubPage() {
                 className="block w-full bg-surface-inset border border-border-subtle rounded px-2 py-1.5 text-text-primary text-sm outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
               />
             </div>
-            <button
-              type="submit"
-              className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-            >
+            <Button variant="primary" type="submit">
               Connect vault
-            </button>
+            </Button>
           </form>
         </Card>
       )}
@@ -143,18 +141,12 @@ export function NotesHubPage() {
             Knowledge data is untouched.
           </p>
           <div className="flex gap-2 mt-3">
-            <button
-              onClick={() => obs.refresh()}
-              className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-            >
+            <Button variant="secondary" onClick={() => obs.refresh()}>
               Try reconnecting
-            </button>
-            <button
-              onClick={() => obs.disconnect()}
-              className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-            >
+            </Button>
+            <Button variant="secondary" onClick={() => obs.disconnect()}>
               Disconnect vault
-            </button>
+            </Button>
           </div>
         </Card>
       )}
@@ -175,18 +167,12 @@ export function NotesHubPage() {
                 )}
               </div>
               <div className="flex gap-2">
-                <button
-                  onClick={() => obs.refresh()}
-                  className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-                >
+                <Button variant="primary" onClick={() => obs.refresh()}>
                   Refresh index
-                </button>
-                <button
-                  onClick={() => obs.disconnect()}
-                  className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-                >
+                </Button>
+                <Button variant="secondary" onClick={() => obs.disconnect()}>
                   Disconnect
-                </button>
+                </Button>
               </div>
             </div>
           </Card>

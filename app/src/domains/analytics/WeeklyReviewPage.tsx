@@ -5,6 +5,7 @@ import { Badge } from "../../components/Badge";
 import { LoadingState } from "../../components/StateViews";
 import { useAnalytics } from "./store";
 import { useAICoach } from "../intelligence/store";
+import { Button } from "../../components/Button";
 
 /**
  * Weekly Review (docs 22.04). Deterministic FACTS first, then optional AI
@@ -46,7 +47,7 @@ export function WeeklyReviewPage() {
         <Link to="/analytics" className="text-text-muted text-xs hover:text-text-secondary">
           ← Analytics
         </Link>
-        <h2 className="text-text-primary text-xl font-semibold mt-1">Weekly Review</h2>
+        <h2 className="t-h2 text-text-primary mt-1">Weekly Review</h2>
         <p className="text-text-muted text-sm">
           {snap.weekStart} → {snap.weekEnd}. Facts first; your notes and any AI interpretation stay
           separate.
@@ -115,13 +116,9 @@ export function WeeklyReviewPage() {
 
       <Card title="Optional: ask the coach to interpret">
         <div className="flex items-center gap-2">
-          <button
-            onClick={askCoach}
-            disabled={busy || coach.aiAvailability !== "ready"}
-            className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium disabled:opacity-40"
-          >
+          <Button variant="secondary" onClick={askCoach} disabled={busy || coach.aiAvailability !== "ready"}>
             Ask AI Coach
-          </button>
+          </Button>
           <Badge tone={coach.aiAvailability === "ready" ? "success" : "warning"}>
             {coach.aiAvailability === "not-configured" ? "not configured" : coach.aiAvailability}
           </Badge>

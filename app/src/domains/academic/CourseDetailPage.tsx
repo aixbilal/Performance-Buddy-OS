@@ -9,6 +9,7 @@ import { analyzeAssessmentWeighting } from "./engine";
 import { AssessmentForm, EMPTY_ASSESSMENT_FORM, type AssessmentFormValues } from "./AssessmentForm";
 import { EMPTY_TOPIC_FORM, TopicForm, type TopicFormValues } from "./TopicForm";
 import { COVERAGE_STATUSES, GRADE_LETTERS, type CoverageStatus, type Topic } from "./types";
+import { Button } from "../../components/Button";
 
 const COVERAGE_LABEL: Record<CoverageStatus, string> = {
   "not-taught": "Not Taught",
@@ -87,7 +88,7 @@ export function CourseDetailPage() {
           <Link to="/academics" className="text-text-muted text-xs hover:text-text-secondary">
             ← Academics
           </Link>
-          <h2 className="text-text-primary text-xl font-semibold mt-1">
+          <h2 className="t-h2 text-text-primary mt-1">
             {course.title}
             {course.code && <span className="text-text-muted text-base"> ({course.code})</span>}
             {course.archived && (
@@ -102,18 +103,12 @@ export function CourseDetailPage() {
         </div>
         <div className="flex items-center gap-3">
           <SaveIndicator state={saveState} />
-          <button
-            onClick={() => navigate(`/academics/${course.id}/edit`)}
-            className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-          >
+          <Button variant="secondary" onClick={() => navigate(`/academics/${course.id}/edit`)}>
             Edit Course
-          </button>
-          <button
-            onClick={() => academic.archiveCourse(course.id, !course.archived)}
-            className="px-3 py-1.5 rounded-md text-text-muted text-xs hover:text-text-secondary"
-          >
+          </Button>
+          <Button variant="ghost" onClick={() => academic.archiveCourse(course.id, !course.archived)}>
             {course.archived ? "Unarchive" : "Archive"}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -158,7 +153,7 @@ export function CourseDetailPage() {
           </button>
         }
       >
-        <p className="text-text-disabled text-[11px] mb-3">
+        <p className="text-text-muted text-[11px] mb-3">
           Professor coverage, personal study, and mastery are tracked separately and never collapsed
           into one number. Mastery is read from the linked Knowledge concept's evidence — not stored
           here.
@@ -326,7 +321,7 @@ export function CourseDetailPage() {
 
       {/* ---- Attempt / final grade ---- */}
       <Card title="Attempt & Final Grade">
-        <p className="text-text-disabled text-[11px] mb-3">
+        <p className="text-text-muted text-[11px] mb-3">
           A score is never converted to a letter grade automatically — the institution's scale isn't
           verified. Enter the official grade yourself, or leave it blank while the course is in
           progress.
@@ -368,25 +363,9 @@ export function CourseDetailPage() {
               ))}
             </select>
           </label>
-          <button
-            onClick={async () => {
-              const existing = attempts[0];
-              await academic.upsertAttempt(
-                course.id,
-                {
-                  attemptNumber: existing?.attemptNumber ?? 1,
-                  term: termDraft,
-                  finalGrade: (gradeDraft || null) as never,
-                },
-                existing?.id,
-              );
-              setGradeDraft("");
-              setTermDraft("");
-            }}
-            className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-          >
+          <Button variant="primary" onClick={async () => { const existing = attempts[0]; await academic.upsertAttempt( course.id, { attemptNumber: existing?.attemptNumber ?? 1, term: termDraft, finalGrade: (gradeDraft || null) as never, }, existing?.id, ); setGradeDraft(""); setTermDraft(""); }}>
             Save attempt
-          </button>
+          </Button>
         </div>
       </Card>
     </div>
@@ -502,7 +481,7 @@ function TopicRow({
       </div>
 
       <div className="mt-2 flex items-center gap-2">
-        <span className="text-text-disabled text-[11px]">
+        <span className="text-text-muted text-[11px]">
           <Badge tone={COVERAGE_TONE[topic.professorCoverage]}>
             {COVERAGE_LABEL[topic.professorCoverage]}
           </Badge>
@@ -541,7 +520,7 @@ function TopicRow({
             </button>
           </span>
         ) : (
-          <span className="text-text-disabled text-[11px]">
+          <span className="text-text-muted text-[11px]">
             Create a Knowledge concept to link mastery evidence.
           </span>
         )}

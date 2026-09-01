@@ -56,6 +56,7 @@ import { CaptureInboxPage } from "../domains/capture/CaptureInboxPage";
 import { SettingsPage } from "../domains/settings/SettingsPage";
 import { OnboardingPage } from "../domains/onboarding/OnboardingPage";
 import { FocusPage } from "../domains/focus/FocusPage";
+import { FocusContextRail } from "../domains/focus/FocusContextRail";
 import { NAVIGATION } from "./navigation";
 
 // Flatten nav config into routes so every sidebar item resolves somewhere real,
@@ -143,7 +144,11 @@ export const router = createHashRouter([
       { path: "/planner", element: <PlannerPage />, handle: { title: "Planner" } },
       { path: "/capture-inbox", element: <CaptureInboxPage />, handle: { title: "Capture Inbox" } },
       { path: "/settings", element: <SettingsPage />, handle: { title: "Settings" } },
-      { path: "/focus", element: <FocusPage />, handle: { title: "Focus" } },
+      {
+        path: "/focus",
+        element: <FocusPage />,
+        handle: { title: "Focus", contextRail: FocusContextRail },
+      },
       ...placeholderRoutes,
     ],
   },

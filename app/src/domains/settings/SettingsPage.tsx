@@ -10,6 +10,7 @@ import { useAICoach } from "../intelligence/store";
 import { useObsidian } from "../obsidian/store";
 import { useOnboarding } from "../onboarding/store";
 import type { NotificationCategory, OperatingMode } from "./types";
+import { Button } from "../../components/Button";
 
 const MODES: OperatingMode[] = ["normal", "midterm", "final", "recovery"];
 const CATEGORIES: NotificationCategory[] = [
@@ -48,7 +49,7 @@ export function SettingsPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-text-primary text-xl font-semibold">Settings</h2>
+          <h2 className="t-h2 text-text-primary">Settings</h2>
           <p className="text-text-muted text-sm">
             Configure existing systems. Nothing here duplicates a domain's own data — Planning owns
             the schedule, the AI Coach owns permissions, Obsidian owns the vault.
@@ -130,19 +131,13 @@ export function SettingsPage() {
         </div>
 
         <div className="flex items-center gap-2 mb-3">
-          <button
-            onClick={addTempOverride}
-            className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-          >
+          <Button variant="secondary" onClick={addTempOverride}>
             Add +15 min temporary override (7 days)
-          </button>
+          </Button>
           {s.temporaryOverrides.length > 0 && (
-            <button
-              onClick={s.clearAllTemporaryOverrides}
-              className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-            >
+            <Button variant="secondary" onClick={s.clearAllTemporaryOverrides}>
               Clear all temporary overrides
-            </button>
+            </Button>
           )}
         </div>
         {s.temporaryOverrides.length > 0 && (
@@ -323,12 +318,9 @@ export function SettingsPage() {
       <Card title="Data & Storage">
         <PersistenceStatusLine />
         <div className="mt-3">
-          <button
-            onClick={s.restoreInterfaceDefaults}
-            className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-          >
+          <Button variant="secondary" onClick={s.restoreInterfaceDefaults}>
             Restore interface defaults
-          </button>
+          </Button>
           {s.lastResetResult && (
             <p className="text-status-success text-[11px] mt-2">
               Reset notifications + appearance only. Never touched:{" "}
@@ -344,12 +336,9 @@ export function SettingsPage() {
             Obsidian index and AI settings are <strong>not</strong> deleted.
           </p>
           {!confirmReset ? (
-            <button
-              onClick={() => setConfirmReset(true)}
-              className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-            >
+            <Button variant="secondary" onClick={() => setConfirmReset(true)}>
               Reset onboarding…
-            </button>
+            </Button>
           ) : (
             <div className="flex items-center gap-2">
               <button
@@ -362,12 +351,9 @@ export function SettingsPage() {
               >
                 Yes, reset onboarding only
               </button>
-              <button
-                onClick={() => setConfirmReset(false)}
-                className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs"
-              >
+              <Button variant="secondary" onClick={() => setConfirmReset(false)}>
                 Cancel
-              </button>
+              </Button>
             </div>
           )}
           {resetNote && (

@@ -68,7 +68,7 @@ export function RoutineBuilderPage() {
         >
           ← {isEdit ? "Routine" : "Routines"}
         </button>
-        <h2 className="text-text-primary text-xl font-semibold mt-1">
+        <h2 className="t-h2 text-text-primary mt-1">
           {isEdit ? "Edit Routine" : "New Routine"}
         </h2>
         <p className="text-text-muted text-sm">

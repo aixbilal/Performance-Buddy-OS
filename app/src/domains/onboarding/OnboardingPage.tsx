@@ -5,6 +5,7 @@ import { Badge } from "../../components/Badge";
 import { useOnboarding } from "./store";
 import { STEP_ORDER } from "./engine";
 import type { OperatingMode } from "../settings/types";
+import { Button } from "../../components/Button";
 
 const STATE_TONE = {
   configured: "success",
@@ -122,12 +123,9 @@ export function OnboardingPage() {
             <p className="text-text-secondary text-xs mb-4">
               No account, no cloud sign-up. This is your machine.
             </p>
-            <button
-              onClick={goToNextStep}
-              className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-            >
+            <Button variant="primary" onClick={goToNextStep}>
               {state.status === "in_progress" ? "Resume setup" : "Start setup"}
-            </button>
+            </Button>
           </Card>
         )}
 
@@ -330,19 +328,12 @@ export function OnboardingPage() {
             </div>
 
             <div className="flex gap-2">
-              <button
-                onClick={goToPrevStep}
-                className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-              >
+              <Button variant="secondary" onClick={goToPrevStep}>
                 Back
-              </button>
-              <button
-                onClick={launch}
-                disabled={!launchCheck.canLaunch}
-                className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium disabled:opacity-50"
-              >
+              </Button>
+              <Button variant="primary" onClick={launch} disabled={!launchCheck.canLaunch}>
                 Launch PBOS
-              </button>
+              </Button>
             </div>
           </Card>
         )}
@@ -363,18 +354,12 @@ export function OnboardingPage() {
 function StepNav({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
   return (
     <div className="flex gap-2">
-      <button
-        onClick={onBack}
-        className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-      >
+      <Button variant="secondary" onClick={onBack}>
         Back
-      </button>
-      <button
-        onClick={onNext}
-        className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-      >
+      </Button>
+      <Button variant="primary" onClick={onNext}>
         Continue
-      </button>
+      </Button>
     </div>
   );
 }

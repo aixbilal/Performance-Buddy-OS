@@ -24,32 +24,32 @@ export function SgpaCgpaPage() {
         <Link to="/academics" className="text-text-muted text-xs hover:text-text-secondary">
           ← Academics
         </Link>
-        <h2 className="text-text-primary text-xl font-semibold mt-1">SGPA / CGPA Intelligence</h2>
+        <h2 className="t-h2 text-text-primary mt-1">SGPA / CGPA Intelligence</h2>
         <p className="text-text-muted text-sm">Understand your academic position and plan your path to your target.</p>
       </div>
 
       <div className="grid grid-cols-4 gap-4">
         <Card>
-          <div className="text-text-muted text-xs mb-1">Current CGPA</div>
-          <div className="text-text-primary text-lg font-semibold">
+          <div className="t-label uppercase text-text-muted mb-1">Current CGPA</div>
+          <div className="t-metric-md text-text-primary">
             {cgpa.cgpa !== null ? cgpa.cgpa.toFixed(2) : "—"}
           </div>
           <div className="text-text-secondary text-xs">{cgpa.totalCreditsCounted} credit hours</div>
         </Card>
         <Card>
-          <div className="text-text-muted text-xs mb-1">Projected SGPA</div>
-          <div className="text-text-primary text-lg font-semibold">
+          <div className="t-label uppercase text-text-muted mb-1">Projected SGPA</div>
+          <div className="t-metric-md text-text-primary">
             {projectedSGPA !== null ? projectedSGPA.toFixed(2) : "—"}
           </div>
           <div className="text-text-secondary text-xs">{semester.label}</div>
         </Card>
         <Card>
-          <div className="text-text-muted text-xs mb-1">Target SGPA</div>
-          <div className="text-text-primary text-lg font-semibold">{TARGET_SGPA.toFixed(2)}</div>
+          <div className="t-label uppercase text-text-muted mb-1">Target SGPA</div>
+          <div className="t-metric-md text-text-primary">{TARGET_SGPA.toFixed(2)}</div>
         </Card>
         <Card>
-          <div className="text-text-muted text-xs mb-1">Required Average</div>
-          <div className="text-text-primary text-lg font-semibold">
+          <div className="t-label uppercase text-text-muted mb-1">Required Average</div>
+          <div className="t-metric-md text-text-primary">
             {requiredForTarget.requiredAverage?.toFixed(2) ?? "—"}
           </div>
           <div className={`text-xs ${requiredForTarget.reachable ? "text-status-success" : "text-status-danger"}`}>
@@ -59,24 +59,24 @@ export function SgpaCgpaPage() {
       </div>
 
       <Card title="Course Grade Projections">
-        <table className="w-full text-sm">
+        <table className="w-full t-body">
           <thead>
-            <tr className="text-text-muted text-xs text-left">
-              <th className="font-normal pb-2">Course</th>
-              <th className="font-normal pb-2">CH</th>
-              <th className="font-normal pb-2">Projected Grade</th>
-              <th className="font-normal pb-2">Target Grade</th>
-              <th className="font-normal pb-2">Grade Points (Projected)</th>
+            <tr className="text-left">
+              <th className="t-label uppercase text-text-muted font-normal pb-2">Course</th>
+              <th className="t-label uppercase text-text-muted font-normal pb-2">CH</th>
+              <th className="t-label uppercase text-text-muted font-normal pb-2">Projected Grade</th>
+              <th className="t-label uppercase text-text-muted font-normal pb-2">Target Grade</th>
+              <th className="t-label uppercase text-text-muted font-normal pb-2">Grade Points (Projected)</th>
             </tr>
           </thead>
           <tbody>
             {activeCourses.map((c) => (
               <tr key={c.id} className="border-t border-border-subtle">
-                <td className="py-2 text-text-primary">{c.title}</td>
-                <td className="py-2 text-text-secondary">{c.creditHours}</td>
-                <td className="py-2 text-text-secondary">{c.projectedGrade ?? "—"}</td>
-                <td className="py-2 text-text-secondary">{c.targetGrade ?? "—"}</td>
-                <td className="py-2 text-text-secondary">
+                <td className="py-3 text-text-primary">{c.title}</td>
+                <td className="py-3 text-text-secondary">{c.creditHours}</td>
+                <td className="py-3 text-text-secondary">{c.projectedGrade ?? "—"}</td>
+                <td className="py-3 text-text-secondary">{c.targetGrade ?? "—"}</td>
+                <td className="py-3 text-text-secondary">
                   {c.projectedGrade ? c.creditHours + "×" : "—"}
                 </td>
               </tr>

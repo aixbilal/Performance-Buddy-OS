@@ -1,6 +1,7 @@
 /** The ONE Transaction form — used for add + inline edit on the Transactions screen. */
 import { useState } from "react";
 import { SelectField, TextField } from "../../components/FormFields";
+import { FormActions } from "../../components/FormActions";
 import { TRANSACTION_TYPES, type TransactionInput, type TransactionType } from "./types";
 
 export type TransactionFormValues = {
@@ -123,25 +124,8 @@ export function TransactionForm({
         onChange={(x) => set("description", x)}
         error={errors.description}
       />
-      {errors._ && <p className="text-status-danger text-xs">{errors._}</p>}
-      <div className="flex gap-2 pt-1">
-        <button
-          type="submit"
-          disabled={busy}
-          className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium disabled:opacity-50"
-        >
-          {submitLabel}
-        </button>
-        {onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-          >
-            Cancel
-          </button>
-        )}
-      </div>
+      {errors._ && <p className="t-small text-status-danger">{errors._}</p>}
+      <FormActions submitLabel={submitLabel} busy={busy} onCancel={onCancel} />
     </form>
   );
 }

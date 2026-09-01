@@ -6,6 +6,7 @@ import { usePerformance } from "../performance/store";
 import { useRoutine } from "./store";
 import { RoutineCheckIn, CHECK_IN_STATE_LABEL } from "./RoutineCheckIn";
 import type { CompletionState } from "./types";
+import { Button } from "../../components/Button";
 
 const COMPLETION_LABEL: Record<string, string> = {
   boolean: "done / not done",
@@ -47,7 +48,7 @@ export function RoutineDetailPage() {
           <Link to="/routine" className="text-text-muted text-xs hover:text-text-secondary">
             ← Routines
           </Link>
-          <h2 className="text-text-primary text-xl font-semibold mt-1">
+          <h2 className="t-h2 text-text-primary mt-1">
             {routine.title}
             {routine.paused && (
               <span className="ml-2">
@@ -67,24 +68,15 @@ export function RoutineDetailPage() {
         </div>
         <div className="flex items-center gap-3">
           <SaveIndicator state={rt.saveState} />
-          <button
-            onClick={() => navigate(`/routine/${routine.id}/edit`)}
-            className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-          >
+          <Button variant="secondary" onClick={() => navigate(`/routine/${routine.id}/edit`)}>
             Edit
-          </button>
-          <button
-            onClick={() => rt.pauseRoutine(routine.id, !routine.paused)}
-            className="px-3 py-1.5 rounded-md text-text-muted text-xs hover:text-text-secondary"
-          >
+          </Button>
+          <Button variant="ghost" onClick={() => rt.pauseRoutine(routine.id, !routine.paused)}>
             {routine.paused ? "Resume" : "Pause"}
-          </button>
-          <button
-            onClick={() => rt.archiveRoutine(routine.id, !routine.archived)}
-            className="px-3 py-1.5 rounded-md text-text-muted text-xs hover:text-text-secondary"
-          >
+          </Button>
+          <Button variant="ghost" onClick={() => rt.archiveRoutine(routine.id, !routine.archived)}>
             {routine.archived ? "Unarchive" : "Archive"}
-          </button>
+          </Button>
           <button
             onClick={() => {
               rt.deleteRoutine(routine.id);
@@ -122,7 +114,7 @@ export function RoutineDetailPage() {
           ) : (
             <>
               <div className="text-text-primary text-lg font-semibold">{consistency.percent}%</div>
-              <p className="text-text-disabled text-[11px] mt-1">
+              <p className="text-text-muted text-[11px] mt-1">
                 {consistency.completed} of {consistency.expected} scheduled opportunities in the last{" "}
                 {consistency.windowDays} days
                 {consistency.excused > 0 ? ` · ${consistency.excused} rest/skipped excused` : ""}. No
@@ -143,7 +135,7 @@ export function RoutineDetailPage() {
               >
                 {linkedSystem.title}
               </Link>
-              <p className="text-text-disabled text-[11px] mt-0.5">
+              <p className="text-text-muted text-[11px] mt-0.5">
                 A reference only. The routine keeps its own identity, history and completion.
               </p>
             </div>
@@ -178,7 +170,7 @@ export function RoutineDetailPage() {
                 </option>
               ))}
             </select>
-            <span className="text-text-disabled text-[11px]">Optional — no Goal required.</span>
+            <span className="text-text-muted text-[11px]">Optional — no Goal required.</span>
           </div>
         )}
       </Card>

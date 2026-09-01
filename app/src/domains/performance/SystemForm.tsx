@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { SelectField, TextArea, TextField } from "./formPrimitives";
 import { DOMAINS, type Domain, type SystemInput } from "./types";
+import { FormActions } from "../../components/FormActions";
 
 export type SystemFormValues = {
   title: string;
@@ -94,23 +95,8 @@ export function SystemForm({
         onChange={(x) => set("tags", x)}
         placeholder="Core, Academic"
       />
-      {errors._ && <p className="text-status-danger text-xs">{errors._}</p>}
-      <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={busy}
-          className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium disabled:opacity-50"
-        >
-          {submitLabel}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-        >
-          Cancel
-        </button>
-      </div>
+      {errors._ && <p className="t-small text-status-danger">{errors._}</p>}
+      <FormActions submitLabel={submitLabel} busy={busy} onCancel={onCancel} />
     </form>
   );
 }

@@ -25,7 +25,7 @@ export function LearningPathPage() {
         <Link to="/development" className="text-text-muted text-xs hover:text-text-secondary">
           ← Development
         </Link>
-        <h2 className="text-text-primary text-xl font-semibold mt-1">Learning Path</h2>
+        <h2 className="t-h2 text-text-primary mt-1">Learning Path</h2>
         <p className="text-text-muted text-sm">
           The skills you're deliberately working through, in order — with your current level against
           the target you set. Derived from your Skills; no AI roadmap engine.

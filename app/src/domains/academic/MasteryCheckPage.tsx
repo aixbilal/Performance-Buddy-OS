@@ -6,6 +6,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { useMastery } from "./masteryStore";
 import { deriveMasteryOutcome, scoreMasteryCheck } from "./masteryEngine";
 import type { MasteryItem, MasteryRating } from "./masteryTypes";
+import { Button } from "../../components/Button";
 
 /** `/academics/mastery` — a light log of past personal checks. */
 export function MasteryIndexPage() {
@@ -15,7 +16,7 @@ export function MasteryIndexPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-text-primary text-xl font-semibold">Mastery Checks</h2>
+          <h2 className="t-h2 text-text-primary">Mastery Checks</h2>
           <p className="text-text-muted text-sm">Personal learning checks — practice evidence, never grades.</p>
         </div>
         <button
@@ -125,7 +126,7 @@ export function MasteryCheckPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h2 className="text-text-primary text-xl font-semibold">Mastery Check — {check.topicTitle}</h2>
+          <h2 className="t-h2 text-text-primary">Mastery Check — {check.topicTitle}</h2>
           <p className="text-text-muted text-sm">
             A personal self-check, not an official assessment and not a grade. Rate each prompt honestly.
           </p>
@@ -171,12 +172,9 @@ export function MasteryCheckPage() {
             </p>
           )}
           <div className="flex gap-2 mt-4">
-            <button
-              onClick={submit}
-              className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-            >
+            <Button variant="primary" onClick={submit}>
               Submit check
-            </button>
+            </Button>
             <button
               onClick={() => navigate("/academics/study")}
               className="px-3 py-1.5 rounded-md border border-border-subtle text-text-secondary text-xs"
@@ -197,7 +195,7 @@ export function MasteryCheckPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-text-primary text-xl font-semibold">Mastery Result — {check.topicTitle}</h2>
+          <h2 className="t-h2 text-text-primary">Mastery Result — {check.topicTitle}</h2>
           <p className="text-text-muted text-sm">Practice evidence, not a course grade.</p>
         </div>
         <button
@@ -220,7 +218,7 @@ export function MasteryCheckPage() {
           <div className="text-text-muted text-xs mb-1">Outcome</div>
           <Badge tone={BAND_TONE[outcome.band]}>{outcome.band.replace("-", " ")}</Badge>
           <p className="text-text-secondary text-xs mt-2">{outcome.message}</p>
-          <p className="text-text-disabled text-[11px] mt-1">
+          <p className="text-text-muted text-[11px] mt-1">
             Suggested next review in ~{outcome.nextReviewInDays} days (advisory — not applied automatically).
           </p>
         </Card>
@@ -262,7 +260,7 @@ export function MasteryCheckPage() {
         ) : !check.knowledgeTopicId ? (
           <div className="text-text-secondary text-xs space-y-1">
             <p>This topic has no linked Knowledge concept, so mastery evidence can’t be recorded yet.</p>
-            <p className="text-text-disabled">
+            <p className="text-text-muted">
               Options: link an existing concept or create one via the course’s topic detail, then come back.
             </p>
           </div>
@@ -272,12 +270,9 @@ export function MasteryCheckPage() {
               Recording sends this result to the linked Knowledge concept as <b>one</b> evidence record. Knowledge
               mastery then re-derives from evidence — this page never stores an academic mastery number.
             </p>
-            <button
-              onClick={doRecord}
-              className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-            >
+            <Button variant="primary" onClick={doRecord}>
               Record as Knowledge Evidence
-            </button>
+            </Button>
           </div>
         )}
         {handoff && (

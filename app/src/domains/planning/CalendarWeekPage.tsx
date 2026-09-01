@@ -63,7 +63,7 @@ export function CalendarWeekPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-text-primary text-xl font-semibold">Calendar</h2>
+          <h2 className="t-h2 text-text-primary">Calendar</h2>
           <p className="text-text-muted text-sm">
             A view of your scheduled Planning Blocks. It never changes an Action's completion.
           </p>
@@ -133,7 +133,7 @@ export function CalendarWeekPage() {
                 )}
               </>
             )}
-            <p className="text-text-disabled text-[10px] mt-2">
+            <p className="text-text-muted text-[10px] mt-2">
               Empty calendar space is not the same as available capacity.
             </p>
           </Card>
@@ -151,10 +151,10 @@ export function CalendarWeekPage() {
             >
               <div className="mb-2">
                 <div className="text-text-primary text-xs font-semibold">{DAY_LABELS[d.weekdayIndex]}</div>
-                <div className="text-text-disabled text-[10px]">{shortDate(d.iso).replace(/^\w+\s/, "")}</div>
+                <div className="text-text-muted text-[10px]">{shortDate(d.iso).replace(/^\w+\s/, "")}</div>
               </div>
               {d.blocks.length === 0 ? (
-                <div className="text-text-disabled text-[10px] py-2">—</div>
+                <div className="text-text-muted text-[10px] py-2">—</div>
               ) : (
                 <ul className="space-y-1">
                   {d.blocks.map((b) => (
@@ -175,10 +175,10 @@ export function CalendarWeekPage() {
                         </div>
                         <div className="text-text-primary truncate">{b.title}</div>
                         <div className="flex gap-1 mt-0.5">
-                          <span className="text-text-disabled">{b.type}</span>
-                          {b.locked && <span className="text-text-disabled">· locked</span>}
-                          {b.actionId && <span className="text-text-disabled">· action</span>}
-                          {b.date == null && <span className="text-text-disabled">· weekly</span>}
+                          <span className="text-text-muted">{b.type}</span>
+                          {b.locked && <span className="text-text-muted">· locked</span>}
+                          {b.actionId && <span className="text-text-muted">· action</span>}
+                          {b.date == null && <span className="text-text-muted">· weekly</span>}
                         </div>
                       </button>
                     </li>
@@ -265,7 +265,7 @@ function BlockDetailPanel({
             </div>
           )
         ) : (
-          <div className="text-text-disabled text-xs">No linked Action.</div>
+          <div className="text-text-muted text-xs">No linked Action.</div>
         )}
 
         <div className="grid grid-cols-3 gap-2 pt-2">
@@ -323,7 +323,7 @@ function BlockDetailPanel({
             Delete
           </button>
         </div>
-        <p className="text-text-disabled text-[10px]">
+        <p className="text-text-muted text-[10px]">
           Moving time never creates a new Action and never changes the Action's status.
         </p>
       </div>

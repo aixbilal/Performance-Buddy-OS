@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useSearch } from "../domains/search/store";
 import { useCapture } from "../domains/capture/store";
 import type { CaptureInboxItem, CaptureType } from "../domains/capture/types";
+import { Button } from "../components/Button";
 
 /**
  * Day 16 §6: Ctrl+K opens, Esc closes and restores exact prior context (this
@@ -47,8 +48,13 @@ export function CommandPalette() {
       }
       if (e.key === "Escape" && open) close();
     };
+    const openFromShell = () => setOpen(true);
     window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    window.addEventListener("pbos:open-command-palette", openFromShell);
+    return () => {
+      window.removeEventListener("keydown", handler);
+      window.removeEventListener("pbos:open-command-palette", openFromShell);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -143,12 +149,12 @@ export function CommandPalette() {
                   className="w-full bg-surface-inset border border-border-subtle rounded-md px-3 py-2 text-text-primary text-sm"
                 />
                 <div className="flex gap-2 mt-3">
-                  <button onClick={submitCapture} className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium">
+                  <Button variant="primary" onClick={submitCapture}>
                     Capture
-                  </button>
-                  <button onClick={() => setCaptureMode(false)} className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium">
+                  </Button>
+                  <Button variant="secondary" onClick={() => setCaptureMode(false)}>
                     Back to Search
-                  </button>
+                  </Button>
                 </div>
               </>
             )}
@@ -167,7 +173,7 @@ export function CommandPalette() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-text-disabled text-[10px]">type:</span>
+                  <span className="text-text-muted text-[10px]">type:</span>
                   {TYPE_CHOICES.map((t) => (
                     <button
                       key={t}
@@ -184,22 +190,12 @@ export function CommandPalette() {
                 {result && <div className="text-text-secondary text-xs">{result}</div>}
 
                 <div className="flex gap-2">
-                  <button
-                    onClick={doConfirm}
-                    disabled={!canConfirmInline}
-                    className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium disabled:opacity-40"
-                  >
+                  <Button variant="primary" onClick={doConfirm} disabled={!canConfirmInline}>
                     Confirm
-                  </button>
-                  <button
-                    onClick={() => {
-                      close();
-                      navigate("/capture-inbox");
-                    }}
-                    className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-                  >
+                  </Button>
+                  <Button variant="secondary" onClick={() => { close(); navigate("/capture-inbox"); }}>
                     Keep in Inbox
-                  </button>
+                  </Button>
                   <button
                     onClick={() => {
                       setPending(null);
@@ -211,7 +207,7 @@ export function CommandPalette() {
                   </button>
                 </div>
                 {!canConfirmInline && (
-                  <p className="text-text-disabled text-[10px]">
+                  <p className="text-text-muted text-[10px]">
                     Notes have no V1 destination — keep it in the Inbox.
                   </p>
                 )}
@@ -221,7 +217,7 @@ export function CommandPalette() {
         ) : (
           <>
             <div className="p-3 border-b border-border-subtle flex items-center gap-2">
-              <span className="text-text-disabled text-sm">⌘</span>
+              <span className="text-text-muted text-sm">⌘</span>
               <input
                 autoFocus
                 value={query}
@@ -239,7 +235,7 @@ export function CommandPalette() {
             <div className="max-h-80 overflow-y-auto p-2">
               {commandMatches.length > 0 && (
                 <div className="mb-2">
-                  <div className="text-text-disabled text-[10px] uppercase px-2 mb-1">Commands</div>
+                  <div className="text-text-muted text-[10px] uppercase px-2 mb-1">Commands</div>
                   {commandMatches.map((c, i) => (
                     <div
                       key={c.id}
@@ -258,7 +254,7 @@ export function CommandPalette() {
               )}
               {results.length > 0 && (
                 <div>
-                  <div className="text-text-disabled text-[10px] uppercase px-2 mb-1">Results</div>
+                  <div className="text-text-muted text-[10px] uppercase px-2 mb-1">Results</div>
                   {results.map((r, i) => {
                     const idx = commandMatches.length + i;
                     return (
@@ -274,7 +270,7 @@ export function CommandPalette() {
                         }}
                       >
                         <span>{r.result.title}</span>
-                        <span className="text-text-disabled text-xs">{r.result.domain}</span>
+                        <span className="text-text-muted text-xs">{r.result.domain}</span>
                       </div>
                     );
                   })}
@@ -284,7 +280,7 @@ export function CommandPalette() {
                 <div className="text-text-muted text-xs px-2 py-3">No results — try Quick Capture instead.</div>
               )}
             </div>
-            <div className="px-3 py-2 border-t border-border-subtle text-text-disabled text-[10px] flex gap-3">
+            <div className="px-3 py-2 border-t border-border-subtle text-text-muted text-[10px] flex gap-3">
               <span>↑↓ Navigate</span>
               <span>Enter Open</span>
               <span>Esc Close</span>

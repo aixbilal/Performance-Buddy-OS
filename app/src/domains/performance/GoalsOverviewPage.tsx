@@ -6,6 +6,7 @@ import { LoadingState } from "../../components/StateViews";
 import { SaveIndicator } from "../../components/SaveIndicator";
 import { usePerformance } from "./store";
 import type { GoalAttention } from "./engine";
+import { Button } from "../../components/Button";
 
 const LIFECYCLE_TONE = {
   draft: "neutral",
@@ -66,19 +67,16 @@ export function GoalsOverviewPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-text-primary text-xl font-semibold">Goals</h2>
+          <h2 className="t-h2 text-text-primary">Goals</h2>
           <p className="text-text-muted text-sm">
             Desired outcomes across every domain — what's active, progressing, or needs attention.
           </p>
         </div>
         <div className="flex items-center gap-3">
           <SaveIndicator state={saveState} />
-          <button
-            onClick={() => navigate("/goals/new")}
-            className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-          >
+          <Button variant="primary" onClick={() => navigate("/goals/new")}>
             + Create Goal
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -179,12 +177,9 @@ export function GoalsOverviewPage() {
           PBOS can propose a micro-goal from your patterns. A proposal is never created automatically —
           you review it in the builder first.
         </p>
-        <button
-          onClick={() => navigate("/goals/new?tab=ai")}
-          className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-        >
+        <Button variant="secondary" onClick={() => navigate("/goals/new?tab=ai")}>
           Review AI proposal
-        </button>
+        </Button>
       </Card>
     </div>
   );

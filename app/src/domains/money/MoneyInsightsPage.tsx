@@ -19,7 +19,7 @@ export function MoneyInsightsPage() {
         <Link to="/money" className="text-text-muted text-xs hover:text-text-secondary">
           ← Money
         </Link>
-        <h2 className="text-text-primary text-xl font-semibold mt-1">Insights &amp; Review</h2>
+        <h2 className="t-h2 text-text-primary mt-1">Insights &amp; Review</h2>
         <p className="text-text-muted text-sm">
           Deterministic statements from your recorded data. No advice, no financial-health score, no
           performance judgement.
@@ -54,7 +54,7 @@ export function MoneyInsightsPage() {
       </Card>
 
       <Card title="How to read this">
-        <ul className="text-text-disabled text-[11px] space-y-1">
+        <ul className="text-text-muted text-[11px] space-y-1">
           <li>
             <b>FACT</b> — a value read directly from your recorded transactions, budgets or goals.
           </li>

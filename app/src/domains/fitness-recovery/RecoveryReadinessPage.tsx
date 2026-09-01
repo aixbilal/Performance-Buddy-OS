@@ -6,6 +6,7 @@ import { SaveIndicator } from "../../components/SaveIndicator";
 import { LoadingState } from "../../components/StateViews";
 import { useFitness } from "./store";
 import { LEVEL3S, SORENESS_LEVELS, type Level3, type SorenessLevel } from "./types";
+import { Button } from "../../components/Button";
 
 const READINESS_TONE = {
   push: "success",
@@ -44,7 +45,7 @@ export function RecoveryReadinessPage() {
           <Link to="/fitness" className="text-text-muted text-xs hover:text-text-secondary">
             ← Fitness
           </Link>
-          <h2 className="text-text-primary text-xl font-semibold mt-1">Recovery &amp; Readiness</h2>
+          <h2 className="t-h2 text-text-primary mt-1">Recovery &amp; Readiness</h2>
           <p className="text-text-muted text-sm">
             Log how you actually feel. Readiness is derived from your check-ins — never a fabricated
             number.
@@ -64,7 +65,7 @@ export function RecoveryReadinessPage() {
         </div>
         <p className="text-text-secondary text-xs">{r.reason}</p>
         {r.state === "insufficient-data" && (
-          <p className="text-text-disabled text-[11px] mt-1">
+          <p className="text-text-muted text-[11px] mt-1">
             This is an honest "not enough data" state — not 0 readiness.
           </p>
         )}
@@ -132,12 +133,9 @@ export function RecoveryReadinessPage() {
           </div>
           {err && <p className="text-status-danger text-[11px]">{err}</p>}
           {saved && !err && <p className="text-status-success text-[11px]">Check-in saved.</p>}
-          <button
-            type="submit"
-            className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-          >
+          <Button variant="primary" type="submit">
             {today ? "Update Check-In" : "Save Check-In"}
-          </button>
+          </Button>
         </form>
       </Card>
 

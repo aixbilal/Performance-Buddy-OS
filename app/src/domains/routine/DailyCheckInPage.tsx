@@ -26,7 +26,7 @@ export function DailyCheckInPage() {
           <Link to="/routine" className="text-text-muted text-xs hover:text-text-secondary">
             ← Routines
           </Link>
-          <h2 className="text-text-primary text-xl font-semibold mt-1">Daily Check-In</h2>
+          <h2 className="t-h2 text-text-primary mt-1">Daily Check-In</h2>
           <p className="text-text-muted text-sm">
             Record what actually happened today. It writes to the routine's history immediately.
           </p>

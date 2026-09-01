@@ -1,5 +1,6 @@
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
+import { Button } from "../../components/Button";
 
 /**
  * Structural type for an AI proposal. This is a presentation-layer contract only —
@@ -31,37 +32,28 @@ export function ProposalCard({
 
   return (
     <Card>
-      <div className="flex items-start justify-between mb-2">
-        <p className="text-text-primary text-sm">{proposal.recommendation}</p>
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <p className="t-body text-text-primary">{proposal.recommendation}</p>
         <Badge tone={confidenceTone}>{proposal.confidence} confidence</Badge>
       </div>
-      <p className="text-text-secondary text-xs mb-2">{proposal.reason}</p>
+      <p className="t-small text-text-secondary mb-2">{proposal.reason}</p>
       {proposal.evidence.length > 0 && (
-        <ul className="text-text-muted text-xs mb-3 list-disc list-inside space-y-0.5">
+        <ul className="t-small text-text-muted mb-3 list-disc list-inside space-y-0.5">
           {proposal.evidence.map((e, i) => (
             <li key={i}>{e}</li>
           ))}
         </ul>
       )}
       <div className="flex gap-2">
-        <button
-          onClick={() => onApprove(proposal.id)}
-          className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-        >
+        <Button variant="primary" onClick={() => onApprove(proposal.id)}>
           Approve
-        </button>
-        <button
-          onClick={() => onModify(proposal.id)}
-          className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-        >
+        </Button>
+        <Button variant="secondary" onClick={() => onModify(proposal.id)}>
           Modify
-        </button>
-        <button
-          onClick={() => onReject(proposal.id)}
-          className="px-3 py-1.5 rounded-md text-text-muted text-xs font-medium hover:text-text-secondary"
-        >
+        </Button>
+        <Button variant="ghost" onClick={() => onReject(proposal.id)}>
           Not now
-        </button>
+        </Button>
       </div>
     </Card>
   );

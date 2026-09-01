@@ -8,6 +8,7 @@ import { useDevelopment } from "./store";
 import { useKnowledge } from "../knowledge/store";
 import { derivePercentToLevel } from "./engine";
 import { PROVENANCES, SKILL_LEVELS, type Provenance, type SkillLevel } from "./types";
+import { Button } from "../../components/Button";
 
 const PROVENANCE_LABEL: Record<Provenance, string> = {
   independent: "Independent",
@@ -66,17 +67,14 @@ export function SkillDetailPage() {
           <Link to="/development" className="text-text-muted text-xs hover:text-text-secondary">
             ← Development
           </Link>
-          <h2 className="text-text-primary text-xl font-semibold mt-1">{skill.title}</h2>
+          <h2 className="t-h2 text-text-primary mt-1">{skill.title}</h2>
           <p className="text-text-muted text-sm">{skill.category || "Uncategorised"}</p>
         </div>
         <div className="flex items-center gap-3">
           <SaveIndicator state={dev.saveState} />
-          <button
-            onClick={() => navigate(`/development/skills/${skill.id}/edit`)}
-            className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-          >
+          <Button variant="secondary" onClick={() => navigate(`/development/skills/${skill.id}/edit`)}>
             Edit Skill
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -108,7 +106,7 @@ export function SkillDetailPage() {
               </div>
             </>
           )}
-          <p className="text-text-disabled text-[10px] mt-1">Independently demonstrated.</p>
+          <p className="text-text-muted text-[10px] mt-1">Independently demonstrated.</p>
         </Card>
       </div>
 
@@ -124,7 +122,7 @@ export function SkillDetailPage() {
       )}
 
       <Card title="Linked Knowledge concept">
-        <p className="text-text-disabled text-[10px] mb-2">
+        <p className="text-text-muted text-[10px] mb-2">
           Development owns practice and capability; Knowledge owns conceptual mastery. Linking a
           concept references it — it does not copy or change its mastery.
         </p>
@@ -216,7 +214,7 @@ export function SkillDetailPage() {
           </button>
         }
       >
-        <p className="text-text-disabled text-[10px] mb-2">
+        <p className="text-text-muted text-[10px] mb-2">
           Record what you actually did and how it was produced. Provenance decides whether it counts
           toward independent capability.
         </p>
@@ -300,12 +298,9 @@ export function SkillDetailPage() {
               </label>
             </div>
             {evError && <p className="text-status-danger text-[11px]">{evError}</p>}
-            <button
-              type="submit"
-              className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-            >
+            <Button variant="primary" type="submit">
               Add Evidence
-            </button>
+            </Button>
           </form>
         )}
 
@@ -335,7 +330,7 @@ export function SkillDetailPage() {
                 provenanceTone: PROVENANCE_TONE[e.provenance],
                 onDelete: () => dev.deleteEvidence(e.id),
                 action: handedOff ? (
-                  <span className="text-text-disabled text-[11px]">in Knowledge</span>
+                  <span className="text-text-muted text-[11px]">in Knowledge</span>
                 ) : skill.knowledgeTopicId && eligible ? (
                   <button
                     onClick={async () => {
@@ -358,7 +353,7 @@ export function SkillDetailPage() {
                     Send to Knowledge
                   </button>
                 ) : !eligible ? (
-                  <span className="text-text-disabled text-[11px]">not independent</span>
+                  <span className="text-text-muted text-[11px]">not independent</span>
                 ) : undefined,
               };
             })}
@@ -393,7 +388,7 @@ function Axis({ label, percent, note }: { label: string; percent: number; note: 
       <div className="text-text-muted text-xs mb-1">{label}</div>
       <Badge tone={LEVEL_TONE[derivePercentToLevel(percent)]}>{derivePercentToLevel(percent)}</Badge>
       <div className="text-text-primary text-lg font-semibold mt-1">{percent}%</div>
-      <p className="text-text-disabled text-[10px] mt-1">{note}</p>
+      <p className="text-text-muted text-[10px] mt-1">{note}</p>
     </Card>
   );
 }

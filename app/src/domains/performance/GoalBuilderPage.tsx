@@ -18,6 +18,7 @@ import {
   type GoalFormValues,
 } from "./GoalForm";
 import type { GoalInput } from "./types";
+import { Button } from "../../components/Button";
 
 type Tab = "manual" | "ai";
 
@@ -109,7 +110,7 @@ export function GoalBuilderPage() {
         <button onClick={() => navigate(isEdit ? `/goals/${goalId}` : "/goals")} className="text-text-muted text-xs hover:text-text-secondary">
           ← {isEdit ? "Goal" : "Goals"}
         </button>
-        <h2 className="text-text-primary text-xl font-semibold mt-1">
+        <h2 className="t-h2 text-text-primary mt-1">
           {isEdit ? "Edit Goal" : "Goal Builder"}
         </h2>
         <p className="text-text-muted text-sm">
@@ -183,29 +184,20 @@ export function GoalBuilderPage() {
                   <li key={b}>{b}</li>
                 ))}
               </ul>
-              <p className="text-text-disabled text-[11px]">
+              <p className="text-text-muted text-[11px]">
                 Accepting or modifying opens the builder prefilled — it does not create anything until you
                 press Create Goal.
               </p>
               <div className="flex gap-2">
-                <button
-                  onClick={() => applyProposal("accepted")}
-                  className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-                >
+                <Button variant="primary" onClick={() => applyProposal("accepted")}>
                   Accept
-                </button>
-                <button
-                  onClick={() => applyProposal("modified")}
-                  className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-                >
+                </Button>
+                <Button variant="secondary" onClick={() => applyProposal("modified")}>
                   Modify
-                </button>
-                <button
-                  onClick={() => setProposalHandled("rejected")}
-                  className="px-3 py-1.5 rounded-md text-text-muted text-xs font-medium hover:text-text-secondary"
-                >
+                </Button>
+                <Button variant="ghost" onClick={() => setProposalHandled("rejected")}>
                   Reject
-                </button>
+                </Button>
               </div>
             </div>
           )}

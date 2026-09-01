@@ -1,7 +1,175 @@
+@import "./tokens/fonts.css";
 @import "tailwindcss";
 @import "./tokens/tokens.css";
 
-body {
-  margin: 0;
-  background: var(--color-canvas);
+/* ============================================================
+   BASE — global element defaults (Batch 9 visual normalization)
+   ============================================================ */
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-canvas);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: var(--text-base--line-height);
+  }
+
+  /* Headings render in the display face automatically — screens don't have to
+     opt in per element. Weight/size still come from utilities or the .t-*
+     classes below where a screen needs the exact canonical step. */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    text-wrap: balance;
+    overflow-wrap: break-word;
+  }
+
+  /* A single very long token (an Obsidian path, a pasted URL, a run-on goal
+     title) must wrap rather than force the page wider than the viewport. */
+  p,
+  li,
+  dd,
+  dt,
+  td,
+  th {
+    overflow-wrap: break-word;
+  }
+
+  /* Canonical keyboard focus — one obvious ring for every interactive element
+     (07 §Focus states). Screens never need to restyle this; removing it
+     without replacement is a regression. */
+  :where(a, button, input, select, textarea, summary, [tabindex], [role="button"], [role="tab"], [role="option"], [role="menuitem"]):focus-visible {
+    outline: 2px solid var(--color-accent-primary);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--color-accent-primary) 30%, transparent);
+    color: var(--color-text-primary);
+  }
+
+  /* Reduced motion — honoured both from the OS setting and from the in-app
+     Appearance toggle (AppGate mirrors useSettings().appearance.reducedMotion
+     onto <html data-reduced-motion>). Essential feedback still happens; only
+     non-essential movement is collapsed. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  :root[data-reduced-motion="true"] *,
+  :root[data-reduced-motion="true"] *::before,
+  :root[data-reduced-motion="true"] *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================
+   COMPONENTS — canonical typography roles (07.04)
+   Opt-in classes for the exact type steps. Prefer these over
+   ad-hoc size+weight+family combinations on a page.
+   ============================================================ */
+@layer components {
+  .t-hero {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    line-height: 2.5rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .t-h1 {
+    font-family: var(--font-display);
+    font-size: 1.75rem;
+    line-height: 2.25rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .t-h2 {
+    font-family: var(--font-display);
+    font-size: 1.375rem;
+    line-height: 1.875rem;
+    font-weight: 600;
+  }
+  .t-h3 {
+    font-family: var(--font-display);
+    font-size: 1.125rem;
+    line-height: 1.625rem;
+    font-weight: 600;
+  }
+  .t-card-title {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    line-height: 1.5rem;
+    font-weight: 500;
+  }
+  .t-body-lg {
+    font-size: 1rem;
+    line-height: 1.5rem;
+  }
+  .t-body {
+    font-size: 0.875rem;
+    line-height: 1.375rem;
+  }
+  .t-small {
+    font-size: 0.8125rem;
+    line-height: 1.125rem;
+  }
+  .t-label {
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+  .t-nav {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 500;
+  }
+  .t-metric-lg {
+    font-family: var(--font-display);
+    font-size: 1.75rem;
+    line-height: 2.125rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .t-metric-md {
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    line-height: 1.625rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .t-timer {
+    font-family: var(--font-mono);
+    font-size: 3rem;
+    line-height: 3.5rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .t-mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
 }

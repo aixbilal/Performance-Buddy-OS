@@ -57,7 +57,7 @@ export function PlanBuilderPage() {
         >
           ← {isEdit ? "Plan" : "Fitness"}
         </button>
-        <h2 className="text-text-primary text-xl font-semibold mt-1">
+        <h2 className="t-h2 text-text-primary mt-1">
           {isEdit ? "Edit Training Plan" : "Create Training Plan"}
         </h2>
         <p className="text-text-muted text-sm">

@@ -5,6 +5,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { SaveIndicator } from "../../components/SaveIndicator";
 import { LoadingState } from "../../components/StateViews";
 import { useKnowledge } from "./store";
+import { Button, buttonClass } from "../../components/Button";
 
 const STATE_TONE = {
   new: "neutral",
@@ -24,22 +25,19 @@ export function KnowledgeOverviewPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-text-primary text-xl font-semibold">Knowledge</h2>
+          <h2 className="t-h2 text-text-primary">Knowledge</h2>
           <p className="text-text-muted text-sm">
             Track what you know, what you're learning, and what deserves review next.
           </p>
         </div>
         <div className="flex items-center gap-3">
           <SaveIndicator state={saveState} />
-          <button
-            onClick={() => navigate("/knowledge/new")}
-            className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-          >
+          <Button variant="primary" onClick={() => navigate("/knowledge/new")}>
             Add Topic
-          </button>
+          </Button>
           <Link
             to="/knowledge/notes"
-            className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
+            className={buttonClass("secondary")}
           >
             Notes Hub
           </Link>

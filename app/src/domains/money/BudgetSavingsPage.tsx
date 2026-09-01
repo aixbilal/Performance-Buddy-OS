@@ -5,6 +5,7 @@ import { Badge } from "../../components/Badge";
 import { SaveIndicator } from "../../components/SaveIndicator";
 import { LoadingState } from "../../components/StateViews";
 import { useMoney } from "./store";
+import { Button } from "../../components/Button";
 
 const STATUS_TONE = {
   "within-budget": "success",
@@ -46,7 +47,7 @@ export function BudgetSavingsPage() {
           <Link to="/money" className="text-text-muted text-xs hover:text-text-secondary">
             ← Money
           </Link>
-          <h2 className="text-text-primary text-xl font-semibold mt-1">Budget &amp; Savings</h2>
+          <h2 className="t-h2 text-text-primary mt-1">Budget &amp; Savings</h2>
           <p className="text-text-muted text-sm">
             Plans and targets. Budget usage counts only actual expense transactions — never planned
             expenses, income, or savings transfers.
@@ -104,12 +105,9 @@ export function BudgetSavingsPage() {
               className="block mt-1 w-full bg-surface-inset border border-border-subtle rounded px-2 py-1.5 text-text-primary text-sm outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
             />
           </label>
-          <button
-            type="submit"
-            className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-          >
+          <Button variant="primary" type="submit">
             Add Budget
-          </button>
+          </Button>
         </form>
         {bErr && <p className="text-status-danger text-[11px] mb-2">{bErr}</p>}
 
@@ -125,7 +123,7 @@ export function BudgetSavingsPage() {
                 <div key={b.id}>
                   <div className="flex items-center justify-between mb-1 text-sm">
                     <span className="text-text-primary">
-                      {b.category} <span className="text-text-disabled text-[11px]">· {b.period}</span>
+                      {b.category} <span className="text-text-muted text-[11px]">· {b.period}</span>
                     </span>
                     <div className="flex items-center gap-2">
                       <span className="text-text-secondary text-xs tabular-nums">
@@ -152,7 +150,7 @@ export function BudgetSavingsPage() {
                     />
                   </div>
                   {!r.hasData && (
-                    <p className="text-text-disabled text-[10px] mt-1">
+                    <p className="text-text-muted text-[10px] mt-1">
                       No matching actual expense recorded yet.
                     </p>
                   )}
@@ -227,12 +225,9 @@ export function BudgetSavingsPage() {
               className="block mt-1 w-full bg-surface-inset border border-border-subtle rounded px-2 py-1.5 text-text-primary text-sm outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
             />
           </label>
-          <button
-            type="submit"
-            className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-          >
+          <Button variant="primary" type="submit">
             Add Goal
-          </button>
+          </Button>
         </form>
         {sErr && <p className="text-status-danger text-[11px] mb-2">{sErr}</p>}
 
@@ -268,7 +263,7 @@ export function BudgetSavingsPage() {
                         style={{ width: `${Math.min(100, p.percent ?? 0)}%` }}
                       />
                     </div>
-                    <p className="text-text-disabled text-[10px] mt-1">
+                    <p className="text-text-muted text-[10px] mt-1">
                       Progress = opening amount + linked savings transfers. Expenses are never counted
                       as savings.
                       {p.estimatedMonthsRemaining !== null &&
@@ -283,7 +278,7 @@ export function BudgetSavingsPage() {
 
       {/* ---------- Planned expenses ---------- */}
       <Card title="Planned Expenses">
-        <p className="text-text-disabled text-[11px] mb-3">
+        <p className="text-text-muted text-[11px] mb-3">
           Future intentions. They are never counted as actual spending. "Record actual" creates a
           separate real transaction and links it — the two rows stay distinct.
         </p>
@@ -345,12 +340,9 @@ export function BudgetSavingsPage() {
               className="block mt-1 w-full bg-surface-inset border border-border-subtle rounded px-2 py-1.5 text-text-primary text-sm outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
             />
           </label>
-          <button
-            type="submit"
-            className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-          >
+          <Button variant="primary" type="submit">
             Add Planned
-          </button>
+          </Button>
         </form>
         {pErr && <p className="text-status-danger text-[11px] mb-2">{pErr}</p>}
 
@@ -366,7 +358,7 @@ export function BudgetSavingsPage() {
                 <div>
                   <div className="text-text-primary text-sm">
                     {p.title}{" "}
-                    <span className="text-text-disabled text-[11px]">
+                    <span className="text-text-muted text-[11px]">
                       · {p.category} · due {p.dueDate}
                     </span>
                   </div>

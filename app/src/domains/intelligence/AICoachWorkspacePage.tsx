@@ -5,6 +5,7 @@ import { Badge } from "../../components/Badge";
 import { RecommendationCard } from "../../components/RecommendationCard";
 import { useAICoach } from "./store";
 import { AI_DOMAINS } from "../ai/context";
+import { Button } from "../../components/Button";
 
 /**
  * AI Coach Workspace — a task-scoped coaching surface. The conversation is
@@ -70,7 +71,7 @@ export function AICoachWorkspacePage() {
         <Link to="/ai-coach" className="text-text-muted text-xs hover:text-text-secondary">
           ← AI Coach
         </Link>
-        <h2 className="text-text-primary text-xl font-semibold mt-1">Workspace</h2>
+        <h2 className="t-h2 text-text-primary mt-1">Workspace</h2>
         <p className="text-text-muted text-sm">
           Ask a bounded coaching question. Nothing you type is remembered after you leave; any
           proposal it makes becomes a reviewable recommendation.
@@ -134,13 +135,9 @@ export function AICoachWorkspacePage() {
           className="w-full bg-surface-inset border border-border-subtle rounded px-2 py-1.5 text-text-primary text-sm outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
         />
         <div className="flex items-center gap-2 mt-2">
-          <button
-            onClick={ask}
-            disabled={busy}
-            className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium disabled:opacity-40"
-          >
+          <Button variant="primary" onClick={ask} disabled={busy}>
             {busy ? "Asking…" : "Ask coach"}
-          </button>
+          </Button>
           <Badge tone={coach.aiAvailability === "ready" ? "success" : "warning"}>
             {coach.aiAvailability === "not-configured" ? "not configured" : coach.aiAvailability}
           </Badge>

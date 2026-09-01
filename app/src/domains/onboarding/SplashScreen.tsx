@@ -108,10 +108,7 @@ export function SplashScreen({
 
       {showWordmark && (
         <div className="absolute inset-x-0 bottom-[18%] flex justify-center">
-          <span
-            className="text-text-primary tracking-[0.25em] text-sm uppercase font-medium animate-[fadeIn_450ms_ease-out]"
-            style={{ fontFamily: "'Space Grotesk', 'Helvetica Neue', sans-serif" }}
-          >
+          <span className="font-display text-text-primary tracking-[0.25em] text-sm uppercase font-medium animate-[fadeIn_450ms_ease-out]">
             Performance Buddy OS
           </span>
         </div>

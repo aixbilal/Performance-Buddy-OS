@@ -30,7 +30,7 @@ export function CaptureInboxPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-text-primary text-xl font-semibold">Capture Inbox</h2>
+        <h2 className="t-h2 text-text-primary">Capture Inbox</h2>
         <p className="text-text-muted text-sm">
           Unresolved raw captures only — confirmed items move into their real domain and leave this list.
           Stored durably ({backend}); nothing is lost on reload.
@@ -74,7 +74,7 @@ export function CaptureInboxPage() {
                   >
                     Confirm
                   </button>
-                  <span className="text-text-disabled text-[10px]">reclassify:</span>
+                  <span className="text-text-muted text-[10px]">reclassify:</span>
                   {RECLASSIFY_TYPES.map((t) => (
                     <button
                       key={t}
@@ -96,7 +96,7 @@ export function CaptureInboxPage() {
                   </button>
                   <button
                     onClick={() => deleteItem(item.id)}
-                    className="px-3 py-1 rounded-md text-text-disabled text-xs hover:text-status-danger"
+                    className="px-3 py-1 rounded-md text-text-muted text-xs hover:text-status-danger"
                   >
                     Delete
                   </button>

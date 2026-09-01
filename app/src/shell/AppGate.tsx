@@ -32,6 +32,17 @@ export function AppGate() {
   const { appearance } = useSettings();
   const lastRelaunchToken = useRef(relaunchToken);
 
+  // Mirror the in-app Appearance toggle onto <html> so the global
+  // [data-reduced-motion] CSS in index.css can collapse non-essential motion
+  // everywhere (route transitions, menus, modals, the AI recommendation entry,
+  // the command palette, the context rail), not just where the OS media query
+  // already applies.
+  useEffect(() => {
+    const root = document.documentElement;
+    if (appearance.reducedMotion) root.dataset.reducedMotion = "true";
+    else delete root.dataset.reducedMotion;
+  }, [appearance.reducedMotion]);
+
   if (relaunchToken !== lastRelaunchToken.current) {
     lastRelaunchToken.current = relaunchToken;
     setSplashDone(false);

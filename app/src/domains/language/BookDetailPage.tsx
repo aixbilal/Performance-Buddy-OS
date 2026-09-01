@@ -7,6 +7,7 @@ import { useKnowledge } from "../knowledge/store";
 import { useObsidian } from "../obsidian/store";
 import { useLanguage } from "./store";
 import { BOOK_STATUSES } from "./types";
+import { Button } from "../../components/Button";
 
 const TONE = {
   reading: "success",
@@ -57,7 +58,7 @@ export function BookDetailPage() {
           <Link to="/language" className="text-text-muted text-xs hover:text-text-secondary">
             ← Reading &amp; Language
           </Link>
-          <h2 className="text-text-primary text-xl font-semibold mt-1">
+          <h2 className="t-h2 text-text-primary mt-1">
             {book.title}
             {book.archived && (
               <span className="ml-2">
@@ -70,18 +71,12 @@ export function BookDetailPage() {
         <div className="flex items-center gap-3">
           <SaveIndicator state={lang.saveState} />
           <Badge tone={TONE[book.status]}>{STATUS_LABEL(book.status)}</Badge>
-          <button
-            onClick={() => navigate(`/language/books/${book.id}/edit`)}
-            className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-          >
+          <Button variant="secondary" onClick={() => navigate(`/language/books/${book.id}/edit`)}>
             Edit
-          </button>
-          <button
-            onClick={() => lang.archiveBook(book.id, !book.archived)}
-            className="px-3 py-1.5 rounded-md text-text-muted text-xs hover:text-text-secondary"
-          >
+          </Button>
+          <Button variant="ghost" onClick={() => lang.archiveBook(book.id, !book.archived)}>
             {book.archived ? "Unarchive" : "Archive"}
-          </button>
+          </Button>
           <button
             onClick={() => {
               lang.deleteBook(book.id);
@@ -100,7 +95,7 @@ export function BookDetailPage() {
           {rp.percent === null ? (
             <>
               <div className="text-text-primary text-lg font-semibold">Page {rp.currentPage}</div>
-              <p className="text-text-disabled text-[11px] mt-1">
+              <p className="text-text-muted text-[11px] mt-1">
                 Total pages not tracked — a percent isn't shown. This is not 0%. Add a total on Edit
                 to see one.
               </p>
@@ -108,7 +103,7 @@ export function BookDetailPage() {
           ) : (
             <>
               <div className="text-text-primary text-lg font-semibold">{rp.percent}%</div>
-              <p className="text-text-disabled text-[11px] mt-1">
+              <p className="text-text-muted text-[11px] mt-1">
                 Page {rp.currentPage} of {rp.totalPages}
                 {book.currentChapter ? ` · chapter ${book.currentChapter}` : ""}. Pages read are
                 activity, not understanding.
@@ -239,11 +234,11 @@ export function BookDetailPage() {
                       </button>
                     </span>
                   ) : vaultConnected ? (
-                    <span className="text-text-disabled block text-[11px] mt-0.5">
+                    <span className="text-text-muted block text-[11px] mt-0.5">
                       Unresolved — no indexed note in the connected vault matches this reference.
                     </span>
                   ) : (
-                    <span className="text-text-disabled block text-[11px] mt-0.5">
+                    <span className="text-text-muted block text-[11px] mt-0.5">
                       A plain pointer you entered. Connect a vault in the Notes Hub to resolve it.
                     </span>
                   )}
@@ -312,15 +307,12 @@ export function BookDetailPage() {
               className="block mt-1 w-20 bg-surface-inset border border-border-subtle rounded px-2 py-1 text-text-primary text-xs outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
             />
           </label>
-          <button
-            type="submit"
-            className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-          >
+          <Button variant="primary" type="submit">
             Log Reading
-          </button>
+          </Button>
           {rsErr && <p className="text-status-danger text-[11px] w-full">{rsErr}</p>}
         </form>
-        <p className="text-text-disabled text-[11px] mb-2">
+        <p className="text-text-muted text-[11px] mb-2">
           Logging where you read to advances your page position. It never records Knowledge mastery.
         </p>
         {readingSessions.length === 0 ? (

@@ -7,6 +7,7 @@ import { LoadingState } from "../../components/StateViews";
 import { usePerformance } from "./store";
 import { goalTransitionsFrom } from "./engine";
 import type { GoalLifecycle } from "./types";
+import { Button, buttonClass } from "../../components/Button";
 
 const LIFECYCLE_LABEL: Record<GoalLifecycle, string> = {
   draft: "Draft",
@@ -71,7 +72,7 @@ export function GoalDetailPage() {
             ← Goals
           </Link>
           <div className="text-text-muted text-[11px] uppercase mt-1 capitalize">{goal.domain} goal</div>
-          <h2 className="text-text-primary text-xl font-semibold">{goal.title}</h2>
+          <h2 className="t-h2 text-text-primary">{goal.title}</h2>
           <div className="flex items-center gap-2 mt-1">
             <Badge>{LIFECYCLE_LABEL[goal.lifecycle]}</Badge>
             <Badge tone={attention.state === "needs-attention" ? "warning" : attention.state === "on-track" ? "success" : "neutral"}>
@@ -85,12 +86,9 @@ export function GoalDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           <SaveIndicator state={saveState} />
-          <button
-            onClick={() => navigate(`/goals/${goal.id}/edit`)}
-            className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-          >
+          <Button variant="secondary" onClick={() => navigate(`/goals/${goal.id}/edit`)}>
             Edit Goal
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -147,7 +145,7 @@ export function GoalDetailPage() {
           </p>
           <button
             onClick={() => setLinkOpen((o) => !o)}
-            className="shrink-0 ml-3 px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
+            className={`shrink-0 ml-3 ${buttonClass("secondary")}`}
           >
             Manage Systems
           </button>
@@ -157,7 +155,7 @@ export function GoalDetailPage() {
           <div className="mb-3 bg-surface-inset border border-border-subtle rounded-md p-3 space-y-2">
             <div className="text-text-muted text-xs">Link an existing system, or create a new one.</div>
             {systems.length === 0 && (
-              <div className="text-text-disabled text-xs">No systems exist yet.</div>
+              <div className="text-text-muted text-xs">No systems exist yet.</div>
             )}
             {systems.map((s) => (
               <label key={s.id} className="flex items-center gap-2 text-sm">
@@ -167,7 +165,7 @@ export function GoalDetailPage() {
                   onChange={(e) => setGoalSystemLink(goal.id, s.id, e.target.checked)}
                 />
                 <span className="text-text-secondary">{s.title}</span>
-                <span className="text-text-disabled text-xs capitalize">{s.domain}</span>
+                <span className="text-text-muted text-xs capitalize">{s.domain}</span>
               </label>
             ))}
             <button
@@ -235,7 +233,7 @@ export function GoalDetailPage() {
                   >
                     <span className="text-text-secondary">
                       {action.title}
-                      <span className="text-text-disabled text-xs"> · {system}</span>
+                      <span className="text-text-muted text-xs"> · {system}</span>
                     </span>
                     <Badge tone={action.status === "done" ? "success" : "neutral"}>{action.status}</Badge>
                   </div>
@@ -274,12 +272,9 @@ export function GoalDetailPage() {
               >
                 Confirm delete
               </button>
-              <button
-                onClick={() => setConfirmDelete(false)}
-                className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-              >
+              <Button variant="secondary" onClick={() => setConfirmDelete(false)}>
                 Keep
-              </button>
+              </Button>
             </>
           ) : (
             <button

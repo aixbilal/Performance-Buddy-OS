@@ -3,6 +3,7 @@ import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { LoadingState } from "../../components/StateViews";
 import { useAnalytics } from "./store";
+import { buttonClass } from "../../components/Button";
 
 const STATE_TONE = {
   improving: "success",
@@ -26,7 +27,7 @@ export function AnalyticsOverviewPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-text-primary text-xl font-semibold">Analytics &amp; Reviews</h2>
+          <h2 className="t-h2 text-text-primary">Analytics &amp; Reviews</h2>
           <p className="text-text-muted text-sm">
             How are your systems behaving, what changed, and where should you look?
           </p>
@@ -34,19 +35,19 @@ export function AnalyticsOverviewPage() {
         <div className="flex gap-2">
           <Link
             to="/analytics/weekly"
-            className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
+            className={buttonClass("secondary")}
           >
             Weekly Review
           </Link>
           <Link
             to="/analytics/monthly"
-            className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
+            className={buttonClass("secondary")}
           >
             Monthly Review
           </Link>
           <Link
             to="/analytics/patterns"
-            className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
+            className={buttonClass("secondary")}
           >
             Patterns
           </Link>

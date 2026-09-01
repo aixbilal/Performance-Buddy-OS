@@ -10,6 +10,7 @@ import { usePerformance } from "../performance/store";
 import { DAY_LABELS, timeLabel } from "./mockData";
 import type { PlanningBlockInput } from "./types";
 import type { ScheduleProposal } from "./engine";
+import { Button } from "../../components/Button";
 
 const FRAGILITY_LABEL = {
   valid: "Healthy buffer",
@@ -235,7 +236,7 @@ export function PlannerPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-text-primary text-xl font-semibold">Planner</h2>
+          <h2 className="t-h2 text-text-primary">Planner</h2>
           <p className="text-text-muted text-sm">
             Decide when work happens. Scheduling a block never marks its Action done — that stays Action-owned.
           </p>
@@ -260,7 +261,7 @@ export function PlannerPage() {
           <div className="text-text-primary text-lg font-semibold" data-testid="violation-count">
             {violations.length}
           </div>
-          <p className="text-text-disabled text-[10px] mt-1">A different problem from conflicts — checked separately.</p>
+          <p className="text-text-muted text-[10px] mt-1">A different problem from conflicts — checked separately.</p>
         </Card>
         <Card>
           <div className="text-text-muted text-xs mb-1">Weekly Flexible Load</div>
@@ -337,7 +338,7 @@ export function PlannerPage() {
                     aria-label={`Include ${a.title} in the generated plan`}
                   />
                   <span className="text-text-primary truncate">{a.title}</span>
-                  <span className="text-text-disabled text-xs">{a.estMinutes ? `${a.estMinutes}m` : "no estimate"}</span>
+                  <span className="text-text-muted text-xs">{a.estMinutes ? `${a.estMinutes}m` : "no estimate"}</span>
                 </label>
                 <button
                   onClick={() => scheduleForToday(a.id, a.title, a.estMinutes)}
@@ -351,14 +352,10 @@ export function PlannerPage() {
         )}
 
         <div className="mt-3 flex items-center gap-3">
-          <button
-            onClick={runGenerate}
-            disabled={picked.size === 0}
-            className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium disabled:opacity-40"
-          >
+          <Button variant="primary" onClick={runGenerate} disabled={picked.size === 0}>
             Generate proposal
-          </button>
-          <span className="text-text-disabled text-[10px]">
+          </Button>
+          <span className="text-text-muted text-[10px]">
             Deterministic — no AI. Fills flexible slots around your fixed &amp; locked blocks.
           </span>
         </div>
@@ -398,21 +395,12 @@ export function PlannerPage() {
             </div>
           )}
           <div className="flex gap-2">
-            <button
-              onClick={async () => {
-                await applyProposal(proposal);
-                setProposal(null);
-                setPicked(new Set());
-                setFeedback("Proposal applied. Locked & manual blocks were preserved.");
-              }}
-              disabled={proposal.proposed.length === 0}
-              className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium disabled:opacity-40"
-            >
+            <Button variant="primary" onClick={async () => { await applyProposal(proposal); setProposal(null); setPicked(new Set()); setFeedback("Proposal applied. Locked & manual blocks were preserved."); }} disabled={proposal.proposed.length === 0}>
               Apply
-            </button>
-            <button onClick={() => setProposal(null)} className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs">
+            </Button>
+            <Button variant="secondary" onClick={() => setProposal(null)}>
               Cancel
-            </button>
+            </Button>
           </div>
         </Card>
       )}
@@ -501,12 +489,9 @@ export function PlannerPage() {
           />
         </div>
         <div className="flex items-center gap-3 mt-3">
-          <button
-            type="submit"
-            className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-          >
+          <Button variant="primary" type="submit">
             Add Block
-          </button>
+          </Button>
           {feedback && (
             <span className="text-text-secondary text-xs" role="status" data-testid="planner-feedback">
               {feedback}
@@ -541,9 +526,9 @@ export function PlannerPage() {
             />
           </div>
           <div className="flex items-center gap-3 mt-3">
-            <button type="submit" className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium">
+            <Button variant="primary" type="submit">
               Save capacity
-            </button>
+            </Button>
             {capMsg && (
               <span className="text-text-secondary text-xs" role="status">
                 {capMsg}

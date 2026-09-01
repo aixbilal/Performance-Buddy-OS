@@ -5,6 +5,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { SaveIndicator } from "../../components/SaveIndicator";
 import { LoadingState } from "../../components/StateViews";
 import { useLanguage } from "./store";
+import { Button } from "../../components/Button";
 
 const PATH_TONE = { active: "success", paused: "warning", completed: "neutral" } as const;
 const BOOK_TONE = {
@@ -30,7 +31,7 @@ export function ReadingLanguageOverviewPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-text-primary text-xl font-semibold">Reading &amp; Language</h2>
+          <h2 className="t-h2 text-text-primary">Reading &amp; Language</h2>
           <p className="text-text-muted text-sm">
             What you're reading and learning, and how far along it is. Time and pages are activity —
             not mastery.
@@ -38,18 +39,12 @@ export function ReadingLanguageOverviewPage() {
         </div>
         <div className="flex items-center gap-3">
           <SaveIndicator state={lang.saveState} />
-          <button
-            onClick={() => navigate("/language/books/new")}
-            className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-          >
+          <Button variant="secondary" onClick={() => navigate("/language/books/new")}>
             Add Book
-          </button>
-          <button
-            onClick={() => navigate("/language/paths/new")}
-            className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-          >
+          </Button>
+          <Button variant="primary" onClick={() => navigate("/language/paths/new")}>
             New Language Path
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -106,7 +101,7 @@ export function ReadingLanguageOverviewPage() {
                           </span>
                         </div>
                       </div>
-                      <div className="text-text-disabled text-[11px] mt-0.5">
+                      <div className="text-text-muted text-[11px] mt-0.5">
                         {p.language}
                         {p.targetLevel ? ` → ${p.targetLevel}` : ""} ·{" "}
                         {next ? `next: ${next.title}` : "no unit queued"}

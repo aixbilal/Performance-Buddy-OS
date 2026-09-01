@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Button } from "../components/Button";
 
 /**
  * §34: "Use the smallest reasonable failing surface... A component failure
@@ -44,10 +45,10 @@ export class RouteErrorBoundary extends Component<Props, State> {
             {/* §35: Is my data safe? */}
             Your data is safe — this only affects this one screen, not the rest of PBOS.
           </p>
-          <button onClick={this.handleRetry} className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium">
+          <Button variant="primary" onClick={this.handleRetry}>
             {/* §35: What can I do? */}
             Try Again
-          </button>
+          </Button>
         </div>
       );
     }

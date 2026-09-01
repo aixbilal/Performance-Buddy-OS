@@ -8,6 +8,7 @@ import { SaveIndicator } from "../../components/SaveIndicator";
 import { usePerformance } from "./store";
 import { SystemForm, emptySystemForm } from "./SystemForm";
 import { DOMAINS, type Domain } from "./types";
+import { Button } from "../../components/Button";
 
 export function SystemsOverviewPage() {
   const {
@@ -78,17 +79,14 @@ export function SystemsOverviewPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-text-primary text-xl font-semibold">Systems</h2>
+          <h2 className="t-h2 text-text-primary">Systems</h2>
           <p className="text-text-muted text-sm">Your repeatable engines. A system can support several goals — or none.</p>
         </div>
         <div className="flex items-center gap-3">
           <SaveIndicator state={saveState} />
-          <button
-            onClick={() => setCreating((c) => !c)}
-            className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-          >
+          <Button variant="primary" onClick={() => setCreating((c) => !c)}>
             + Create System
-          </button>
+          </Button>
         </div>
       </div>
 

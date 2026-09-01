@@ -7,6 +7,7 @@ import { useKnowledge } from "../knowledge/store";
 import { useRoutine } from "../routine/store";
 import { useLanguage } from "./store";
 import { LANGUAGE_UNIT_KINDS, type LanguageUnitKind } from "./types";
+import { Button } from "../../components/Button";
 
 const STATUS_TONE = { active: "success", paused: "warning", completed: "neutral" } as const;
 
@@ -59,7 +60,7 @@ export function LanguagePathDetailPage() {
           <Link to="/language" className="text-text-muted text-xs hover:text-text-secondary">
             ← Reading &amp; Language
           </Link>
-          <h2 className="text-text-primary text-xl font-semibold mt-1">
+          <h2 className="t-h2 text-text-primary mt-1">
             {path.title}
             {path.archived && (
               <span className="ml-2">
@@ -75,24 +76,15 @@ export function LanguagePathDetailPage() {
         <div className="flex items-center gap-3">
           <SaveIndicator state={lang.saveState} />
           <Badge tone={STATUS_TONE[path.status]}>{path.status}</Badge>
-          <button
-            onClick={() => navigate(`/language/paths/${path.id}/session`)}
-            className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-          >
+          <Button variant="primary" onClick={() => navigate(`/language/paths/${path.id}/session`)}>
             Start Learning Session
-          </button>
-          <button
-            onClick={() => navigate(`/language/paths/${path.id}/edit`)}
-            className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-          >
+          </Button>
+          <Button variant="secondary" onClick={() => navigate(`/language/paths/${path.id}/edit`)}>
             Edit
-          </button>
-          <button
-            onClick={() => lang.archivePath(path.id, !path.archived)}
-            className="px-3 py-1.5 rounded-md text-text-muted text-xs hover:text-text-secondary"
-          >
+          </Button>
+          <Button variant="ghost" onClick={() => lang.archivePath(path.id, !path.archived)}>
             {path.archived ? "Unarchive" : "Archive"}
-          </button>
+          </Button>
           <button
             onClick={() => {
               lang.deletePath(path.id);
@@ -111,7 +103,7 @@ export function LanguagePathDetailPage() {
           <div className="text-text-primary text-lg font-semibold">
             {progress.percent === null ? "—" : `${progress.percent}%`}
           </div>
-          <p className="text-text-disabled text-[11px] mt-1">
+          <p className="text-text-muted text-[11px] mt-1">
             {progress.percent === null
               ? "No units yet — not 0%."
               : `${progress.completed} of ${progress.total} units. Curriculum position, not skill evidence.`}
@@ -135,7 +127,7 @@ export function LanguagePathDetailPage() {
                   Unlink
                 </button>
               </div>
-              <p className="text-text-disabled text-[11px] mt-1">
+              <p className="text-text-muted text-[11px] mt-1">
                 A reference only — the routine owns cadence and check-in history, this path owns
                 curriculum progress.
               </p>
@@ -164,7 +156,7 @@ export function LanguagePathDetailPage() {
                     </option>
                   ))}
               </select>
-              <span className="text-text-disabled text-[11px]">Routine owns cadence, not progress.</span>
+              <span className="text-text-muted text-[11px]">Routine owns cadence, not progress.</span>
             </div>
           )}
         </Card>
@@ -236,12 +228,9 @@ export function LanguagePathDetailPage() {
                 ))}
               </select>
             </label>
-            <button
-              type="submit"
-              className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-            >
+            <Button variant="primary" type="submit">
               Add Unit
-            </button>
+            </Button>
           </div>
           {uErr && <p className="text-status-danger text-[11px]">{uErr}</p>}
         </form>
@@ -266,7 +255,7 @@ export function LanguagePathDetailPage() {
                   className={`flex-1 text-sm ${u.completed ? "text-text-muted line-through" : "text-text-primary"}`}
                 >
                   {u.title}{" "}
-                  <span className="text-text-disabled text-[11px]">
+                  <span className="text-text-muted text-[11px]">
                     · {u.kind}
                     {u.knowledgeTopicId ? ` · ${topicTitle(u.knowledgeTopicId)}` : ""}
                   </span>
@@ -300,7 +289,7 @@ export function LanguagePathDetailPage() {
       </Card>
 
       <Card title={`Learning Sessions (${sessions.length})`}>
-        <p className="text-text-disabled text-[11px] mb-2">
+        <p className="text-text-muted text-[11px] mb-2">
           Actual practice events. Minutes and completion are activity — they never mark language
           knowledge as mastered.
         </p>
@@ -316,7 +305,7 @@ export function LanguagePathDetailPage() {
                 <span className="text-text-primary text-sm">
                   {s.date} · {s.activity}
                   {s.unitId ? (
-                    <span className="text-text-disabled text-[11px]">
+                    <span className="text-text-muted text-[11px]">
                       {" "}
                       · {units.find((u) => u.id === s.unitId)?.title ?? "unit removed"}
                     </span>

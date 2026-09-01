@@ -112,7 +112,7 @@ export function TodayPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-text-primary text-xl font-semibold">Today</h2>
+        <h2 className="t-h2 text-text-primary">Today</h2>
         <p className="text-text-muted text-sm">Real data from Goals/Systems/Actions and your Planner — not a mock.</p>
       </div>
 
@@ -143,7 +143,7 @@ export function TodayPage() {
             <div className="space-y-4">
               {current.length > 0 && (
                 <div>
-                  <div className="text-text-disabled text-[10px] uppercase tracking-wide mb-1">Now</div>
+                  <div className="text-text-muted text-[10px] uppercase tracking-wide mb-1">Now</div>
                   {current.map((b) => (
                     <Row key={b.id} block={b} />
                   ))}
@@ -151,7 +151,7 @@ export function TodayPage() {
               )}
               {next.length > 0 && (
                 <div>
-                  <div className="text-text-disabled text-[10px] uppercase tracking-wide mb-1">Next</div>
+                  <div className="text-text-muted text-[10px] uppercase tracking-wide mb-1">Next</div>
                   {next.map((b) => (
                     <Row key={b.id} block={b} />
                   ))}
@@ -159,7 +159,7 @@ export function TodayPage() {
               )}
               {later.length > 0 && (
                 <div>
-                  <div className="text-text-disabled text-[10px] uppercase tracking-wide mb-1">Later today</div>
+                  <div className="text-text-muted text-[10px] uppercase tracking-wide mb-1">Later today</div>
                   {later.map((b) => (
                     <Row key={b.id} block={b} />
                   ))}
@@ -167,7 +167,7 @@ export function TodayPage() {
               )}
               {earlier.length > 0 && (
                 <div>
-                  <div className="text-text-disabled text-[10px] uppercase tracking-wide mb-1">Earlier</div>
+                  <div className="text-text-muted text-[10px] uppercase tracking-wide mb-1">Earlier</div>
                   {earlier.map((b) => (
                     <Row key={b.id} block={b} muted />
                   ))}

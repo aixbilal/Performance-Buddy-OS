@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Badge } from "./Badge";
+import { Button } from "./Button";
 import { getAdapter } from "../domains/intelligence/applyAdapters";
 import type { ApplyContext } from "../domains/intelligence/applyAdapters";
 import type { Recommendation } from "../domains/intelligence/types";
@@ -58,8 +59,8 @@ export function RecommendationCard({
     <div className="bg-surface-inset border border-border-subtle rounded-md p-3" data-testid={`rec-${rec.id}`}>
       <div className="flex items-start justify-between gap-2 mb-1">
         <div className="min-w-0">
-          <div className="text-text-primary text-sm font-medium">{rec.title}</div>
-          <div className="text-text-secondary text-xs">
+          <div className="t-card-title text-text-primary truncate">{rec.title}</div>
+          <div className="t-small text-text-secondary truncate">
             {rec.domain} · {adapter?.label ?? rec.kind} · from {rec.generatedFrom}
           </div>
         </div>
@@ -121,7 +122,8 @@ export function RecommendationCard({
               />
             </label>
           ))}
-          <button
+          <Button
+            variant="primary"
             onClick={() => {
               const modified: Record<string, unknown> = {};
               for (const [k] of numericParams) {
@@ -131,65 +133,42 @@ export function RecommendationCard({
               onDecide(rec.id, "modified", modified);
               setEditing(false);
             }}
-            className="px-2.5 py-1 rounded bg-action-primary text-text-inverse text-[11px] font-medium"
           >
             Save modified proposal
-          </button>
+          </Button>
         </div>
       )}
 
       <div className="flex flex-wrap gap-2">
         {!decided && (
           <>
-            <button
-              onClick={() => onDecide(rec.id, "accepted")}
-              disabled={busy}
-              className="px-3 py-1 rounded-md bg-action-primary text-text-inverse text-xs disabled:opacity-40"
-            >
+            <Button variant="primary" disabled={busy} onClick={() => onDecide(rec.id, "accepted")}>
               Accept
-            </button>
+            </Button>
             {numericParams.length > 0 && (
-              <button
-                onClick={() => setEditing((v) => !v)}
-                className="px-3 py-1 rounded-md bg-action-secondary text-text-primary text-xs"
-              >
+              <Button variant="secondary" onClick={() => setEditing((v) => !v)}>
                 {editing ? "Cancel edit" : "Modify"}
-              </button>
+              </Button>
             )}
-            <button
-              onClick={() => onDecide(rec.id, "rejected")}
-              disabled={busy}
-              className="px-3 py-1 rounded-md text-text-secondary text-xs hover:text-status-danger disabled:opacity-40"
-            >
+            <Button variant="ghost" disabled={busy} onClick={() => onDecide(rec.id, "rejected")}>
               Reject
-            </button>
+            </Button>
           </>
         )}
         {canApply && (
-          <button
-            onClick={() => onApply(rec.id)}
-            disabled={busy}
-            className="px-3 py-1 rounded-md bg-action-primary text-text-inverse text-xs font-medium disabled:opacity-40"
-          >
+          <Button variant="primary" disabled={busy} onClick={() => onApply(rec.id)}>
             Apply
-          </button>
+          </Button>
         )}
         {rec.status === "apply-failed" && numericParams.length > 0 && (
-          <button
-            onClick={() => setEditing((v) => !v)}
-            className="px-3 py-1 rounded-md bg-action-secondary text-text-primary text-xs"
-          >
+          <Button variant="secondary" onClick={() => setEditing((v) => !v)}>
             {editing ? "Cancel edit" : "Modify & retry"}
-          </button>
+          </Button>
         )}
         {rec.status === "apply-failed" && (
-          <button
-            onClick={() => onApply(rec.id)}
-            disabled={busy}
-            className="px-3 py-1 rounded-md bg-action-secondary text-text-primary text-xs disabled:opacity-40"
-          >
+          <Button variant="secondary" disabled={busy} onClick={() => onApply(rec.id)}>
             Retry apply
-          </button>
+          </Button>
         )}
       </div>
     </div>

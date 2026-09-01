@@ -6,6 +6,7 @@ import { SaveIndicator } from "../../components/SaveIndicator";
 import { StatCard } from "../../components/StatCard";
 import { LoadingState } from "../../components/StateViews";
 import { useAcademic } from "./store";
+import { Button } from "../../components/Button";
 
 const STATUS_TONE = {
   "on-track": "success",
@@ -26,7 +27,7 @@ export function AcademicsOverviewPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-text-primary text-xl font-semibold">Academics</h2>
+          <h2 className="t-h2 text-text-primary">Academics</h2>
           <p className="text-text-muted text-sm">{semester.label}</p>
         </div>
         <div className="flex items-center gap-3">
@@ -37,12 +38,9 @@ export function AcademicsOverviewPage() {
           >
             Normal Study
           </button>
-          <button
-            onClick={() => navigate("/academics/new")}
-            className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-          >
+          <Button variant="primary" onClick={() => navigate("/academics/new")}>
             Add Course
-          </button>
+          </Button>
         </div>
       </div>
 

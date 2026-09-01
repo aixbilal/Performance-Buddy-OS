@@ -11,6 +11,7 @@ import { SelectField, TextArea, TextField } from "../../components/FormFields";
 import { useKnowledge } from "../knowledge/store";
 import { useLanguage } from "./store";
 import { SESSION_ACTIVITIES, type SessionActivity } from "./types";
+import { Button } from "../../components/Button";
 
 const TITLE_CASE = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -94,7 +95,7 @@ export function LearningSessionPage() {
         >
           ← {path.title}
         </Link>
-        <h2 className="text-text-primary text-xl font-semibold mt-1">Learning Session</h2>
+        <h2 className="t-h2 text-text-primary mt-1">Learning Session</h2>
         <p className="text-text-muted text-sm">
           {path.language}
           {path.targetLevel ? ` → ${path.targetLevel}` : ""}. Record what you actually practised.
@@ -147,13 +148,9 @@ export function LearningSessionPage() {
             rows={2}
           />
           {errors._ && <p className="text-status-danger text-xs">{errors._}</p>}
-          <button
-            type="submit"
-            disabled={lang.saveState === "saving"}
-            className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium disabled:opacity-50"
-          >
+          <Button variant="primary" type="submit" disabled={lang.saveState === "saving"}>
             Log Session
-          </button>
+          </Button>
         </form>
       </Card>
 
@@ -166,13 +163,10 @@ export function LearningSessionPage() {
           <div className="mt-3">
             {linkedTopicId ? (
               <>
-                <button
-                  onClick={recordEvidence}
-                  className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-                >
+                <Button variant="secondary" onClick={recordEvidence}>
                   Record recall as Knowledge evidence
-                </button>
-                <p className="text-text-disabled text-[11px] mt-1">
+                </Button>
+                <p className="text-text-muted text-[11px] mt-1">
                   Optional and explicit — Knowledge mastery is never updated automatically.
                 </p>
               </>

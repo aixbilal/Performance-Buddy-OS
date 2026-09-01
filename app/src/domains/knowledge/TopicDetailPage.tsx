@@ -10,6 +10,7 @@ import { useAcademic } from "../academic/store";
 import { useObsidian } from "../obsidian/store";
 import { EMPTY_SOURCE_FORM, SourceForm } from "./SourceForm";
 import { EVIDENCE_TYPES, type EvidenceType, type SourceType } from "./types";
+import { Button } from "../../components/Button";
 
 const STATE_TONE = {
   new: "neutral",
@@ -74,7 +75,7 @@ export function TopicDetailPage() {
           <Link to="/knowledge" className="text-text-muted text-xs hover:text-text-secondary">
             ← Knowledge
           </Link>
-          <h2 className="text-text-primary text-xl font-semibold mt-1">{topic.title}</h2>
+          <h2 className="t-h2 text-text-primary mt-1">{topic.title}</h2>
           <div className="flex items-center gap-2 mt-1">
             <Badge>{topic.category}</Badge>
             {topic.context && <span className="text-text-muted text-xs">{topic.context}</span>}
@@ -82,12 +83,9 @@ export function TopicDetailPage() {
         </div>
         <div className="flex items-center gap-3">
           <SaveIndicator state={saveState} />
-          <button
-            onClick={() => navigate(`/knowledge/${topic.id}/edit`)}
-            className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-          >
+          <Button variant="secondary" onClick={() => navigate(`/knowledge/${topic.id}/edit`)}>
             Edit Topic
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -98,7 +96,7 @@ export function TopicDetailPage() {
             <Badge tone={STATE_TONE[topic.state]}>{topic.state}</Badge>
             {reviewDue && <Badge tone="warning">Review Due</Badge>}
           </div>
-          <p className="text-text-disabled text-[10px] mt-1">
+          <p className="text-text-muted text-[10px] mt-1">
             "Strong" and "Review Due" can both be true — tracked separately.
           </p>
           <button
@@ -107,7 +105,7 @@ export function TopicDetailPage() {
           >
             Mark reviewed
           </button>
-          <p className="text-text-disabled text-[10px] mt-1">
+          <p className="text-text-muted text-[10px] mt-1">
             Updates the review schedule only — never mastery.
           </p>
         </Card>
@@ -116,7 +114,7 @@ export function TopicDetailPage() {
           <div className="text-text-primary text-lg font-semibold">
             {topic.hasEvidence ? `${topic.masteryPercent}%` : "—"}
           </div>
-          <p className="text-text-disabled text-[10px] mt-1">
+          <p className="text-text-muted text-[10px] mt-1">
             {topic.hasEvidence ? "Derived from evidence below." : "No mastery evidence yet."}
           </p>
         </Card>
@@ -174,7 +172,7 @@ export function TopicDetailPage() {
             </button>
           }
         >
-          <p className="text-text-disabled text-[10px] mb-2">
+          <p className="text-text-muted text-[10px] mb-2">
             References only — the actual note content lives in Obsidian, not duplicated here. Adding a
             source is not evidence of understanding.
           </p>
@@ -257,7 +255,7 @@ export function TopicDetailPage() {
             </button>
           }
         >
-          <p className="text-text-disabled text-[10px] mb-2">
+          <p className="text-text-muted text-[10px] mb-2">
             Mastery above is derived from this evidence. Professor coverage, personal study and saving
             a source never create evidence.
           </p>
@@ -330,12 +328,9 @@ export function TopicDetailPage() {
                 />
               </div>
               {evError && <p className="text-status-danger text-[11px]">{evError}</p>}
-              <button
-                type="submit"
-                className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-              >
+              <Button variant="primary" type="submit">
                 Record Evidence
-              </button>
+              </Button>
             </form>
           )}
 
@@ -370,7 +365,7 @@ export function TopicDetailPage() {
           </Link>
         }
       >
-        <p className="text-text-disabled text-[10px] mb-2">
+        <p className="text-text-muted text-[10px] mb-2">
           References to note files in your Obsidian vault. Obsidian owns the note bodies; linking a
           note is not evidence of understanding and never changes mastery.
         </p>

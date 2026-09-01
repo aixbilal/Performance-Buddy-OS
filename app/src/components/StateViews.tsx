@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Button } from "./Button";
 
 /**
  * Shared Day-17 resilience state views. These sit alongside `EmptyState`
@@ -60,12 +61,9 @@ export function ErrorState({
       {detail && <p className="text-text-muted text-xs max-w-sm mb-1">{detail}</p>}
       <p className="text-text-muted text-xs max-w-sm mb-4">{dataSafeNote}</p>
       {onRetry && (
-        <button
-          onClick={onRetry}
-          className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium"
-        >
+        <Button variant="primary" onClick={onRetry}>
           {retryLabel}
-        </button>
+        </Button>
       )}
     </div>
   );

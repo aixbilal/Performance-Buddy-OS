@@ -7,6 +7,7 @@
  */
 import { useState } from "react";
 import { TextArea, TextField, SelectField } from "./formPrimitives";
+import { FormActions } from "../../components/FormActions";
 import {
   DOMAINS,
   GOAL_TYPES,
@@ -176,24 +177,9 @@ export function GoalForm({
         rows={3}
       />
 
-      {errors._ && <p className="text-status-danger text-xs">{errors._}</p>}
+      {errors._ && <p className="t-small text-status-danger">{errors._}</p>}
 
-      <div className="flex gap-2 pt-1">
-        <button
-          type="submit"
-          disabled={busy}
-          className="px-3 py-1.5 rounded-md bg-action-primary text-text-inverse text-xs font-medium disabled:opacity-50"
-        >
-          {submitLabel}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-3 py-1.5 rounded-md bg-action-secondary text-text-primary text-xs font-medium"
-        >
-          Cancel
-        </button>
-      </div>
+      <FormActions submitLabel={submitLabel} busy={busy} onCancel={onCancel} />
     </form>
   );
 }
