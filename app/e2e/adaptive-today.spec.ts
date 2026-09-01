@@ -33,19 +33,31 @@ async function hashTo(page: Page, route: string, expectText: RegExp) {
   await expect(page.getByText(expectText).first()).toBeVisible({ timeout: 15_000 });
 }
 
+/** Local civil date `yyyy-mm-dd` — must match the app's `isoDateOf(new Date())`,
+ *  NOT `toISOString()` (UTC), or a block pins to the wrong day in the hours
+ *  either side of midnight in a non-UTC timezone. */
+function localIsoDate(d = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 async function addBlock(page: Page, title: string, start: string, end: string) {
   await hashTo(page, "#/planner", /Planner|capacity|block/i);
   await page.getByLabel("Block title").fill(title);
   await page.getByLabel("Weekday").selectOption({ index: new Date().getDay() === 0 ? 6 : new Date().getDay() - 1 });
   // pin to today so it matches regardless of weekday handling
   await page.getByLabel(/Pin to a specific date/i).check();
-  await page.getByLabel("Block date").fill(new Date().toISOString().slice(0, 10));
+  await page.getByLabel("Block date").fill(localIsoDate());
   await page.getByLabel("Start time").fill(start);
   await page.getByLabel("End time").fill(end);
   await page.getByRole("button", { name: /add block|schedule block|create/i }).first().click();
 }
 
 test("follow-plan: nothing elapsed or diverging → no adaptation surface", async ({ page }) => {
+  // A far-future block today (23:30) is "planned"; in the last 30 min of the
+  // day it would already be elapsed, so skip that thin window rather than flake.
+  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  test.skip(nowMin >= 23 * 60 + 30, "runs inside the late block window — 'planned' state not deterministic");
   await boot(page);
   // A far-future block today: planned, not elapsed → the plan still fits.
   await addBlock(page, "Late review", "23:30", "23:59");
