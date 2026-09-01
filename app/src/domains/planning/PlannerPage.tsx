@@ -10,6 +10,15 @@ import { usePerformance } from "../performance/store";
 import { DAY_LABELS, timeLabel } from "./mockData";
 import type { PlanningBlockInput } from "./types";
 import type { ScheduleProposal } from "./engine";
+import { isoDateOf, addDaysIso, startOfWeekIso, mondayIndexOf, blocksOnDate } from "./engine";
+import {
+  buildPlanningDiff,
+  placeCandidates,
+  type DatedBlock,
+  type PlanningCandidate,
+  type PlanningDiff,
+} from "./adaptiveEngine";
+import { PlanningDiffReview } from "./PlanningDiffReview";
 import { Button } from "../../components/Button";
 
 const FRAGILITY_LABEL = {
@@ -87,12 +96,21 @@ export function PlannerPage() {
     setCapacity,
     generateProposal,
     applyProposal,
+    applyPlanningDiff,
+    undoPlanningChangeSet,
+    changeSets,
+    occurrenceExceptions,
     todayIso,
     loaded,
     loadError,
   } = usePlanning();
   const { actions } = usePerformance();
   const navigate = useNavigate();
+
+  // V2 adaptive-planning: a concrete-date diff over the coming 7 days.
+  const [v2Diff, setV2Diff] = useState<PlanningDiff | null>(null);
+  const [v2Busy, setV2Busy] = useState(false);
+  const [v2Msg, setV2Msg] = useState<string | null>(null);
 
   const [form, setForm] = useState<BlockForm>(EMPTY_FORM);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -108,6 +126,84 @@ export function PlannerPage() {
 
   const dayViolations = violations.filter((v) => v.scope === "day");
   const weekViolation = violations.find((v) => v.scope === "week");
+
+  const horizonStartIso = startOfWeekIso(todayIso ?? isoDateOf(new Date()));
+  const horizonEndIso = addDaysIso(horizonStartIso, 6);
+
+  /** Resolve the canonical blocks onto each date of the coming week. */
+  const datedBlocks = useMemo<DatedBlock[]>(() => {
+    const out: DatedBlock[] = [];
+    for (let i = 0; i < 7; i++) {
+      const iso = addDaysIso(horizonStartIso, i);
+      const wd = mondayIndexOf(iso);
+      const skipped = new Set(
+        occurrenceExceptions
+          .filter((e) => e.occurrenceDate === iso && e.state !== "done")
+          .map((e) => e.blockId),
+      );
+      for (const b of blocksOnDate(blocks, iso, wd)) {
+        if (skipped.has(b.id)) continue;
+        out.push({ ...b, date: iso, origin: b.source === "manual" ? "manual" : "generated" });
+      }
+    }
+    return out;
+  }, [blocks, occurrenceExceptions, horizonStartIso]);
+
+  const runAdaptWeek = () => {
+    setV2Msg(null);
+    const candidates: PlanningCandidate[] = unscheduledActions
+      .filter((a) => picked.has(a.id))
+      .map((a, i) => ({
+        id: `cand_${a.id}`,
+        sourceDomain: "Goals & Systems",
+        sourceEntityType: "action",
+        sourceEntityId: a.id,
+        actionId: a.id,
+        title: a.title,
+        context: "Planner adapt",
+        estMinutes: a.estMinutes && a.estMinutes > 0 ? a.estMinutes : 45,
+        requiredBefore: null,
+        earliestDate: null,
+        preferredTimeWindow: null,
+        minimumBlockMinutes: null,
+        splittable: false,
+        reasonCodes: ["USER_SELECTED"],
+        priority: i,
+      }));
+    if (candidates.length === 0) {
+      setV2Msg("Pick at least one item under “Work needing placement” first.");
+      return;
+    }
+    const plan = placeCandidates({
+      candidates,
+      horizonStartIso,
+      horizonEndIso,
+      datedBlocks,
+      dailyCapacityMinutes: capacity.dailyCapacityMinutes,
+      weeklyCapacityMinutes: capacity.weeklyCapacityMinutes,
+      scope: "week",
+    });
+    setV2Diff(buildPlanningDiff(plan, [], datedBlocks.filter((b) => b.locked || b.type === "fixed").map((b) => b.id)));
+  };
+
+  const applyV2Diff = async () => {
+    if (!v2Diff) return;
+    setV2Busy(true);
+    const res = await applyPlanningDiff(v2Diff, {
+      scope: "week",
+      targetStartDate: horizonStartIso,
+      targetEndDate: horizonEndIso,
+      rationale: "Planner: adapt the coming week",
+    });
+    setV2Busy(false);
+    setV2Msg(res.message);
+    if (res.ok) {
+      setV2Diff(null);
+      setPicked(new Set());
+    }
+  };
+
+  const recentChangeSets = changeSets.slice(0, 4);
 
   const scheduledActionIds = useMemo(
     () => new Set(blocks.map((b) => b.actionId).filter(Boolean) as string[]),
@@ -404,6 +500,53 @@ export function PlannerPage() {
           </div>
         </Card>
       )}
+
+      {/* --- V2: adapt the coming week on concrete dates --- */}
+      <Card
+        title="Adapt this week (concrete dates)"
+        action={
+          <Button variant="secondary" size="sm" onClick={runAdaptWeek} disabled={picked.size === 0}>
+            Build a diff
+          </Button>
+        }
+      >
+        <p className="text-text-secondary text-xs mb-2">
+          Places the items you picked above onto real dates this week, respecting fixed/locked/manual
+          blocks, capacity and buffer. Review the diff, then Apply — with a one-click Undo.
+        </p>
+        {v2Msg && <p className="text-text-secondary text-xs mb-2">{v2Msg}</p>}
+        {v2Diff && (
+          <PlanningDiffReview
+            diff={v2Diff}
+            busy={v2Busy}
+            onApply={() => void applyV2Diff()}
+            onDiscard={() => setV2Diff(null)}
+          />
+        )}
+        {recentChangeSets.length > 0 && (
+          <div className="mt-3">
+            <p className="t-caption text-text-muted uppercase tracking-wide mb-1">Recent plan changes</p>
+            <ul className="space-y-1">
+              {recentChangeSets.map((cs) => (
+                <li key={cs.id} className="flex items-center justify-between text-xs">
+                  <span className="text-text-secondary">
+                    {cs.scope} · {cs.status}
+                    {cs.rationale ? ` · ${cs.rationale}` : ""}
+                  </span>
+                  {cs.status === "applied" && (
+                    <button
+                      onClick={() => void undoPlanningChangeSet(cs.id)}
+                      className="text-text-muted underline hover:text-text-secondary"
+                    >
+                      Undo
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </Card>
 
       {/* --- Plan Builder --- */}
       <Card title="Add a Block (Plan Builder)">

@@ -5,6 +5,8 @@ import { Badge } from "../../components/Badge";
 import { LoadingState } from "../../components/StateViews";
 import { useAnalytics } from "./store";
 import { useAICoach } from "../intelligence/store";
+import { useCapture } from "../capture/store";
+import { usePlanning } from "../planning/store";
 import { Button } from "../../components/Button";
 
 /**
@@ -14,8 +16,18 @@ import { Button } from "../../components/Button";
 export function WeeklyReviewPage() {
   const analytics = useAnalytics();
   const coach = useAICoach();
+  const capture = useCapture();
+  const planning = usePlanning();
   const navigate = useNavigate();
   const snap = analytics.weeklySnapshot();
+
+  // V2: decisions PBOS already knows are open — surfaced so the user acts on
+  // them rather than re-typing facts PBOS owns.
+  const openProposals = capture.proposals.filter(
+    (p) => p.status === "proposed" || p.status === "accepted" || p.status === "modified",
+  ).length;
+  const proposedChangeSets = planning.changeSets.filter((c) => c.status === "proposed").length;
+  const appliedChangeSets = planning.changeSets.filter((c) => c.status === "applied").length;
   const [wins, setWins] = useState("");
   const [friction, setFriction] = useState("");
   const [aiNote, setAiNote] = useState<string | null>(null);
@@ -78,6 +90,49 @@ export function WeeklyReviewPage() {
           Data sufficiency this week: <span className="capitalize">{snap.dataSufficiency}</span>. One
           difficult week is not a trend.
         </p>
+      </Card>
+
+      <Card title="Still open — decide or correct">
+        {openProposals === 0 && proposedChangeSets === 0 ? (
+          <p className="text-text-secondary text-sm">
+            Nothing waiting on a decision. Add any events PBOS could not have known below.
+          </p>
+        ) : (
+          <ul className="space-y-1.5 text-sm">
+            {openProposals > 0 && (
+              <li className="flex items-center justify-between">
+                <span className="text-text-primary">
+                  {openProposals} Natural Capture proposal{openProposals === 1 ? "" : "s"} to review
+                </span>
+                <button
+                  onClick={() => navigate("/capture-inbox")}
+                  className="text-text-muted text-xs underline hover:text-text-secondary"
+                >
+                  Open Capture Inbox
+                </button>
+              </li>
+            )}
+            {proposedChangeSets > 0 && (
+              <li className="flex items-center justify-between">
+                <span className="text-text-primary">
+                  {proposedChangeSets} proposed plan change{proposedChangeSets === 1 ? "" : "s"}
+                </span>
+                <button
+                  onClick={() => navigate("/planner")}
+                  className="text-text-muted text-xs underline hover:text-text-secondary"
+                >
+                  Open Planner
+                </button>
+              </li>
+            )}
+          </ul>
+        )}
+        {appliedChangeSets > 0 && (
+          <p className="text-text-secondary text-[11px] mt-2">
+            {appliedChangeSets} plan change{appliedChangeSets === 1 ? " was" : "s were"} applied this
+            period (undoable from the Planner).
+          </p>
+        )}
       </Card>
 
       <Card title="Your notes (separate from the facts)">
