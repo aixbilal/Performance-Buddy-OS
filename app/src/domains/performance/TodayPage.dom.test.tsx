@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { PerformanceProvider, usePerformance } from "./store";
 import { PlanningProvider, usePlanning } from "../planning/store";
@@ -123,5 +123,30 @@ describe("TodayPage — canonical Planning integration", () => {
     await plan.createBlock({ ...base, title: "X", day: 0, date: plan.todayIso, startMinute: 600, endMinute: 660 });
     await waitFor(() => expect(plan.todaysBlocks).toHaveLength(1));
     expect(screen.getByText("X")).toBeInTheDocument();
+  });
+
+  // ---- V1 Visual Correction §16–§21: operating hierarchy ----
+
+  it("promotes the current/next block into one primary action surface with a Start Focus", async () => {
+    await mount();
+    await plan.createBlock({
+      ...base,
+      title: "Review AVL deletion cases",
+      day: 0,
+      date: plan.todayIso,
+      startMinute: 0,
+      endMinute: 24 * 60, // spans now → always the featured 'Now' block
+    });
+    const region = await screen.findByRole("region", { name: /current focus/i });
+    expect(within(region).getByText("Review AVL deletion cases")).toBeInTheDocument();
+    expect(within(region).getByText(/^Now$/)).toBeInTheDocument();
+    expect(within(region).getByRole("button", { name: /start focus/i })).toBeInTheDocument();
+  });
+
+  it("keeps all three summary metrics — demoted, not deleted", async () => {
+    await mount();
+    expect(screen.getByText("Actions Completed")).toBeInTheDocument();
+    expect(screen.getByText("Scheduled Today")).toBeInTheDocument();
+    expect(screen.getByText(/Health$/)).toBeInTheDocument();
   });
 });

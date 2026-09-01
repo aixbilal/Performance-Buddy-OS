@@ -167,4 +167,10 @@
   --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.55);
   --shadow-float: 0 8px 24px rgba(0, 0, 0, 0.45);
   --ring-focus: 0 0 0 2px var(--color-accent-primary);
+
+  /* Faint state edge for the single primary/next-action surface (V1 Visual
+     Correction §18) — a 1px inset accent hairline + a restrained, tight outer
+     bloom. State, not decoration; never applied to ordinary cards. */
+  --shadow-active-edge: inset 0 0 0 1px var(--color-accent-soft),
+    0 10px 30px -16px rgba(111, 141, 170, 0.5);
 }

@@ -24,11 +24,19 @@
  * resolved together, once, rather than patched per-screenshot.
  */
 
+import type { IconName } from "../components/Icon";
+
 export type NavItem = {
   id: string;
   label: string;
   path: string;
   status: "placeholder" | "structured" | "implemented";
+  /**
+   * Canonical icon for this destination (V1 Visual Correction §9–§10). One
+   * consistent line-icon family; the visible label still carries the meaning,
+   * the icon is decorative.
+   */
+  icon: IconName;
 };
 
 export type NavGroup = {
@@ -42,37 +50,37 @@ export const NAVIGATION: NavGroup[] = [
     id: "core",
     label: "Today",
     items: [
-      { id: "today", label: "Today", path: "/", status: "structured" },
-      { id: "focus", label: "Focus", path: "/focus", status: "structured" },
-      { id: "goals", label: "Goals", path: "/goals", status: "structured" },
-      { id: "planner", label: "Planner", path: "/planner", status: "structured" },
-      { id: "calendar", label: "Calendar", path: "/calendar", status: "structured" },
+      { id: "today", label: "Today", path: "/", status: "structured", icon: "today" },
+      { id: "focus", label: "Focus", path: "/focus", status: "structured", icon: "focus" },
+      { id: "goals", label: "Goals", path: "/goals", status: "structured", icon: "goals" },
+      { id: "planner", label: "Planner", path: "/planner", status: "structured", icon: "planner" },
+      { id: "calendar", label: "Calendar", path: "/calendar", status: "structured", icon: "calendar" },
     ],
   },
   {
     id: "life",
     label: "Life",
     items: [
-      { id: "academics", label: "Academics", path: "/academics", status: "structured" },
-      { id: "development", label: "Development", path: "/development", status: "structured" },
-      { id: "fitness", label: "Fitness", path: "/fitness", status: "structured" },
-      { id: "routine", label: "Routine", path: "/routine", status: "structured" },
-      { id: "language", label: "Language", path: "/language", status: "structured" },
-      { id: "money", label: "Money", path: "/money", status: "structured" },
+      { id: "academics", label: "Academics", path: "/academics", status: "structured", icon: "academics" },
+      { id: "development", label: "Development", path: "/development", status: "structured", icon: "development" },
+      { id: "fitness", label: "Fitness", path: "/fitness", status: "structured", icon: "fitness" },
+      { id: "routine", label: "Routine", path: "/routine", status: "structured", icon: "routine" },
+      { id: "language", label: "Language", path: "/language", status: "structured", icon: "language" },
+      { id: "money", label: "Money", path: "/money", status: "structured", icon: "money" },
     ],
   },
   {
     id: "intelligence",
     label: "Intelligence",
     items: [
-      { id: "knowledge", label: "Knowledge", path: "/knowledge", status: "structured" },
-      { id: "analytics", label: "Analytics", path: "/analytics", status: "structured" },
-      { id: "ai-coach", label: "AI Coach", path: "/ai-coach", status: "structured" },
+      { id: "knowledge", label: "Knowledge", path: "/knowledge", status: "structured", icon: "knowledge" },
+      { id: "analytics", label: "Analytics", path: "/analytics", status: "structured", icon: "analytics" },
+      { id: "ai-coach", label: "AI Coach", path: "/ai-coach", status: "structured", icon: "ai" },
     ],
   },
   {
     id: "system",
     label: "System",
-    items: [{ id: "settings", label: "Settings", path: "/settings", status: "structured" }],
+    items: [{ id: "settings", label: "Settings", path: "/settings", status: "structured", icon: "settings" }],
   },
 ];

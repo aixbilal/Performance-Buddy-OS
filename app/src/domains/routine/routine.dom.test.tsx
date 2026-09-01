@@ -138,6 +138,25 @@ describe("Routines — driven through the real UI", () => {
     expect(await screen.findByLabelText(/link a system to dsa warmup/i)).toBeInTheDocument();
   });
 
+  it("Daily Check-In uses the full-width row layout and keeps one-click check-in (§22–§24)", async () => {
+    const user = userEvent.setup();
+    const first = render(<App />);
+    await createRoutine(user, "Hydration");
+    first.unmount();
+
+    render(<App start="/routine/check-in" />);
+    // full-width row: routine link + its one-click state control, plus a
+    // progress summary — no streak / XP / rings anywhere
+    expect(await screen.findByRole("link", { name: /Hydration/ })).toBeInTheDocument();
+    expect(screen.getByText(/recorded today/i)).toBeInTheDocument();
+    const group = screen.getByRole("group", { name: /check-in for hydration/i });
+    expect(group).toBeInTheDocument();
+    expect(screen.queryByText(/streak|XP|badge/i)).not.toBeInTheDocument();
+
+    await user.click(within(group).getByRole("button", { name: /mark hydration done/i }));
+    expect(await screen.findByText(/recorded Done/i)).toBeInTheDocument();
+  });
+
   it("pause hides a routine from Daily Check-In but keeps it (and its history)", async () => {
     const user = userEvent.setup();
     render(<App />);
