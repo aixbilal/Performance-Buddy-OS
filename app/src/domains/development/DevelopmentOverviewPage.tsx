@@ -3,6 +3,7 @@ import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { EmptyState } from "../../components/EmptyState";
 import { SaveIndicator } from "../../components/SaveIndicator";
+import { LoadingState } from "../../components/StateViews";
 import { useDevelopment } from "./store";
 
 const STATUS_TONE = {
@@ -21,6 +22,8 @@ export function DevelopmentOverviewPage() {
     saveState,
     loaded,
   } = useDevelopment();
+
+  if (!loaded) return <LoadingState label="Loading development…" />;
 
   const activeProjects = projects.filter((p) => !p.archived);
   const activeSkills = skills.filter((s) => !s.archived);

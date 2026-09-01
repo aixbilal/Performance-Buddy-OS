@@ -24,6 +24,7 @@ import {
 import { cacheAdapter } from "../persistence/cache";
 import type { SaveState } from "../resilience/types";
 import { resolveEffectiveConfig, resolveResetScope } from "./engine";
+import { recordRevision } from "../revision/recorder";
 import { makeSettingsRepo, type SettingsRepo } from "./repo";
 import {
   DEFAULT_APPEARANCE,
@@ -147,11 +148,35 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       .catch(() => setSaveState("failed")); // failure preserves the in-memory value
   }
 
-  const setBaseConfig = (patch: Partial<BaseConfig>) =>
+  const setBaseConfig = (patch: Partial<BaseConfig>) => {
     commit({ ...config, baseConfig: { ...config.baseConfig, ...patch } });
+    recordRevision({
+      domain: "settings",
+      entityType: "settings-config",
+      entityId: "base",
+      operation: "update",
+      source: "user",
+      summary: `Changed base configuration (${Object.keys(patch).join(", ")})`,
+      metadata: { patch },
+    });
+  };
 
   // mode change never touches base or overrides
-  const setMode = (mode: OperatingMode) => commit({ ...config, mode });
+  const setMode = (mode: OperatingMode) => {
+    const before = config.mode;
+    commit({ ...config, mode });
+    if (before !== mode) {
+      recordRevision({
+        domain: "settings",
+        entityType: "settings-config",
+        entityId: "mode",
+        operation: "status-change",
+        source: "user",
+        summary: `Operating mode ${before} → ${mode}`,
+        metadata: { before, after: mode },
+      });
+    }
+  };
 
   const applyOnboardingBaseline = (input: {
     weekdayAcademicCapacityMinutes: number;

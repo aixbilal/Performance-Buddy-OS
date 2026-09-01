@@ -2,6 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { EmptyState } from "../../components/EmptyState";
+import { LoadingState } from "../../components/StateViews";
 import { SaveIndicator } from "../../components/SaveIndicator";
 import { usePerformance } from "./store";
 import type { GoalAttention } from "./engine";
@@ -43,7 +44,7 @@ export function GoalsOverviewPage() {
   const navigate = useNavigate();
 
   if (!loaded) {
-    return <div className="text-text-muted text-sm">Loading your goals…</div>;
+    return <LoadingState label="Loading your goals…" />;
   }
 
   if (goals.length === 0) {

@@ -30,6 +30,8 @@ import { useRoutine } from "../routine/store";
 import { useAnalytics } from "../analytics/store";
 import { computeCombinedImpact, parseProposals } from "./engine";
 import { getAdapter, type ApplyContext } from "./applyAdapters";
+import { recordRevision } from "../revision/recorder";
+import type { RevisionDomain } from "../revision/types";
 import { makeAIRepo, type AIRepo } from "./repo";
 import {
   DEFAULT_PERMISSIONS,
@@ -405,6 +407,24 @@ export function AICoachProvider({ children }: { children: ReactNode }) {
     };
     await persistRec(appliedRec);
     await appendEvent(id, "applied", { result: outcome.result });
+    // Also surface the applied canonical mutation in the general cross-domain
+    // revision log (source: "ai-applied"). The AI decision trail stays in
+    // ai_decision_events; this is the one-place-for-every-domain view.
+    const APPLIED_DOMAIN: Record<string, RevisionDomain> = {
+      "create-action": "performance",
+      "schedule-block": "planning",
+      "set-knowledge-review": "knowledge",
+      "adjust-routine-cadence": "routine",
+    };
+    recordRevision({
+      domain: APPLIED_DOMAIN[rec.kind] ?? "performance",
+      entityType: rec.kind,
+      entityId: String((outcome.result as Record<string, unknown> | null)?.id ?? id),
+      operation: "apply",
+      source: "ai-applied",
+      summary: `AI-applied: ${rec.title}`,
+      metadata: { recommendationId: id, kind: rec.kind },
+    });
     return { ok: true, status: "applied", message: outcome.message, triggersReplan: adapter.triggersReplan };
   };
 

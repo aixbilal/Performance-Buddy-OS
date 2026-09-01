@@ -1,12 +1,16 @@
 import { Link } from "react-router-dom";
 import { Card } from "../../components/Card";
+import { LoadingState } from "../../components/StateViews";
 import { useAcademic } from "./store";
 import { calculateRequiredAverageForTarget } from "./engine";
 
 const TARGET_SGPA = 3.7;
 
 export function SgpaCgpaPage() {
-  const { semester, courses, cgpa, projectedSGPA } = useAcademic();
+  const { semester, courses, cgpa, projectedSGPA, loaded } = useAcademic();
+
+  // LOADING ≠ EMPTY — a blank "—" grid must not stand in for "still loading".
+  if (!loaded) return <LoadingState label="Loading academic record…" />;
 
   const activeCourses = courses.filter((c) => !c.archived);
   const requiredForTarget = calculateRequiredAverageForTarget(

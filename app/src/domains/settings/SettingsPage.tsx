@@ -4,6 +4,7 @@ import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { SaveIndicator } from "../../components/SaveIndicator";
 import { PersistenceStatusLine } from "../../components/PersistenceStatusLine";
+import { LoadingState } from "../../components/StateViews";
 import { useSettings } from "./store";
 import { useAICoach } from "../intelligence/store";
 import { useObsidian } from "../obsidian/store";
@@ -39,6 +40,9 @@ export function SettingsPage() {
   };
 
   const eff = s.effectiveConfig;
+
+  // LOADING ≠ EMPTY — never render defaults as if they were the user's saved config.
+  if (!s.loaded) return <LoadingState label="Loading settings…" />;
 
   return (
     <div className="space-y-6">

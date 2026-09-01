@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
+import { LoadingState } from "../../components/StateViews";
 import { useAnalytics } from "./store";
 import { monthBounds } from "./engine";
 
@@ -23,6 +24,9 @@ export function MonthlyReviewPage() {
   const b = monthBounds(new Date().toISOString().slice(0, 10));
   const comparisons = analytics.monthlyComparisons();
   const [observations, setObservations] = useState("");
+
+  // LOADING ≠ EMPTY.
+  if (!analytics.loaded) return <LoadingState label="Loading this month…" />;
 
   return (
     <div className="space-y-6">

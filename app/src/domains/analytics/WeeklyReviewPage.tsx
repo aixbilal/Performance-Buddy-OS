@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
+import { LoadingState } from "../../components/StateViews";
 import { useAnalytics } from "./store";
 import { useAICoach } from "../intelligence/store";
 
@@ -18,6 +19,9 @@ export function WeeklyReviewPage() {
   const [friction, setFriction] = useState("");
   const [aiNote, setAiNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // LOADING ≠ EMPTY. (An AI failure below is surfaced inline and never gates this.)
+  if (!analytics.loaded) return <LoadingState label="Loading this week…" />;
 
   const lines = (s: string) =>
     s.split("\n").map((x) => x.trim()).filter(Boolean);

@@ -34,6 +34,7 @@ beforeEach(() => window.localStorage.clear());
 afterEach(() => window.localStorage.clear());
 
 async function createPlan(user: ReturnType<typeof userEvent.setup>, title: string) {
+  await screen.findAllByRole("button", { name: /create (your first plan|training plan)/i }); // wait past LOADING
   const start =
     screen.queryByRole("button", { name: /create your first plan/i }) ??
     screen.getByRole("button", { name: "Create Training Plan" });

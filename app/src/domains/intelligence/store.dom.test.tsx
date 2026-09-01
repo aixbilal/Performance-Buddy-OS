@@ -10,6 +10,8 @@ import { RoutineProvider } from "../routine/store";
 import { MoneyProvider, useMoney } from "../money/store";
 import { PlanningProvider, usePlanning } from "../planning/store";
 import { AnalyticsProvider } from "../analytics/store";
+import { RevisionProvider, useRevision } from "../revision/store";
+import { __resetRevisionRecorderForTest } from "../revision/recorder";
 import { AICoachProvider, useAICoach } from "./store";
 
 vi.mock("@tauri-apps/api/core", () => ({ isTauri: () => false, invoke: vi.fn() }));
@@ -20,6 +22,7 @@ let perf: ReturnType<typeof usePerformance>;
 let know: ReturnType<typeof useKnowledge>;
 let plan: ReturnType<typeof usePlanning>;
 let money: ReturnType<typeof useMoney>;
+let rev: ReturnType<typeof useRevision>;
 
 function Probe() {
   coach = useAICoach();
@@ -27,6 +30,7 @@ function Probe() {
   know = useKnowledge();
   plan = usePlanning();
   money = useMoney();
+  rev = useRevision();
   return (
     <div data-testid="ready">
       {String(coach.loaded && perf.loaded && know.loaded && plan.loaded)}
@@ -35,6 +39,7 @@ function Probe() {
 }
 function Harness() {
   return (
+    <RevisionProvider>
     <PerformanceProvider>
       <AcademicProvider>
         <KnowledgeProvider>
@@ -54,10 +59,14 @@ function Harness() {
         </KnowledgeProvider>
       </AcademicProvider>
     </PerformanceProvider>
+    </RevisionProvider>
   );
 }
 
-beforeEach(() => window.localStorage.clear());
+beforeEach(() => {
+  window.localStorage.clear();
+  __resetRevisionRecorderForTest();
+});
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
@@ -120,6 +129,39 @@ describe("AI decision loop — generate → decide → validate → canonical Ap
       expect(coach.recommendations.find((r) => r.id === block.id)?.status).toBe("applied"),
     );
     expect(coach.eventsFor(block.id).length).toBe(3);
+  });
+
+  it("an AI-applied canonical mutation also appends a general revision event with source 'ai-applied' — and the AI decision trail stays separate", async () => {
+    await mount();
+    await seed();
+
+    let gen!: Awaited<ReturnType<typeof coach.generate>>;
+    await act(async () => {
+      gen = await coach.generate("weekly-review", ["Knowledge", "Planning", "Today"]);
+    });
+    expect(gen.ok).toBe(true);
+    const block = coach.recommendations.find((r) => r.kind === "schedule-block")!;
+    await act(async () => {
+      await coach.decide(block.id, "accepted");
+    });
+    await act(async () => {
+      await coach.apply(block.id);
+    });
+
+    // The general cross-domain revision log has ONE ai-applied entry for this.
+    await waitFor(() => {
+      const aiApplied = rev.events.filter((e) => e.source === "ai-applied");
+      expect(aiApplied).toHaveLength(1);
+      expect(aiApplied[0].domain).toBe("planning");
+      expect(aiApplied[0].operation).toBe("apply");
+      expect(JSON.stringify(aiApplied[0].metadata)).toContain(block.id);
+    });
+
+    // The AI's own decision trail (ai_decision_events) is untouched by this —
+    // the two records are NOT merged.
+    expect(coach.eventsFor(block.id).map((e) => e.event)).toEqual(["proposed", "accepted", "applied"]);
+    // ...and no ai-applied row leaked into the AI decision trail.
+    expect(coach.eventsFor(block.id).some((e) => (e.event as string) === "apply")).toBe(false);
   });
 
   it("Reject causes zero canonical mutation; the recommendation stays in history as rejected", async () => {

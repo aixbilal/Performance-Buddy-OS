@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { SaveIndicator } from "../../components/SaveIndicator";
+import { LoadingState } from "../../components/StateViews";
 import { useMoney } from "./store";
 
 const STATUS_TONE = {
@@ -35,6 +36,8 @@ export function BudgetSavingsPage() {
   const [pCat, setPCat] = useState("");
   const [pDue, setPDue] = useState(todayIso());
   const [pErr, setPErr] = useState<string | null>(null);
+
+  if (!money.loaded) return <LoadingState label="Loading budgets & savings…" />;
 
   return (
     <div className="space-y-6">

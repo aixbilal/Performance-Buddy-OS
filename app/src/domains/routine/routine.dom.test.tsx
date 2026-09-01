@@ -60,6 +60,7 @@ beforeEach(() => window.localStorage.clear());
 afterEach(() => window.localStorage.clear());
 
 async function createRoutine(user: ReturnType<typeof userEvent.setup>, title: string) {
+  await screen.findAllByRole("button", { name: /create your first routine|^new routine$/i }); // wait past LOADING
   const start =
     screen.queryByRole("button", { name: /create your first routine/i }) ??
     screen.getByRole("button", { name: /^new routine$/i });

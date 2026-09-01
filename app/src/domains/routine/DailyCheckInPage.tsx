@@ -7,6 +7,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Card } from "../../components/Card";
 import { EmptyState } from "../../components/EmptyState";
 import { SaveIndicator } from "../../components/SaveIndicator";
+import { LoadingState } from "../../components/StateViews";
 import { useRoutine } from "./store";
 import { RoutineCheckIn } from "./RoutineCheckIn";
 import type { CompletionState } from "./types";
@@ -15,6 +16,8 @@ export function DailyCheckInPage() {
   const navigate = useNavigate();
   const rt = useRoutine();
   const due = rt.getDueToday();
+
+  if (!rt.loaded) return <LoadingState label="Loading today's routines…" />;
 
   return (
     <div className="space-y-6 max-w-2xl">

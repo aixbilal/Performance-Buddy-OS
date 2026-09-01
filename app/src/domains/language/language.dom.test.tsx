@@ -102,6 +102,7 @@ beforeEach(() => window.localStorage.clear());
 afterEach(() => window.localStorage.clear());
 
 async function createPath(user: ReturnType<typeof userEvent.setup>, language: string) {
+  await screen.findAllByRole("button", { name: /new language path/i }); // wait past LOADING
   await user.click(screen.getAllByRole("button", { name: /new language path/i })[0]);
   await user.type(await screen.findByLabelText(/^language$/i), language);
   await user.type(screen.getByLabelText(/path title/i), `${language} A1`);
@@ -199,6 +200,7 @@ describe("Language — driven through the real UI", () => {
 
 describe("Reading — driven through the real UI", () => {
   async function addBook(user: ReturnType<typeof userEvent.setup>, title: string, total?: string) {
+    await screen.findAllByRole("button", { name: /add book/i }); // wait past LOADING
     await user.click(screen.getAllByRole("button", { name: /add book/i })[0]);
     await user.type(await screen.findByLabelText(/^title$/i), title);
     if (total !== undefined) {

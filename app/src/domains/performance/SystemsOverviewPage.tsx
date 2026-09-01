@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { EmptyState } from "../../components/EmptyState";
+import { LoadingState } from "../../components/StateViews";
 import { SaveIndicator } from "../../components/SaveIndicator";
 import { usePerformance } from "./store";
 import { SystemForm, emptySystemForm } from "./SystemForm";
@@ -35,7 +36,7 @@ export function SystemsOverviewPage() {
     [systems, domainFilter],
   );
 
-  if (!loaded) return <div className="text-text-muted text-sm">Loading your systems…</div>;
+  if (!loaded) return <LoadingState label="Loading your systems…" />;
 
   const createPanel = (
     <Card title={newForGoal ? `New system for “${newForGoal.title}”` : "New System"}>

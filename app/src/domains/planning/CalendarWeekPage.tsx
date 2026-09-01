@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "../../components/Card";
+import { LoadingState, ErrorState } from "../../components/StateViews";
 import { usePlanning } from "./store";
 import { usePerformance } from "../performance/store";
 import { DAY_LABELS, DAY_LABELS_LONG, shortDate, timeLabel } from "./mockData";
@@ -26,6 +27,8 @@ export function CalendarWeekPage() {
     deleteBlock,
     moveBlock,
     blocks,
+    loaded,
+    loadError,
   } = usePlanning();
   const { actions } = usePerformance();
   const navigate = useNavigate();
@@ -39,6 +42,14 @@ export function CalendarWeekPage() {
     }
     return s;
   }, [conflicts]);
+
+  // Day-17: LOADING ≠ EMPTY.
+  if (loadError) {
+    return <ErrorState title="The calendar couldn't load" detail={loadError} onRetry={() => window.location.reload()} />;
+  }
+  if (!loaded) {
+    return <LoadingState label="Loading your calendar…" />;
+  }
 
   const selected = selectedId ? getBlock(selectedId) ?? null : null;
   const selectedAction =

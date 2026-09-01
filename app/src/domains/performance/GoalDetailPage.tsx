@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { SaveIndicator } from "../../components/SaveIndicator";
+import { LoadingState } from "../../components/StateViews";
 import { usePerformance } from "./store";
 import { goalTransitionsFrom } from "./engine";
 import type { GoalLifecycle } from "./types";
@@ -42,7 +43,7 @@ export function GoalDetailPage() {
   const [linkOpen, setLinkOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  if (!loaded) return <div className="text-text-muted text-sm">Loading…</div>;
+  if (!loaded) return <LoadingState label="Loading…" />;
 
   const goal = goalId ? getGoal(goalId) : undefined;
   if (!goal) {

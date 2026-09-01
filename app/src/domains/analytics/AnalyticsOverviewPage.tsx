@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
+import { LoadingState } from "../../components/StateViews";
 import { useAnalytics } from "./store";
 
 const STATE_TONE = {
@@ -13,7 +14,12 @@ const STATE_TONE = {
 const CONFIDENCE_TONE = { high: "success", moderate: "warning", limited: "neutral" } as const;
 
 export function AnalyticsOverviewPage() {
-  const { domainSnapshots, patterns, weeklyReviews, monthlyReviews, weeklySnapshot } = useAnalytics();
+  const { domainSnapshots, patterns, weeklyReviews, monthlyReviews, weeklySnapshot, loaded } = useAnalytics();
+
+  // Day-17: LOADING ≠ EMPTY — don't render "not enough evidence yet" while the
+  // review history is still resolving.
+  if (!loaded) return <LoadingState label="Loading analytics…" />;
+
   const snap = weeklySnapshot();
 
   return (

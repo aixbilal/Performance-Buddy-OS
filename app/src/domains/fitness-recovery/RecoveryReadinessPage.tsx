@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { SaveIndicator } from "../../components/SaveIndicator";
+import { LoadingState } from "../../components/StateViews";
 import { useFitness } from "./store";
 import { LEVEL3S, SORENESS_LEVELS, type Level3, type SorenessLevel } from "./types";
 
@@ -32,6 +33,9 @@ export function RecoveryReadinessPage() {
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
   );
   const r = fit.readiness;
+
+  // LOADING ≠ EMPTY — "insufficient data" readiness must not stand in for "loading".
+  if (!fit.loaded) return <LoadingState label="Loading recovery data…" />;
 
   return (
     <div className="space-y-6">

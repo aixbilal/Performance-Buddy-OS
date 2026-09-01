@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { SaveIndicator } from "../../components/SaveIndicator";
+import { LoadingState } from "../../components/StateViews";
 import { usePerformance } from "./store";
 import {
   ActionForm,
@@ -120,7 +121,7 @@ export function SystemDetailPage() {
   const [editActionId, setEditActionId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  if (!loaded) return <div className="text-text-muted text-sm">Loading…</div>;
+  if (!loaded) return <LoadingState label="Loading…" />;
 
   const system = systemId ? getSystem(systemId) : undefined;
   if (!system) {

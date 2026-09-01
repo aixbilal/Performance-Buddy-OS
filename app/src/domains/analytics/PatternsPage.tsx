@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
+import { LoadingState } from "../../components/StateViews";
 import { useAnalytics } from "./store";
 
 const CONFIDENCE_TONE = { high: "success", moderate: "warning", limited: "neutral" } as const;
@@ -11,7 +12,10 @@ const CONFIDENCE_TONE = { high: "success", moderate: "warning", limited: "neutra
  * correlation, never causation. Sparse data yields INSUFFICIENT EVIDENCE.
  */
 export function PatternsPage() {
-  const { patterns } = useAnalytics();
+  const { patterns, loaded } = useAnalytics();
+
+  // LOADING ≠ EMPTY — don't show "no patterns" before the history has resolved.
+  if (!loaded) return <LoadingState label="Loading patterns…" />;
 
   return (
     <div className="space-y-6">

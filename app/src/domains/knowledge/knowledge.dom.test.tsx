@@ -38,6 +38,7 @@ beforeEach(() => window.localStorage.clear());
 afterEach(() => window.localStorage.clear());
 
 async function addTopic(user: ReturnType<typeof userEvent.setup>, title: string) {
+  await screen.findAllByRole("button", { name: /add (your first topic|topic)/i }); // wait past LOADING
   const start =
     screen.queryByRole("button", { name: /add your first topic/i }) ??
     screen.getByRole("button", { name: "Add Topic" });

@@ -3,6 +3,7 @@ import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { EmptyState } from "../../components/EmptyState";
 import { SaveIndicator } from "../../components/SaveIndicator";
+import { LoadingState } from "../../components/StateViews";
 import { useKnowledge } from "./store";
 
 const STATE_TONE = {
@@ -16,6 +17,8 @@ export function KnowledgeOverviewPage() {
   const navigate = useNavigate();
   const { topics, getReviewQueue, saveState, loaded } = useKnowledge();
   const reviewQueue = getReviewQueue();
+
+  if (!loaded) return <LoadingState label="Loading your knowledge…" />;
 
   return (
     <div className="space-y-6">

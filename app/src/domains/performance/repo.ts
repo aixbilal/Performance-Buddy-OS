@@ -9,6 +9,7 @@
  * canonical shape under one key and is clearly not the production target.
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { assertRepoWritable } from "../persistence/testControls";
 import type { Action, Goal, PerfGraph, System } from "./types";
 
 export type PerfImportReport = {
@@ -113,6 +114,7 @@ export class LocalRepo implements PerformanceRepo {
     }
   }
   private write(g: PerfGraph) {
+    assertRepoWritable(); // dev/test-only save-failure injection (no-op in production)
     window.localStorage.setItem(LS_KEY, JSON.stringify(g));
   }
 

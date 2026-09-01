@@ -3,6 +3,7 @@ import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { EmptyState } from "../../components/EmptyState";
 import { SaveIndicator } from "../../components/SaveIndicator";
+import { LoadingState } from "../../components/StateViews";
 import { useFitness } from "./store";
 
 const READINESS_TONE = {
@@ -17,6 +18,8 @@ export function FitnessOverviewPage() {
   const navigate = useNavigate();
   const { plans, plan, getRecentWorkouts, readiness, checkIns, saveState, loaded, dayLabel } =
     useFitness();
+
+  if (!loaded) return <LoadingState label="Loading fitness…" />;
 
   const activePlans = plans.filter((p) => !p.archived);
   const recent = getRecentWorkouts(5);

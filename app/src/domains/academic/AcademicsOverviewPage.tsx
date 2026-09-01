@@ -4,6 +4,7 @@ import { Badge } from "../../components/Badge";
 import { EmptyState } from "../../components/EmptyState";
 import { SaveIndicator } from "../../components/SaveIndicator";
 import { StatCard } from "../../components/StatCard";
+import { LoadingState } from "../../components/StateViews";
 import { useAcademic } from "./store";
 
 const STATUS_TONE = {
@@ -15,6 +16,8 @@ const STATUS_TONE = {
 export function AcademicsOverviewPage() {
   const navigate = useNavigate();
   const { semester, courses, cgpa, projectedSGPA, saveState, loaded } = useAcademic();
+
+  if (!loaded) return <LoadingState label="Loading academics…" />;
 
   const activeCourses = courses.filter((c) => !c.archived);
   const archivedCourses = courses.filter((c) => c.archived);

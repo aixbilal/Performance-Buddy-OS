@@ -4,6 +4,7 @@ import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { EmptyState } from "../../components/EmptyState";
 import { SaveIndicator } from "../../components/SaveIndicator";
+import { LoadingState } from "../../components/StateViews";
 import { useMoney } from "./store";
 import {
   TransactionForm,
@@ -43,6 +44,8 @@ export function TransactionsPage() {
     a.date < b.date ? 1 : a.date > b.date ? -1 : 0,
   );
   const goals = money.savingsGoals.map((g) => ({ id: g.id, title: g.title }));
+
+  if (!money.loaded) return <LoadingState label="Loading transactions…" />;
 
   return (
     <div className="space-y-6">

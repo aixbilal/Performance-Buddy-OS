@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { RecommendationCard } from "../../components/RecommendationCard";
+import { LoadingState } from "../../components/StateViews";
 import { useAICoach } from "./store";
 import { useAnalytics } from "../analytics/store";
 
@@ -39,6 +40,10 @@ export function AICoachPage() {
       setBusy(false);
     }
   };
+
+  // LOADING ≠ EMPTY / ≠ DISABLED. Don't flash the availability card before the
+  // durable AI config + recommendation history have resolved.
+  if (!coach.loaded) return <LoadingState label="Loading AI Coach…" />;
 
   return (
     <div className="space-y-6">

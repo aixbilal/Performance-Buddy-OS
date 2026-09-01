@@ -42,6 +42,7 @@ import {
   type ScheduleProposal,
 } from "./engine";
 import { newId } from "./ids";
+import { recordRevision } from "../revision/recorder";
 import { resolveLegacyPlanning, type PlanningLegacyReport } from "./legacyImport";
 import { makePlanningRepo, type PlanningRepo } from "./repo";
 import {
@@ -315,6 +316,15 @@ export function PlanningProvider({ children }: { children: ReactNode }) {
     await persist(async () => {
       for (const old of replaced) await repoRef.current.blockDelete(old.id);
       for (const b of generated) await repoRef.current.blockUpsert(b);
+    });
+    recordRevision({
+      domain: "planning",
+      entityType: "schedule",
+      entityId: "week",
+      operation: "reschedule",
+      source: "user",
+      summary: `Re-planned: ${generated.length} generated block(s), ${survivors.length} manual/locked kept`,
+      metadata: { generated: generated.length, kept: survivors.length, replaced: replaced.length },
     });
   };
 

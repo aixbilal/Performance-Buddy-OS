@@ -3,6 +3,7 @@ import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { EmptyState } from "../../components/EmptyState";
 import { SaveIndicator } from "../../components/SaveIndicator";
+import { LoadingState } from "../../components/StateViews";
 import { useLanguage } from "./store";
 
 const PATH_TONE = { active: "success", paused: "warning", completed: "neutral" } as const;
@@ -16,6 +17,9 @@ const BOOK_TONE = {
 export function ReadingLanguageOverviewPage() {
   const navigate = useNavigate();
   const lang = useLanguage();
+
+  if (!lang.loaded) return <LoadingState label="Loading reading & language…" />;
+
   const paths = lang.getActivePaths();
   const books = lang.getActiveBooks();
   const recentSessions = lang.getRecentSessions(5);

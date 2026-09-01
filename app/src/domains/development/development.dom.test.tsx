@@ -39,6 +39,7 @@ beforeEach(() => window.localStorage.clear());
 afterEach(() => window.localStorage.clear());
 
 async function addProject(user: ReturnType<typeof userEvent.setup>, title: string) {
+  await screen.findAllByRole("button", { name: /add (your first project|project)/i }); // wait past LOADING
   const start =
     screen.queryByRole("button", { name: /add your first project/i }) ??
     screen.getByRole("button", { name: "Add Project" });
@@ -49,6 +50,7 @@ async function addProject(user: ReturnType<typeof userEvent.setup>, title: strin
 }
 
 async function addSkill(user: ReturnType<typeof userEvent.setup>, title: string) {
+  await screen.findAllByRole("button", { name: /^add skill$/i }); // wait past LOADING
   await user.click(screen.getByRole("button", { name: "Add Skill" }));
   await user.type(await screen.findByLabelText(/skill name/i), title);
   await user.click(screen.getByRole("button", { name: /^add skill$/i }));

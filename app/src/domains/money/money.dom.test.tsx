@@ -36,6 +36,7 @@ async function addTransaction(
   user: U,
   { type, amount, category }: { type: string; amount: string; category?: string },
 ) {
+  await screen.findAllByRole("button", { name: /add.*transaction/i }); // wait past LOADING
   const openers = screen.queryAllByRole("button", { name: /add.*transaction/i });
   await user.click(openers[0]);
   await user.selectOptions(await screen.findByLabelText(/^type$/i), type);
@@ -151,7 +152,7 @@ describe("Money — driven through the real UI", () => {
   it("validation failure preserves the other input", async () => {
     const user = userEvent.setup();
     render(<App start="/money/transactions" />);
-    await user.click(screen.getByRole("button", { name: /add transaction/i }));
+    await user.click(await screen.findByRole("button", { name: /add transaction/i }));
     await user.type(await screen.findByLabelText(/^category/i), "Groceries");
     await user.click(screen.getByRole("button", { name: /^add transaction$/i }));
     expect(await screen.findByText(/amount must be a positive number/i)).toBeInTheDocument();

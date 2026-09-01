@@ -1,4 +1,5 @@
 import { AppGate } from "./shell/AppGate";
+import { RevisionProvider } from "./domains/revision/store";
 import { PerformanceProvider } from "./domains/performance/store";
 import { AcademicProvider } from "./domains/academic/store";
 import { KnowledgeProvider } from "./domains/knowledge/store";
@@ -26,6 +27,7 @@ import { ObsidianProvider } from "./domains/obsidian/store";
  */
 export default function App() {
   return (
+    <RevisionProvider>
     <PerformanceProvider>
       <AcademicProvider>
         <KnowledgeProvider>
@@ -63,5 +65,6 @@ export default function App() {
         </KnowledgeProvider>
       </AcademicProvider>
     </PerformanceProvider>
+    </RevisionProvider>
   );
 }

@@ -30,6 +30,7 @@ import {
   validateTopicInput,
 } from "./engine";
 import { newId } from "./ids";
+import { recordRevision } from "../revision/recorder";
 import { resolveLegacyKnowledge, type KnowledgeLegacyReport } from "./legacyImport";
 import { makeKnowledgeRepo, type KnowledgeRepo } from "./repo";
 import type {
@@ -314,6 +315,15 @@ export function KnowledgeProvider({ children }: { children: ReactNode }) {
     };
     setGraph((g) => ({ ...g, evidence: [...g.evidence, evidence] }));
     await persist(() => repoRef.current.evidenceUpsert(evidence));
+    recordRevision({
+      domain: "knowledge",
+      entityType: "topic",
+      entityId: topicId,
+      operation: "update",
+      source: "user",
+      summary: `Recorded ${v.value.type} evidence for "${graph.topics.find((t) => t.id === topicId)?.title ?? topicId}"`,
+      metadata: { evidenceId: evidence.id, evidenceType: v.value.type },
+    });
     return { ok: true, id: evidence.id };
   };
 

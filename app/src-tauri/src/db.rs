@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
 /// Bumped whenever a migration is added to `MIGRATIONS`.
-const CURRENT_SCHEMA_VERSION: i64 = 9;
+const CURRENT_SCHEMA_VERSION: i64 = 10;
 
 /// Ordered, forward-only migrations. `version` must be contiguous from 1.
 const MIGRATIONS: &[(i64, &str)] = &[
@@ -906,6 +906,43 @@ const MIGRATIONS: &[(i64, &str)] = &[
         created_at          TEXT NOT NULL,
         updated_at          TEXT NOT NULL
     );
+    "#,
+    ),
+    (
+        10,
+        // Batch 8 — the general cross-domain revision / audit event store
+        // (`docs/32` data class 3, audit finding P1-20's non-AI slice).
+        //
+        // Locks enforced by shape:
+        //   APPEND-ONLY. `revision_events` has a stable primary key and is
+        //     written with INSERT OR IGNORE only — `revision.rs` exposes no
+        //     update-one or delete-one command. It is a history log, never an
+        //     authoritative domain state (mastery / grades / balances are still
+        //     derived from their own canonical tables).
+        //   NOT event-sourcing. A row records that an important user-visible
+        //     change happened (domain / entity / operation / source / a short
+        //     human summary) plus a SMALL optional `metadata` blob for a
+        //     targeted before/after — never a full entity snapshot.
+        //   The AI decision trail keeps its own `ai_decision_events` table
+        //     (migration v8); an AI-applied canonical mutation also appends one
+        //     row here with `source = 'ai-applied'` so a user sees every
+        //     domain's changes in one place, but the two are not merged.
+        r#"
+    CREATE TABLE IF NOT EXISTS revision_events (
+        id           TEXT PRIMARY KEY NOT NULL,
+        domain       TEXT NOT NULL,   -- performance|academic|knowledge|planning|routine|settings|development|fitness|language|money
+        entity_type  TEXT NOT NULL,   -- goal|system|action|course|topic|evidence|block|routine|settings-config|...
+        entity_id    TEXT NOT NULL,
+        operation    TEXT NOT NULL,   -- create|update|delete|status-change|apply|reschedule|check-in
+        source       TEXT NOT NULL DEFAULT 'user',  -- user|ai-applied|import|system
+        summary      TEXT NOT NULL DEFAULT '',
+        metadata     TEXT NOT NULL DEFAULT '{}',    -- small JSON { before?, after?, ... } — NOT a full snapshot
+        created_at   TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_revision_entity  ON revision_events(domain, entity_type, entity_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_revision_domain  ON revision_events(domain, created_at);
+    CREATE INDEX IF NOT EXISTS idx_revision_created ON revision_events(created_at);
     "#,
     ),
 ];

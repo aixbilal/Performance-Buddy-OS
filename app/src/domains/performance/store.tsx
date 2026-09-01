@@ -35,6 +35,8 @@ import {
   validateSystemInput,
 } from "./engine";
 import { newId } from "./ids";
+import { consumeLoadDelay } from "../persistence/testControls";
+import { recordRevision } from "../revision/recorder";
 import { resolveLegacyPerformance, type LegacyImportReport } from "./legacyImport";
 import { makePerformanceRepo, type PerformanceRepo } from "./repo";
 import type {
@@ -131,6 +133,7 @@ export function PerformanceProvider({ children }: { children: ReactNode }) {
     (async () => {
       try {
         const repo = repoRef.current;
+        await consumeLoadDelay(); // dev/test-only: makes the LOADING state observable (no-op in production)
         // One-time, idempotent import of the Batch 0 KV blobs.
         const legacy = resolveLegacyPerformance({
           goals: cacheAdapter.getItem("pbos:performance-goals"),
@@ -205,6 +208,14 @@ export function PerformanceProvider({ children }: { children: ReactNode }) {
     };
     setGraph((g) => ({ ...g, goals: [...g.goals, goal] }));
     await persist(() => repoRef.current.goalUpsert(goal));
+    recordRevision({
+      domain: "performance",
+      entityType: "goal",
+      entityId: goal.id,
+      operation: "create",
+      source: createdBy === "ai-approved" ? "ai-applied" : "user",
+      summary: `Created goal "${goal.title}"`,
+    });
     return { ok: true, id: goal.id };
   };
 
@@ -228,6 +239,15 @@ export function PerformanceProvider({ children }: { children: ReactNode }) {
     const goal: Goal = { ...existing, lifecycle: to, updatedAt: nowIso() };
     setGraph((g) => ({ ...g, goals: g.goals.map((x) => (x.id === id ? goal : x)) }));
     await persist(() => repoRef.current.goalUpsert(goal));
+    recordRevision({
+      domain: "performance",
+      entityType: "goal",
+      entityId: id,
+      operation: "status-change",
+      source: "user",
+      summary: `Goal "${existing.title}" moved ${existing.lifecycle} → ${to}`,
+      metadata: { before: existing.lifecycle, after: to },
+    });
     return { ok: true, id };
   };
 
@@ -315,6 +335,14 @@ export function PerformanceProvider({ children }: { children: ReactNode }) {
     };
     setGraph((g) => ({ ...g, actions: [...g.actions, action] }));
     await persist(() => repoRef.current.actionUpsert(action));
+    recordRevision({
+      domain: "performance",
+      entityType: "action",
+      entityId: action.id,
+      operation: "create",
+      source: "user",
+      summary: `Created action "${action.title}"`,
+    });
     return { ok: true, id: action.id };
   };
 
@@ -335,6 +363,15 @@ export function PerformanceProvider({ children }: { children: ReactNode }) {
     const action: Action = { ...existing, status, updatedAt: nowIso() };
     setGraph((g) => ({ ...g, actions: g.actions.map((x) => (x.id === id ? action : x)) }));
     await persist(() => repoRef.current.actionUpsert(action));
+    recordRevision({
+      domain: "performance",
+      entityType: "action",
+      entityId: id,
+      operation: "status-change",
+      source: "user",
+      summary: `Action "${existing.title}" ${existing.status} → ${status}`,
+      metadata: { before: existing.status, after: status },
+    });
   };
 
   const deleteAction = async (id: string) => {

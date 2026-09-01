@@ -3,6 +3,7 @@ import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { StatCard } from "../../components/StatCard";
 import { EmptyState } from "../../components/EmptyState";
+import { LoadingState, ErrorState } from "../../components/StateViews";
 import { ProposalCard } from "../intelligence/ProposalCard";
 import { usePerformance } from "./store";
 import { usePlanning } from "../planning/store";
@@ -27,10 +28,26 @@ function timeLabel(mins: number) {
 }
 
 export function TodayPage() {
-  const { actions, systems, systemHealth } = usePerformance();
-  const { todaysBlocks } = usePlanning();
+  const { actions, systems, systemHealth, loaded: perfLoaded, loadError: perfError } = usePerformance();
+  const { todaysBlocks, loaded: planLoaded, loadError: planError } = usePlanning();
   const { visibleRecommendations } = useAICoach();
   const navigate = useNavigate();
+
+  // Day-17: LOADING ≠ EMPTY. Never flash "your day is open" while the canonical
+  // Planning / Performance data is still resolving. An AI Coach failure does
+  // NOT gate Today — that stays local to the AI surface below.
+  if (perfError || planError) {
+    return (
+      <ErrorState
+        title="Today couldn't load"
+        detail={perfError ?? planError ?? undefined}
+        onRetry={() => window.location.reload()}
+      />
+    );
+  }
+  if (!perfLoaded || !planLoaded) {
+    return <LoadingState label="Loading today…" />;
+  }
 
   const completedActions = actions.filter((a) => a.status === "done").length;
   const primarySystem = systems.find((s) => s.starred) ?? systems[0];

@@ -10,6 +10,7 @@ mod money;
 mod obsidian;
 mod performance;
 mod planning;
+mod revision;
 mod routine;
 mod setup;
 mod study;
@@ -205,6 +206,10 @@ pub fn run() {
             setup::setup_settings_upsert,
             setup::setup_reset_onboarding,
             setup::setup_reset_for_test,
+            // Batch 8 — general cross-domain revision / audit event store
+            revision::revision_append,
+            revision::revision_load,
+            revision::revision_reset_for_test,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

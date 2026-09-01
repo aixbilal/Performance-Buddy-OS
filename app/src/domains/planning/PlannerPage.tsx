@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { EmptyState } from "../../components/EmptyState";
+import { LoadingState, ErrorState } from "../../components/StateViews";
 import { TextField } from "../../components/FormFields";
 import { usePlanning } from "./store";
 import { usePerformance } from "../performance/store";
@@ -86,6 +87,8 @@ export function PlannerPage() {
     generateProposal,
     applyProposal,
     todayIso,
+    loaded,
+    loadError,
   } = usePlanning();
   const { actions } = usePerformance();
   const navigate = useNavigate();
@@ -117,6 +120,15 @@ export function PlannerPage() {
     () => schedulableActions.filter((a) => !scheduledActionIds.has(a.id)),
     [schedulableActions, scheduledActionIds],
   );
+
+  // Day-17: LOADING ≠ EMPTY — never render an empty planner grid while the
+  // canonical Planning store is still resolving.
+  if (loadError) {
+    return <ErrorState title="The planner couldn't load" detail={loadError} onRetry={() => window.location.reload()} />;
+  }
+  if (!loaded) {
+    return <LoadingState label="Loading your plan…" />;
+  }
 
   const submit = async () => {
     setFeedback(null);

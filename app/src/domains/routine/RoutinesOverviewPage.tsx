@@ -3,6 +3,7 @@ import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { EmptyState } from "../../components/EmptyState";
 import { SaveIndicator } from "../../components/SaveIndicator";
+import { LoadingState } from "../../components/StateViews";
 import { useRoutine } from "./store";
 import { RoutineCheckIn } from "./RoutineCheckIn";
 import type { CompletionState, TimeWindow } from "./types";
@@ -17,6 +18,9 @@ const WINDOWS: { key: TimeWindow; label: string }[] = [
 export function RoutinesOverviewPage() {
   const navigate = useNavigate();
   const rt = useRoutine();
+
+  if (!rt.loaded) return <LoadingState label="Loading routines…" />;
+
   const activeRoutines = rt.routines.filter((r) => !r.archived);
   const dueToday = rt.getDueToday();
   const doneToday = dueToday.filter((r) => {

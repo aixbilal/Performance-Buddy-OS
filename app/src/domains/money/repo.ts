@@ -5,6 +5,7 @@
  *                            \->  { localStorage JSON }  (browser dev only)
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { assertRepoWritable } from "../persistence/testControls";
 import type { Budget, MoneyGraph, PlannedExpense, SavingsGoal, Transaction } from "./types";
 
 export type MoneyImportReport = {
@@ -106,6 +107,7 @@ export class LocalRepo implements MoneyRepo {
     }
   }
   private write(g: MoneyGraph) {
+    assertRepoWritable(); // dev/test-only save-failure injection (no-op in production)
     window.localStorage.setItem(LS_KEY, JSON.stringify(g));
   }
   private upsert<T extends { id: string; createdAt: string }>(arr: T[], row: T): T[] {

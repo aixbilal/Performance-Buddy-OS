@@ -33,6 +33,7 @@ import {
   type TodayState,
 } from "./engine";
 import { newId } from "./ids";
+import { recordRevision } from "../revision/recorder";
 import { resolveLegacyRoutine, type RoutineLegacyReport } from "./legacyImport";
 import { makeRoutineRepo, type RoutineRepo } from "./repo";
 import type {
@@ -279,6 +280,15 @@ export function RoutineProvider({ children }: { children: ReactNode }) {
     };
     setGraph((g) => ({ ...g, logs: [...g.logs, log] }));
     await persist(() => repoRef.current.logUpsert(log));
+    recordRevision({
+      domain: "routine",
+      entityType: "routine",
+      entityId: routineId,
+      operation: "check-in",
+      source: "user",
+      summary: `Checked in "${getRoutine(routineId)?.title ?? routineId}" — ${v.value.state} (${date})`,
+      metadata: { logId: log.id, state: v.value.state, date },
+    });
     return { ok: true, id: log.id };
   };
 

@@ -4,6 +4,7 @@ import { Badge } from "../../components/Badge";
 import { EmptyState } from "../../components/EmptyState";
 import { SaveIndicator } from "../../components/SaveIndicator";
 import { StatCard } from "../../components/StatCard";
+import { LoadingState } from "../../components/StateViews";
 import { useMoney } from "./store";
 
 const STATUS_TONE = {
@@ -15,6 +16,10 @@ const STATUS_TONE = {
 export function MoneyOverviewPage() {
   const navigate = useNavigate();
   const money = useMoney();
+
+  // LOADING ≠ EMPTY — don't render zeroed totals while the store is resolving.
+  // (A load ERROR still sets `loaded`, so the inline warning below is reached.)
+  if (!money.loaded) return <LoadingState label="Loading your money data…" />;
 
   const hasAnything =
     money.transactions.length > 0 ||

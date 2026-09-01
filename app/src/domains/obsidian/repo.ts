@@ -11,6 +11,7 @@
  * filesystem correctness is proven by the Rust tests in `obsidian.rs`.
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { assertObsidianScanOk } from "../persistence/testControls";
 import { devNoteId } from "./engine";
 import type {
   NotePreview,
@@ -148,6 +149,7 @@ class AdapterRepo implements ObsidianRepo {
   }
 
   async scan(): Promise<ScanReport> {
+    assertObsidianScanOk(); // dev/test-only scan-failure injection (no-op in production)
     const cfg = this.read<ObsidianConfig | null>(K_CONFIG, null);
     if (!cfg) throw new Error("No vault connected.");
     const disk = this.disk();

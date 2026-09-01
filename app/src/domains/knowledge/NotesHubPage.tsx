@@ -34,6 +34,10 @@ export function NotesHubPage() {
   const results = obs.search(query);
   const isAdapter = obs.backend === "adapter";
 
+  // NOTE: LOADING ≠ NOT-CONNECTED is already handled below via
+  // `obs.hubState === "loading"` (the store returns "loading" until the
+  // durable Obsidian config resolves) and `obs.actionError` for scan errors.
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
