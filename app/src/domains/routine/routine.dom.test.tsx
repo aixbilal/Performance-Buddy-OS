@@ -5,6 +5,12 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { PerformanceProvider } from "../performance/store";
+import { RevisionProvider } from "../revision/store";
+import { AcademicProvider } from "../academic/store";
+import { KnowledgeProvider } from "../knowledge/store";
+import { LanguageProvider } from "../language/store";
+import { MoneyProvider } from "../money/store";
+import { PlanningProvider } from "../planning/store";
 import { RoutineProvider } from "./store";
 import { RoutinesOverviewPage } from "./RoutinesOverviewPage";
 import { RoutineBuilderPage } from "./RoutineBuilderPage";
@@ -40,19 +46,31 @@ function seedSystem() {
 
 function App({ start = "/routine" }: { start?: string }) {
   return (
-    <PerformanceProvider>
-      <RoutineProvider>
-        <MemoryRouter initialEntries={[start]}>
-          <Routes>
-            <Route path="/routine" element={<RoutinesOverviewPage />} />
-            <Route path="/routine/new" element={<RoutineBuilderPage />} />
-            <Route path="/routine/check-in" element={<DailyCheckInPage />} />
-            <Route path="/routine/:routineId" element={<RoutineDetailPage />} />
-            <Route path="/routine/:routineId/edit" element={<RoutineBuilderPage />} />
-          </Routes>
-        </MemoryRouter>
-      </RoutineProvider>
-    </PerformanceProvider>
+    <RevisionProvider>
+      <PerformanceProvider>
+        <AcademicProvider>
+          <KnowledgeProvider>
+            <LanguageProvider>
+              <MoneyProvider>
+                <PlanningProvider>
+                  <RoutineProvider>
+                    <MemoryRouter initialEntries={[start]}>
+                      <Routes>
+                        <Route path="/routine" element={<RoutinesOverviewPage />} />
+                        <Route path="/routine/new" element={<RoutineBuilderPage />} />
+                        <Route path="/routine/check-in" element={<DailyCheckInPage />} />
+                        <Route path="/routine/:routineId" element={<RoutineDetailPage />} />
+                        <Route path="/routine/:routineId/edit" element={<RoutineBuilderPage />} />
+                      </Routes>
+                    </MemoryRouter>
+                  </RoutineProvider>
+                </PlanningProvider>
+              </MoneyProvider>
+            </LanguageProvider>
+          </KnowledgeProvider>
+        </AcademicProvider>
+      </PerformanceProvider>
+    </RevisionProvider>
   );
 }
 

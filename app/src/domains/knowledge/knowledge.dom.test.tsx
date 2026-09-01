@@ -7,6 +7,16 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { KnowledgeProvider } from "./store";
 import { AcademicProvider } from "../academic/store";
 import { ObsidianProvider } from "../obsidian/store";
+import { RevisionProvider } from "../revision/store";
+import { PerformanceProvider } from "../performance/store";
+import { FitnessProvider } from "../fitness-recovery/store";
+import { RoutineProvider } from "../routine/store";
+import { MoneyProvider } from "../money/store";
+import { LanguageProvider } from "../language/store";
+import { PlanningProvider } from "../planning/store";
+import { AnalyticsProvider } from "../analytics/store";
+import { AICoachProvider } from "../intelligence/store";
+import { MasteryProvider } from "../academic/masteryStore";
 import { KnowledgeOverviewPage } from "./KnowledgeOverviewPage";
 import { KnowledgeTopicBuilderPage } from "./KnowledgeTopicBuilderPage";
 import { TopicDetailPage } from "./TopicDetailPage";
@@ -16,21 +26,41 @@ vi.mock("@tauri-apps/api/core", () => ({ isTauri: () => false, invoke: vi.fn() }
 
 function App({ start = "/knowledge" }: { start?: string }) {
   return (
-    <AcademicProvider>
-      <KnowledgeProvider>
-        <ObsidianProvider>
-        <MemoryRouter initialEntries={[start]}>
-          <Routes>
-            <Route path="/knowledge" element={<KnowledgeOverviewPage />} />
-            <Route path="/knowledge/new" element={<KnowledgeTopicBuilderPage />} />
-            <Route path="/knowledge/notes" element={<NotesHubPage />} />
-            <Route path="/knowledge/:topicId" element={<TopicDetailPage />} />
-            <Route path="/knowledge/:topicId/edit" element={<KnowledgeTopicBuilderPage />} />
-          </Routes>
-        </MemoryRouter>
-        </ObsidianProvider>
-      </KnowledgeProvider>
-    </AcademicProvider>
+    <RevisionProvider>
+      <PerformanceProvider>
+        <AcademicProvider>
+          <KnowledgeProvider>
+            <ObsidianProvider>
+              <FitnessProvider>
+                <RoutineProvider>
+                  <LanguageProvider>
+                    <MoneyProvider>
+                      <PlanningProvider>
+                        <AnalyticsProvider>
+                          <AICoachProvider>
+                            <MasteryProvider>
+                              <MemoryRouter initialEntries={[start]}>
+                                <Routes>
+                                  <Route path="/knowledge" element={<KnowledgeOverviewPage />} />
+                                  <Route path="/knowledge/new" element={<KnowledgeTopicBuilderPage />} />
+                                  <Route path="/knowledge/notes" element={<NotesHubPage />} />
+                                  <Route path="/knowledge/:topicId" element={<TopicDetailPage />} />
+                                  <Route path="/knowledge/:topicId/edit" element={<KnowledgeTopicBuilderPage />} />
+                                </Routes>
+                              </MemoryRouter>
+                            </MasteryProvider>
+                          </AICoachProvider>
+                        </AnalyticsProvider>
+                      </PlanningProvider>
+                    </MoneyProvider>
+                  </LanguageProvider>
+                </RoutineProvider>
+              </FitnessProvider>
+            </ObsidianProvider>
+          </KnowledgeProvider>
+        </AcademicProvider>
+      </PerformanceProvider>
+    </RevisionProvider>
   );
 }
 

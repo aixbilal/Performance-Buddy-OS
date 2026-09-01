@@ -102,7 +102,6 @@ export function deriveTodayState(input: TodayEngineInput): TodayState {
     occurrenceStateFor,
     focusMinutesForBlock,
     actionStatusFor,
-    dailyCapacityMinutes,
     weeklyCapacityMinutes,
     weeklyScheduledMinutes,
     capacityLevel,
@@ -166,10 +165,9 @@ export function deriveTodayState(input: TodayEngineInput): TodayState {
   const remainingActualMinutes = remainingViews.reduce((s, v) => s + v.actualFocusMinutes, 0);
 
   const minutesLeftInDay = Math.max(0, 24 * 60 - nowMinute);
-  const dayFragility = computePlanFragility(
-    remainingPlannedMinutes,
-    Math.min(minutesLeftInDay, dailyCapacityMinutes),
-  );
+  // Feasibility is against the CLOCK time left, not the soft capacity budget —
+  // an already-scheduled block that is running now is not "doesn't fit".
+  const dayFragility = computePlanFragility(remainingPlannedMinutes, minutesLeftInDay);
   const weeklyFragility = computePlanFragility(weeklyScheduledMinutes, weeklyCapacityMinutes);
 
   // --- Adaptation verdict (§11.1) — material divergence only ----------

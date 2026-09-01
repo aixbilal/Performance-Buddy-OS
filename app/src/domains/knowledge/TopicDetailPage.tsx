@@ -9,6 +9,7 @@ import { useKnowledge } from "./store";
 import { useAcademic } from "../academic/store";
 import { useObsidian } from "../obsidian/store";
 import { EMPTY_SOURCE_FORM, SourceForm } from "./SourceForm";
+import { GenerateRecallButton } from "./GenerateRecallButton";
 import { EVIDENCE_TYPES, type EvidenceType, type SourceType } from "./types";
 import { Button } from "../../components/Button";
 
@@ -114,9 +115,14 @@ export function TopicDetailPage() {
           <div className="text-text-primary text-lg font-semibold">
             {topic.hasEvidence ? `${topic.masteryPercent}%` : "—"}
           </div>
-          <p className="text-text-muted text-[10px] mt-1">
+          <p className="text-text-muted text-[10px] mt-1 mb-2">
             {topic.hasEvidence ? "Derived from evidence below." : "No mastery evidence yet."}
           </p>
+          <GenerateRecallButton
+            knowledgeTopicId={topic.id}
+            topicTitle={topic.title}
+            linkedSourceTitles={sources.map((s) => s.title)}
+          />
         </Card>
         <Card>
           <TextField

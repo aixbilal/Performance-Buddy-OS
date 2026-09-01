@@ -5,6 +5,7 @@ import { SaveIndicator } from "../../components/SaveIndicator";
 import { usePerformance } from "../performance/store";
 import { useRoutine } from "./store";
 import { RoutineCheckIn, CHECK_IN_STATE_LABEL } from "./RoutineCheckIn";
+import { RoutinePatternPanel } from "./RoutinePatternPanel";
 import type { CompletionState } from "./types";
 import { Button } from "../../components/Button";
 
@@ -124,6 +125,10 @@ export function RoutineDetailPage() {
           )}
         </Card>
       </div>
+
+      <Card title="Pattern & adjustment">
+        <RoutinePatternPanel routine={routine} />
+      </Card>
 
       <Card title="Related System">
         {linkedSystem ? (

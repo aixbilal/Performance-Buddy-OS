@@ -53,14 +53,17 @@ test("follow-plan: nothing elapsed or diverging → no adaptation surface", asyn
   await expect(page.getByText(/Adaptation needed/i)).toHaveCount(0);
 });
 
-test("adaptation-needed: an elapsed unresolved block surfaces the panel, resolving clears it", async ({ page }) => {
+test("adaptation-needed: a block whose end time is before now surfaces the panel; resolving clears it", async ({ page }) => {
   await boot(page);
-  await addBlock(page, "Elapsed block", "00:00", "00:01");
+  // A block early today: unless the test runs within its first ~30 min, it has
+  // already elapsed. Skip the run in that rare pre-dawn window rather than flake.
+  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  test.skip(nowMin < 40, "runs inside the block window — elapsed state not yet deterministic");
+  await addBlock(page, "Elapsed block", "00:00", "00:30");
   await hashTo(page, "#/", /Today/i);
   await expect(page.getByText(/Adaptation needed/i)).toBeVisible();
   await expect(page.getByText(/without being resolved/i)).toBeVisible();
 
-  // Resolve it from Today's adaptation panel.
   await page.getByRole("button", { name: "Skip", exact: true }).first().click();
   await expect(page.getByText(/Adaptation needed/i)).toHaveCount(0);
 });

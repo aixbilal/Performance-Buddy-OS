@@ -32,6 +32,10 @@ export type StartCheckInput = {
   knowledgeTopicId: string | null;
   courseId: string | null;
   topicTitle: string;
+  /** Defaults to "self-check". "recall" is a governed Generate-Recall session. */
+  kind?: "self-check" | "recall";
+  /** Prompt strings for a "recall" check. Ignored for "self-check". */
+  recallPrompts?: string[];
 };
 
 export type RecordEvidenceResult =
@@ -107,16 +111,21 @@ export function MasteryProvider({ children }: { children: ReactNode }) {
     checks.filter((c) => c.academicTopicId === academicTopicId);
 
   const startCheck = async (input: StartCheckInput): Promise<string> => {
+    const kind = input.kind ?? "self-check";
+    const items: MasteryItem[] =
+      kind === "recall" && (input.recallPrompts?.length ?? 0) > 0
+        ? input.recallPrompts!.map((prompt, i) => ({ id: `it_${i}`, prompt, rating: null }))
+        : buildSelfCheckItems();
     const check: MasteryCheck = {
       id: newId(),
       academicTopicId: input.academicTopicId,
       knowledgeTopicId: input.knowledgeTopicId,
       courseId: input.courseId,
       topicTitle: input.topicTitle,
-      kind: "self-check",
-      items: buildSelfCheckItems(),
+      kind,
+      items,
       score: 0,
-      maxScore: buildSelfCheckItems().length,
+      maxScore: items.length,
       status: "in-progress",
       evidenceId: null,
       createdAt: nowIso(),

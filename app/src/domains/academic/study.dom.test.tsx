@@ -233,6 +233,53 @@ describe("Mastery Check — result + explicit, idempotent Knowledge evidence han
     expect(at.masterySelfAssessed).toBeNull();
   });
 
+  it("V2 Generate Recall: a `recall` check from generated prompts creates NO evidence until completed + recorded", async () => {
+    await mount();
+    const ids = await seedCourseTopicLinked();
+
+    // seed a governed recall check straight from prompts (what GenerateRecall does)
+    let checkId = "";
+    await act(async () => {
+      checkId = await mastery.startCheck({
+        academicTopicId: null,
+        knowledgeTopicId: ids.knowledgeId,
+        courseId: null,
+        topicTitle: "Binary Trees",
+        kind: "recall",
+        recallPrompts: ["Explain AVL rotations.", "When does a red-black tree rebalance?"],
+      });
+    });
+    const check = mastery.getCheck(checkId)!;
+    expect(check.kind).toBe("recall");
+    expect(check.items.map((i) => i.prompt)).toEqual([
+      "Explain AVL rotations.",
+      "When does a red-black tree rebalance?",
+    ]);
+    // prompts alone → no evidence, mastery untouched
+    expect(know.getEvidenceForTopic(ids.knowledgeId)).toHaveLength(0);
+    expect(know.getTopic(ids.knowledgeId)?.hasEvidence).toBe(false);
+
+    // recording before completion is refused
+    await act(async () => {
+      const r = await mastery.recordEvidence(checkId);
+      expect(r.ok).toBe(false);
+    });
+    expect(know.getEvidenceForTopic(ids.knowledgeId)).toHaveLength(0);
+
+    // complete + evaluate the check, THEN record — now one evidence row exists
+    await act(async () => {
+      await mastery.submitCheck(
+        checkId,
+        check.items.map((i) => ({ ...i, rating: "confident" as const })),
+      );
+    });
+    await act(async () => {
+      const r = await mastery.recordEvidence(checkId);
+      expect(r.ok).toBe(true);
+    });
+    expect(know.getEvidenceForTopic(ids.knowledgeId)).toHaveLength(1);
+  });
+
   it("a low result records neutral evidence — no grade change, no coverage change, no shame wording", async () => {
     const user = userEvent.setup();
     await mount();
